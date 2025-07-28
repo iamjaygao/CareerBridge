@@ -18,10 +18,10 @@ class CustomUserAdmin(UserAdmin): # inherit from the built-in UserAdmin
     model = User
 
     # fields displayed in the user list view
-    list_display = ('email', 'username', 'role', 'is_staff', 'is_active', 'date_joined')
+    list_display = ('email', 'username', 'role', 'is_staff', 'is_active', 'email_verified', 'date_joined')
 
     # fields displayed in the right sidebar
-    list_filter = ('role', 'is_staff', 'is_superuser', 'is_active', 'date_joined')
+    list_filter = ('role', 'is_staff', 'is_superuser', 'is_active', 'email_verified', 'date_joined')
 
     # fields displayed from the top search bar
     search_fields = ('email', 'username', 'first_name', 'last_name')
@@ -37,8 +37,11 @@ class CustomUserAdmin(UserAdmin): # inherit from the built-in UserAdmin
     # field groups shown when editing an existing user
     fieldsets = UserAdmin.fieldsets + (
         ('Role and Avatar', {'fields': ('role', 'avatar')}),
+        ('Email Verification', {'fields': ('email_verified', 'email_verification_token', 'email_verification_sent_at')}),
+        ('Password Reset', {'fields': ('password_reset_token', 'password_reset_sent_at')}),
+        ('Username Management', {'fields': ('username_updated_at',)}),
     )
 
     # fields that are read-only
-    readonly_fields = ('date_joined', 'last_login')
+    readonly_fields = ('date_joined', 'last_login', 'email_verification_token', 'password_reset_token')
 
