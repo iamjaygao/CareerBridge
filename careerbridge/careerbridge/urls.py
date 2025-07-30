@@ -16,6 +16,7 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from . import views
 
 #swagger UI setup for drf-yasg  
 from drf_yasg.views import get_schema_view
@@ -35,8 +36,21 @@ schema_view = get_schema_view(
     ),
     public=True,
     permission_classes=(permissions.AllowAny,),
+    patterns=[
+        path('api/v1/users/', include('users.urls')),
+        path('api/v1/mentors/', include('mentors.urls')),
+        path('api/v1/appointments/', include('appointments.urls')),
+        path('api/v1/notifications/', include('notifications.urls')),
+        path('api/v1/adminpanel/', include('adminpanel.urls')),
+    ],
 )
 urlpatterns = [
+    # homepage
+    path('', views.home, name='home'),
+    
+    # API root
+    path('api/v1/', views.api_root, name='api-root'),
+    
     # admin panel 
     path('admin/', admin.site.urls),
 
@@ -47,9 +61,12 @@ urlpatterns = [
     path('api/v1/adminpanel/', include('adminpanel.urls')), # Admin panel for managing users, mentors, appointments, etc.
     path('api/v1/notifications/', include('notifications.urls')), # Notifications for users
     path('api/v1/resumes/', include('resumes.urls')), # Resume management
+    path('api/v1/payments/', include('payments.urls')), # Payment management
 
     # swagger documentation
     path('swagger<format>/', schema_view.without_ui(cache_timeout=0), name='schema-json'),
+    path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
+    path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
 
 
 ]
