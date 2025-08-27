@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
@@ -59,7 +59,8 @@ const LoginPage: React.FC = () => {
 
   const onSubmit = async (data: LoginFormData) => {
     try {
-      await dispatch(login(data)).unwrap();
+      const loginData = { login: data.login, password: data.password };
+      await dispatch(login(loginData)).unwrap();
       navigate('/dashboard');
     } catch (error) {
       // Error is handled by the slice
@@ -120,11 +121,12 @@ const LoginPage: React.FC = () => {
               margin="normal"
               fullWidth
               label="Username or Email"
+              placeholder="Enter your username or email"
               autoComplete="username"
               autoFocus
               {...register('login')}
               error={!!errors.login}
-              helperText={errors.login?.message}
+              helperText={errors.login?.message || "You can use your username or email address"}
               disabled={loading}
             />
 

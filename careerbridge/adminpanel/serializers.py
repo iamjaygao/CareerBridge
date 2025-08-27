@@ -170,10 +170,28 @@ class UserManagementSerializer(serializers.Serializer):
     email = serializers.EmailField()
     is_active = serializers.BooleanField()
     is_staff = serializers.BooleanField()
+    role = serializers.CharField()
     date_joined = serializers.DateTimeField()
     last_login = serializers.DateTimeField()
     total_appointments = serializers.IntegerField()
     total_resumes = serializers.IntegerField()
+
+class MentorApplicationsSerializer(serializers.Serializer):
+    """Mentor applications serializer"""
+    
+    id = serializers.IntegerField()
+    user_id = serializers.IntegerField()
+    username = serializers.CharField()
+    email = serializers.EmailField()
+    first_name = serializers.CharField()
+    last_name = serializers.CharField()
+    status = serializers.CharField()
+    motivation = serializers.CharField()
+    relevant_experience = serializers.CharField()
+    preferred_payment_method = serializers.CharField()
+    created_at = serializers.DateTimeField()
+    reviewed_at = serializers.DateTimeField(allow_null=True)
+    reviewed_by = serializers.CharField(allow_null=True)
 
 class MentorManagementSerializer(serializers.Serializer):
     """Mentor management serializer"""

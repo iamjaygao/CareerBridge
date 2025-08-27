@@ -317,6 +317,20 @@ class ResumeJobMatchCreateSerializer(serializers.ModelSerializer):
 
         return data
 
+
+class ExternalJobCrawlRequestSerializer(serializers.Serializer):
+    """Serializer for triggering external job crawler"""
+    job_title = serializers.CharField()
+    location = serializers.CharField()
+    sources = serializers.ListField(child=serializers.CharField(), required=False)
+    limit = serializers.IntegerField(required=False, min_value=1, max_value=100)
+
+
+class ExternalResumeMatchRequestSerializer(serializers.Serializer):
+    """Serializer for matching a resume to a job description via external service"""
+    resume_id = serializers.IntegerField()
+    job_description_id = serializers.IntegerField()
+
 class JobRecommendationSerializer(serializers.Serializer):
     """Job Recommendation Serializer"""
 

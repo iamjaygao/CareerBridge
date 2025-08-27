@@ -207,17 +207,200 @@ class UserManagementView(generics.GenericAPIView):
             total_appointments=Count('appointments'),
             total_resumes=Count('resumes')
         ).values(
-            'id', 'username', 'email', 'is_active', 'is_staff',
+            'id', 'username', 'email', 'is_active', 'is_staff', 'role',
             'date_joined', 'last_login', 'total_appointments', 'total_resumes'
         )
         
-        serializer = UserManagementSerializer(users, many=True)
+        # Transform the data to match the serializer expectations
+        transformed_users = []
+        for user in users:
+            transformed_users.append({
+                'user_id': user['id'],
+                'username': user['username'],
+                'email': user['email'],
+                'is_active': user['is_active'],
+                'is_staff': user['is_staff'],
+                'role': user['role'],
+                'date_joined': user['date_joined'],
+                'last_login': user['last_login'],
+                'total_appointments': user['total_appointments'],
+                'total_resumes': user['total_resumes']
+            })
+        
+        serializer = UserManagementSerializer(transformed_users, many=True)
         return Response(serializer.data)
     
     def post(self, request):
-        """Update user status"""
+        """Handle user management actions"""
+        action = request.data.get('action')
+        
+        if action == 'create':
+            return self.create_user(request)
+        elif action == 'update':
+            return self.update_user(request)
+        elif action == 'delete':
+            return self.delete_user(request)
+        else:
+            return self.update_user_status(request)
+    
+    def create_user(self, request):
+        """Create new user"""
+        try:
+            username = request.data.get('username')
+            email = request.data.get('email')
+            password = request.data.get('password')
+            role = request.data.get('role', 'student')
+            
+            if not all([username, email, password]):
+                return Response(
+                    {'error': 'Username, email, and password are required'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Check if user already exists
+            if User.objects.filter(username=username).exists():
+                return Response(
+                    {'error': 'Username already exists'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if User.objects.filter(email=email).exists():
+                return Response(
+                    {'error': 'Email already exists'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Create user
+            user = User.objects.create_user(
+                username=username,
+                email=email,
+                password=password,
+                role=role
+            )
+            
+            # Record admin action
+            AdminAction.objects.create(
+                admin_user=request.user,
+                action_type='user_management',
+                action_description=f'Created user {user.username}',
+                target_model='User',
+                target_id=user.id,
+                action_data={'action': 'create', 'username': username, 'email': email, 'role': role},
+                ip_address=request.META.get('REMOTE_ADDR'),
+                user_agent=request.META.get('HTTP_USER_AGENT', '')
+            )
+            
+            return Response({'message': f'User {username} created successfully'})
+            
+        except Exception as e:
+            return Response(
+                {'error': f'Failed to create user: {str(e)}'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    def update_user(self, request):
+        """Update user information"""
+        try:
+            user_id = request.data.get('user_id')
+            user = User.objects.get(id=user_id)
+            
+            # Update fields
+            if 'username' in request.data:
+                new_username = request.data['username']
+                if User.objects.filter(username=new_username).exclude(id=user_id).exists():
+                    return Response(
+                        {'error': 'Username already exists'}, 
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                user.username = new_username
+            
+            if 'email' in request.data:
+                new_email = request.data['email']
+                if User.objects.filter(email=new_email).exclude(id=user_id).exists():
+                    return Response(
+                        {'error': 'Email already exists'}, 
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                user.email = new_email
+            
+            if 'role' in request.data:
+                user.role = request.data['role']
+            
+            if 'is_staff' in request.data:
+                user.is_staff = request.data['is_staff']
+            
+            user.save()
+            
+            # Record admin action
+            AdminAction.objects.create(
+                admin_user=request.user,
+                action_type='user_management',
+                action_description=f'Updated user {user.username}',
+                target_model='User',
+                target_id=user.id,
+                action_data={'action': 'update', 'updated_fields': list(request.data.keys())},
+                ip_address=request.META.get('REMOTE_ADDR'),
+                user_agent=request.META.get('HTTP_USER_AGENT', '')
+            )
+            
+            return Response({'message': f'User {user.username} updated successfully'})
+            
+        except User.DoesNotExist:
+            return Response(
+                {'error': 'User not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {'error': f'Failed to update user: {str(e)}'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    def delete_user(self, request):
+        """Delete user"""
+        try:
+            user_id = request.data.get('user_id')
+            user = User.objects.get(id=user_id)
+            
+            # Prevent deleting self
+            if user.id == request.user.id:
+                return Response(
+                    {'error': 'Cannot delete your own account'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            username = user.username
+            user.delete()
+            
+            # Record admin action
+            AdminAction.objects.create(
+                admin_user=request.user,
+                action_type='user_management',
+                action_description=f'Deleted user {username}',
+                target_model='User',
+                target_id=user_id,
+                action_data={'action': 'delete', 'username': username},
+                ip_address=request.META.get('REMOTE_ADDR'),
+                user_agent=request.META.get('HTTP_USER_AGENT', '')
+            )
+            
+            return Response({'message': f'User {username} deleted successfully'})
+            
+        except User.DoesNotExist:
+            return Response(
+                {'error': 'User not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {'error': f'Failed to delete user: {str(e)}'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    def update_user_status(self, request):
+        """Update user status (activate/deactivate/make_staff)"""
         user_id = request.data.get('user_id')
-        action = request.data.get('action')  # 'activate', 'deactivate', 'make_staff'
+        action = request.data.get('action')  # 'activate', 'deactivate', 'make_staff', 'remove_staff'
         
         try:
             user = User.objects.get(id=user_id)
@@ -251,6 +434,138 @@ class UserManagementView(generics.GenericAPIView):
             return Response(
                 {'error': 'User not found'}, 
                 status=status.HTTP_404_NOT_FOUND
+            )
+
+class MentorApplicationsView(generics.GenericAPIView):
+    """Mentor applications management"""
+    permission_classes = [permissions.IsAdminUser]
+    
+    def get(self, request):
+        """Get mentor applications list"""
+        from mentors.models import MentorApplication
+        
+        applications = MentorApplication.objects.select_related('user').values(
+            'id', 'user__id', 'user__username', 'user__email', 'user__first_name', 'user__last_name',
+            'status', 'motivation', 'relevant_experience', 'preferred_payment_method',
+            'created_at', 'reviewed_at', 'reviewed_by__username'
+        )
+        
+        # Apply filters
+        status_filter = request.query_params.get('status')
+        if status_filter and status_filter != 'all':
+            applications = applications.filter(status=status_filter)
+        
+        # Apply search
+        search_term = request.query_params.get('search')
+        if search_term:
+            applications = applications.filter(
+                Q(user__username__icontains=search_term) |
+                Q(user__email__icontains=search_term) |
+                Q(user__first_name__icontains=search_term) |
+                Q(user__last_name__icontains=search_term)
+            )
+        
+        serializer = MentorApplicationsSerializer(applications, many=True)
+        return Response(serializer.data)
+    
+    def post(self, request):
+        """Handle mentor application actions"""
+        action = request.data.get('action')
+        
+        if action == 'approve':
+            return self.approve_application(request)
+        elif action == 'reject':
+            return self.reject_application(request)
+        else:
+            return Response(
+                {'error': 'Invalid action'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    def approve_application(self, request):
+        """Approve mentor application"""
+        try:
+            application_id = request.data.get('application_id')
+            from mentors.models import MentorApplication
+            
+            application = MentorApplication.objects.get(id=application_id)
+            
+            if application.status != 'pending':
+                return Response(
+                    {'error': 'Application is not pending'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Approve the application
+            application.approve(request.user)
+            
+            # Record admin action
+            AdminAction.objects.create(
+                admin_user=request.user,
+                action_type='mentor_management',
+                action_description=f'Approved mentor application for {application.user.username}',
+                target_model='MentorApplication',
+                target_id=application.id,
+                action_data={'action': 'approve', 'user_id': application.user.id},
+                ip_address=request.META.get('REMOTE_ADDR'),
+                user_agent=request.META.get('HTTP_USER_AGENT', '')
+            )
+            
+            return Response({'message': f'Mentor application approved successfully'})
+            
+        except MentorApplication.DoesNotExist:
+            return Response(
+                {'error': 'Application not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {'error': f'Failed to approve application: {str(e)}'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    def reject_application(self, request):
+        """Reject mentor application"""
+        try:
+            application_id = request.data.get('application_id')
+            rejection_reason = request.data.get('rejection_reason', '')
+            
+            from mentors.models import MentorApplication
+            
+            application = MentorApplication.objects.get(id=application_id)
+            
+            if application.status != 'pending':
+                return Response(
+                    {'error': 'Application is not pending'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Reject the application
+            application.reject(request.user, rejection_reason)
+            
+            # Record admin action
+            AdminAction.objects.create(
+                admin_user=request.user,
+                action_type='mentor_management',
+                action_description=f'Rejected mentor application for {application.user.username}',
+                target_model='MentorApplication',
+                target_id=application.id,
+                action_data={'action': 'reject', 'user_id': application.user.id, 'reason': rejection_reason},
+                ip_address=request.META.get('REMOTE_ADDR'),
+                user_agent=request.META.get('HTTP_USER_AGENT', '')
+            )
+            
+            return Response({'message': f'Mentor application rejected successfully'})
+            
+        except MentorApplication.DoesNotExist:
+            return Response(
+                {'error': 'Application not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {'error': f'Failed to reject application: {str(e)}'}, 
+                status=status.HTTP_400_BAD_REQUEST
             )
 
 class MentorManagementView(generics.GenericAPIView):
@@ -322,17 +637,33 @@ class SystemHealthView(generics.GenericAPIView):
         data = {
             'database_status': 'healthy',
             'cache_status': 'healthy',
-            'external_services_status': {
-                'email_service': 'healthy',
-                'payment_service': 'healthy',
-                'ai_service': 'healthy'
+            'external_services': [
+                {
+                    'name': 'email_service',
+                    'status': 'healthy',
+                    'response_time': 150,
+                    'last_check': timezone.now().isoformat()
+                },
+                {
+                    'name': 'payment_service',
+                    'status': 'healthy',
+                    'response_time': 200,
+                    'last_check': timezone.now().isoformat()
+                },
+                {
+                    'name': 'ai_service',
+                    'status': 'healthy',
+                    'response_time': 300,
+                    'last_check': timezone.now().isoformat()
+                }
+            ],
+            'system_metrics': {
+                'cpu_usage': 23.1,
+                'memory_usage': 67.8,
+                'disk_usage': 45.2,
+                'active_connections': 15
             },
-            'disk_usage': 45.2,
-            'memory_usage': 67.8,
-            'cpu_usage': 23.1,
-            'active_connections': 15,
-            'error_count_last_hour': 0
+            'last_updated': timezone.now().isoformat()
         }
         
-        serializer = SystemHealthSerializer(data)
-        return Response(serializer.data)
+        return Response(data)

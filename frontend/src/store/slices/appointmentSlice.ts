@@ -1,102 +1,144 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { Appointment, PaginatedResponse } from '../../types';
-import apiClient from '../../services/api/client';
+import appointmentService, { AppointmentFilters, FeedbackData } from '../../services/api/appointmentService';
+import { Appointment } from '../../types';
 
-// Async thunks
-export const fetchAppointments = createAsyncThunk(
-  'appointments/fetchAppointments',
-  async (_, { rejectWithValue }) => {
-    try {
-      const response = await apiClient.get<PaginatedResponse<Appointment>>('/appointments/appointments/');
-      return response;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.error || 'Failed to fetch appointments');
-    }
-  }
-);
-
-export const createAppointment = createAsyncThunk(
-  'appointments/createAppointment',
-  async (appointmentData: Partial<Appointment>, { rejectWithValue }) => {
-    try {
-      const response = await apiClient.post<Appointment>('/appointments/appointments/', appointmentData);
-      return response;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.error || 'Failed to create appointment');
-    }
-  }
-);
-
-// Appointment state interface
 interface AppointmentState {
   appointments: Appointment[];
   selectedAppointment: Appointment | null;
   loading: boolean;
   error: string | null;
-  totalCount: number;
-  nextPage: string | null;
-  previousPage: string | null;
+  filters: AppointmentFilters;
 }
 
-// Initial state
 const initialState: AppointmentState = {
   appointments: [],
   selectedAppointment: null,
   loading: false,
   error: null,
-  totalCount: 0,
-  nextPage: null,
-  previousPage: null,
+  filters: {},
 };
 
-// Appointment slice
+export const fetchAppointments = createAsyncThunk(
+  'appointments/fetchAppointments',
+  async (filters?: AppointmentFilters) => {
+    return await appointmentService.getAppointments(filters);
+  }
+);
+
+export const fetchAppointmentById = createAsyncThunk(
+  'appointments/fetchAppointmentById',
+  async (id: number) => {
+    return await appointmentService.getAppointmentById(id);
+  }
+);
+
+export const createAppointment = createAsyncThunk(
+  'appointments/createAppointment',
+  async (data: {
+    mentor_id: number;
+    service_id: number;
+    scheduled_date: string;
+    scheduled_time: string;
+    user_notes?: string;
+  }) => {
+    return await appointmentService.createAppointment(data);
+  }
+);
+
+export const cancelAppointment = createAsyncThunk(
+  'appointments/cancelAppointment',
+  async (id: number) => {
+    await appointmentService.cancelAppointment(id);
+    return id;
+  }
+);
+
+export const rescheduleAppointment = createAsyncThunk(
+  'appointments/rescheduleAppointment',
+  async ({ id, data }: { id: number; data: { scheduled_start: string; scheduled_end: string } }) => {
+    return await appointmentService.rescheduleAppointment(id, data);
+  }
+);
+
+export const submitFeedback = createAsyncThunk(
+  'appointments/submitFeedback',
+  async ({ id, feedback }: { id: number; feedback: FeedbackData }) => {
+    return await appointmentService.submitFeedback(id, feedback);
+  }
+);
+
 const appointmentSlice = createSlice({
   name: 'appointments',
   initialState,
   reducers: {
-    clearError: (state) => {
-      state.error = null;
+    setFilters: (state, action) => {
+      state.filters = action.payload;
     },
-    clearSelectedAppointment: (state) => {
-      state.selectedAppointment = null;
+    clearFilters: (state) => {
+      state.filters = {};
     },
   },
   extraReducers: (builder) => {
-    // Fetch appointments
     builder
+      // Fetch appointments
       .addCase(fetchAppointments.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
       .addCase(fetchAppointments.fulfilled, (state, action) => {
         state.loading = false;
-        state.appointments = action.payload.results;
-        state.totalCount = action.payload.count;
-        state.nextPage = action.payload.next || null;
-        state.previousPage = action.payload.previous || null;
+        state.appointments = action.payload;
       })
       .addCase(fetchAppointments.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload as string;
-      });
+        state.error = action.error.message || 'Failed to fetch appointments';
+      })
 
-    // Create appointment
-    builder
-      .addCase(createAppointment.pending, (state) => {
+      // Fetch appointment by ID
+      .addCase(fetchAppointmentById.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
-      .addCase(createAppointment.fulfilled, (state, action) => {
+      .addCase(fetchAppointmentById.fulfilled, (state, action) => {
         state.loading = false;
-        state.appointments.unshift(action.payload);
-        state.totalCount += 1;
+        state.selectedAppointment = action.payload as any;
       })
-      .addCase(createAppointment.rejected, (state, action) => {
+      .addCase(fetchAppointmentById.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload as string;
+        state.error = action.error.message || 'Failed to fetch appointment details';
+      })
+
+      // Create appointment
+      .addCase(createAppointment.fulfilled, (state, action) => {
+        state.appointments.unshift(action.payload as any);
+      })
+
+      // Cancel appointment
+      .addCase(cancelAppointment.fulfilled, (state, action) => {
+        const appointment = state.appointments.find(apt => apt.id === action.payload);
+        if (appointment) {
+          appointment.status = 'cancelled';
+        }
+      })
+
+      // Reschedule appointment
+      .addCase(rescheduleAppointment.fulfilled, (state, action) => {
+        const index = state.appointments.findIndex(apt => apt.id === action.payload.id);
+        if (index !== -1) {
+          state.appointments[index] = action.payload as any;
+        }
+      })
+
+      // Submit feedback
+      .addCase(submitFeedback.fulfilled, (state, action) => {
+        const index = state.appointments.findIndex(apt => apt.id === action.payload.id);
+        if (index !== -1) {
+          state.appointments[index] = action.payload as any;
+        }
       });
   },
 });
 
-export const { clearError, clearSelectedAppointment } = appointmentSlice.actions;
-export default appointmentSlice.reducer; 
+export const { setFilters, clearFilters } = appointmentSlice.actions;
+
+export default appointmentSlice.reducer;

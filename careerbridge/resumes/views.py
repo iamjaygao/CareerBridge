@@ -20,7 +20,8 @@ from .serializers import (
     ResumeSearchSerializer, ResumeFilterSerializer, ResumeStatsSerializer,
     ResumeAnalysisResultSerializer, JobDescriptionSerializer, ResumeJobMatchSerializer,
     KeywordMatchSerializer, UserSubscriptionSerializer,
-    InvitationCodeSerializer
+    InvitationCodeSerializer,
+    ExternalJobCrawlRequestSerializer, ExternalResumeMatchRequestSerializer
 )
 from .services import (
     ResumeAnalysisService, ResumeSearchService, ResumeStatsService,
@@ -29,6 +30,9 @@ from .services import (
 # JDManager functionality moved to external service
 from .tier_service import TierFactory, TierService
 from .referral_service import ReferralService, PricingService
+from .external_services import ExternalServiceManager
+from .models import ExternalServiceIntegration
+import requests
 
 class ResumeListView(generics.ListCreateAPIView):
     """Resume List and Create View with tier support"""
@@ -191,6 +195,102 @@ class ResumeFeedbackView(generics.RetrieveAPIView):
     )
     def get(self, request, *args, **kwargs):
         return super().get(request, *args, **kwargs)
+
+class ExternalJobCrawlerView(generics.CreateAPIView):
+    """Trigger external job crawling and store results"""
+    serializer_class = ExternalJobCrawlRequestSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    manager = ExternalServiceManager()
+
+    @swagger_auto_schema(
+        operation_description="Trigger external job crawler and store jobs in DB",
+        request_body=ExternalJobCrawlRequestSerializer,
+        responses={200: JobDescriptionSerializer(many=True)}
+    )
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        job_title = serializer.validated_data['job_title']
+        location = serializer.validated_data['location']
+        sources = serializer.validated_data.get('sources')
+        limit = serializer.validated_data.get('limit', 20)
+
+        stored = self.manager.crawl_and_store_jobs(
+            job_title=job_title,
+            location=location,
+            sources=sources,
+            limit=limit,
+            user=request.user
+        )
+        return Response(JobDescriptionSerializer(stored, many=True).data, status=status.HTTP_200_OK)
+
+class ExternalResumeMatcherView(generics.CreateAPIView):
+    """Match a resume to an existing job description via external ResumeMatcher service"""
+    serializer_class = ExternalResumeMatchRequestSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    manager = ExternalServiceManager()
+
+    @swagger_auto_schema(
+        operation_description="Match a resume to a job description using ResumeMatcher",
+        request_body=ExternalResumeMatchRequestSerializer,
+        responses={200: ResumeJobMatchSerializer}
+    )
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        resume = get_object_or_404(Resume, id=serializer.validated_data['resume_id'], user=request.user)
+        job = get_object_or_404(JobDescription, id=serializer.validated_data['job_description_id'])
+
+        match = self.manager.match_resume_to_external_jd(resume=resume, job_description=job, user=request.user)
+        if not match:
+            return Response({'error': 'Matching failed'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(ResumeJobMatchSerializer(match).data, status=status.HTTP_200_OK)
+
+class ExternalServicesHealthView(generics.GenericAPIView):
+    """Health check for external service integrations (ResumeMatcher, JobCrawler)"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="Check health/status of configured external services",
+        responses={200: 'OK'}
+    )
+    def get(self, request, *args, **kwargs):
+        results = {}
+        for service_type in ['resume_matcher', 'job_crawler']:
+            try:
+                cfg = ExternalServiceIntegration.objects.filter(service_type=service_type, is_active=True).first()
+                if not cfg:
+                    results[service_type] = {
+                        'configured': False,
+                        'status': 'not_configured'
+                    }
+                    continue
+
+                headers = {'Content-Type': 'application/json', 'User-Agent': 'CareerBridge/1.0'}
+                if cfg.api_key:
+                    headers['Authorization'] = f'Bearer {cfg.api_key}'
+                health_url = f"{cfg.base_url.rstrip('/')}/health"
+                try:
+                    resp = requests.get(health_url, headers=headers, timeout=cfg.timeout)
+                    results[service_type] = {
+                        'configured': True,
+                        'status': 'healthy' if resp.status_code < 400 else 'unhealthy',
+                        'http_status': resp.status_code
+                    }
+                except Exception as e:
+                    results[service_type] = {
+                        'configured': True,
+                        'status': 'unhealthy',
+                        'error': str(e)
+                    }
+            except Exception as e:
+                results[service_type] = {
+                    'configured': False,
+                    'status': 'error',
+                    'error': str(e)
+                }
+
+        return Response(results, status=status.HTTP_200_OK)
 
 class ResumeSearchView(generics.ListAPIView):
     """Search resumes with filters"""

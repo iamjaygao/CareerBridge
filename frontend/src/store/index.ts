@@ -4,6 +4,7 @@ import mentorReducer from './slices/mentorSlice';
 import appointmentReducer from './slices/appointmentSlice';
 import resumeReducer from './slices/resumeSlice';
 import notificationReducer from './slices/notificationSlice';
+import settingsReducer from './slices/settingsSlice';
 
 export const store = configureStore({
   reducer: {
@@ -12,6 +13,7 @@ export const store = configureStore({
     appointments: appointmentReducer,
     resumes: resumeReducer,
     notifications: notificationReducer,
+    settings: settingsReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

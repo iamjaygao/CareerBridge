@@ -5,7 +5,7 @@ from rest_framework.decorators import action
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
 from django.utils import timezone
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 
@@ -14,7 +14,7 @@ from .models import (
     MentorReview, MentorApplication, MentorPayment, MentorNotification
 )
 from .serializers import (
-    MentorProfileSerializer, MentorProfileDetailSerializer, MentorServiceSerializer,
+    MentorProfileSerializer, MentorProfileDetailSerializer, MentorDetailSerializer, MentorServiceSerializer,
     MentorAvailabilitySerializer, MentorSessionSerializer, MentorSessionCreateSerializer,
     MentorReviewSerializer, MentorApplicationSerializer, MentorPaymentSerializer,
     MentorNotificationSerializer, MentorSearchSerializer, MentorRecommendationSerializer,
@@ -65,13 +65,13 @@ class MentorListView(generics.ListAPIView):
 
 class MentorDetailView(generics.RetrieveAPIView):
     """Get detailed mentor profile"""
-    serializer_class = MentorProfileDetailSerializer
+    serializer_class = MentorDetailSerializer
     permission_classes = []  # Allow public access to view mentor details
     queryset = MentorProfile.objects.filter(status='approved')
 
     @swagger_auto_schema(
         operation_description="Get detailed mentor profile information",
-        responses={200: MentorProfileDetailSerializer}
+        responses={200: MentorDetailSerializer}
     )
     def get(self, request, *args, **kwargs):
         return super().get(request, *args, **kwargs)
@@ -177,21 +177,32 @@ class MentorAvailabilityView(generics.ListCreateAPIView):
 
 class MentorAvailabilitySlotsView(APIView):
     """Get available time slots for a mentor"""
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = []  # Allow public access to view availability
     
     @swagger_auto_schema(
         operation_description="Get available time slots for a mentor on a specific date",
         manual_parameters=[
             openapi.Parameter('date', openapi.IN_QUERY, description="Date to check availability", type=openapi.TYPE_STRING, format=openapi.FORMAT_DATE),
+            openapi.Parameter('service_id', openapi.IN_QUERY, description="Service ID to get duration", type=openapi.TYPE_INTEGER),
         ],
         responses={200: MentorAvailabilitySlotSerializer(many=True)}
     )
     def get(self, request, mentor_id):
         mentor = get_object_or_404(MentorProfile, id=mentor_id, status='approved')
         check_date = request.query_params.get('date', date.today())
+        service_id = request.query_params.get('service_id')
         
         if isinstance(check_date, str):
             check_date = date.fromisoformat(check_date)
+        
+        # Get service duration if service_id is provided
+        duration_minutes = 60  # default 1 hour
+        if service_id:
+            try:
+                service = MentorService.objects.get(id=service_id, mentor=mentor, is_active=True)
+                duration_minutes = service.duration_minutes
+            except MentorService.DoesNotExist:
+                pass
         
         day_of_week = check_date.weekday()
         availabilities = MentorAvailability.objects.filter(
@@ -202,8 +213,33 @@ class MentorAvailabilitySlotsView(APIView):
         
         slots = []
         for availability in availabilities:
-            availability_slots = availability.get_available_slots(check_date)
-            slots.extend(availability_slots)
+            # Generate slots based on service duration
+            current_time = availability.start_time
+            while current_time < availability.end_time:
+                # Calculate end time for this slot
+                slot_end = (datetime.combine(check_date, current_time) + timedelta(minutes=duration_minutes)).time()
+                
+                # Check if the entire slot fits within availability
+                if slot_end <= availability.end_time:
+                    # Check if this time slot is available (no conflicting sessions)
+                    is_available = not MentorSession.objects.filter(
+                        mentor=mentor,
+                        scheduled_date=check_date,
+                        scheduled_time=current_time,
+                        status__in=['confirmed', 'pending']
+                    ).exists()
+                    
+                    if is_available:
+                        slots.append({
+                            'date': check_date,
+                            'start_time': current_time,
+                            'end_time': slot_end,
+                            'is_available': is_available,
+                            'duration_minutes': duration_minutes
+                        })
+                
+                # Move to next slot (30-minute intervals for selection)
+                current_time = (datetime.combine(check_date, current_time) + timedelta(minutes=30)).time()
         
         serializer = MentorAvailabilitySlotSerializer(slots, many=True)
         return Response(serializer.data)

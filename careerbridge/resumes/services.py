@@ -5,6 +5,7 @@ from django.core.cache import cache
 from django.utils import timezone
 from django.db.models import Q, Avg, Count
 from .models import Resume, ResumeAnalysis, ResumeFeedback
+from careerbridge.external_services.ai_services.openai_service import openai_service
 
 class ResumeAnalysisService:
     """Service class for resume analysis operations"""
@@ -12,51 +13,90 @@ class ResumeAnalysisService:
     @staticmethod
     def analyze_resume(resume_id, industry=None, job_title=None):
         """
-        Analyze a resume using AI
-        This is a mock implementation - in production, integrate with OpenAI API
+        Analyze a resume using OpenAI
         """
         try:
             resume = Resume.objects.get(id=resume_id)
-            
-            # Update status to analyzing
             resume.status = 'analyzing'
             resume.save()
-            
-            # Simulate AI processing time
             start_time = time.time()
-            time.sleep(2)  # Simulate processing
+
+            # 1. 提取简历文本（假设resume有extracted_text字段或需OCR/解析）
+            # 这里简化为直接读取resume.file内容（实际应做PDF解析）
+            resume_text = None
+            if hasattr(resume, 'extracted_text') and resume.extracted_text:
+                resume_text = resume.extracted_text
+            else:
+                # 简化：如有file字段，尝试读取文本
+                try:
+                    with resume.file.open('r') as f:
+                        resume_text = f.read()
+                except Exception:
+                    resume_text = resume.title  # fallback
+
+            # 2. 调用OpenAI分析
+            ai_result = openai_service.analyze_resume(resume_text or resume.title)
             processing_time = time.time() - start_time
-            
-            # Mock analysis results
-            analysis_data = ResumeAnalysisService._generate_mock_analysis(
-                resume, industry, job_title
-            )
-            
-            # Create analysis record
+
+            # 3. 解析AI结果，映射到ResumeAnalysis字段
+            analysis_data = {
+                'overall_score': Decimal(str(ai_result.get('overall_score', 75))),
+                'structure_score': Decimal(str(ai_result.get('ats_compatibility', {}).get('score', 70))),
+                'content_score': Decimal(str(ai_result.get('skill_analysis', {}).get('technical_skills', []).__len__() * 10 or 70)),
+                'keyword_score': Decimal(str(ai_result.get('ats_compatibility', {}).get('score', 70))),
+                'ats_score': Decimal(str(ai_result.get('ats_compatibility', {}).get('score', 70))),
+                'extracted_text': resume_text or '',
+                'detected_keywords': ai_result.get('skill_analysis', {}).get('technical_skills', []),
+                'missing_keywords': ai_result.get('skill_analysis', {}).get('missing_skills', []),
+                'industry_keywords': ai_result.get('ats_compatibility', {}).get('issues', []),
+                'technical_skills': ai_result.get('skill_analysis', {}).get('technical_skills', []),
+                'soft_skills': ai_result.get('skill_analysis', {}).get('soft_skills', []),
+                'skill_gaps': ai_result.get('skill_analysis', {}).get('missing_skills', []),
+                'experience_years': ai_result.get('experience_years', 0),
+                'job_titles': ai_result.get('job_titles', []),
+                'companies': ai_result.get('companies', []),
+                'education_level': ai_result.get('education_level', ''),
+                'institutions': ai_result.get('institutions', []),
+                'certifications': ai_result.get('certifications', []),
+                'analysis_version': 'openai-1.0',
+                'processing_time': Decimal(str(processing_time)),
+                'confidence_score': Decimal(str(ai_result.get('confidence', 0.85)))
+            }
+
+            # 4. 创建分析记录
             analysis = ResumeAnalysis.objects.create(
                 resume=resume,
-                processing_time=Decimal(str(processing_time)),
                 **analysis_data
             )
-            
-            # Create feedback
-            feedback_data = ResumeAnalysisService._generate_mock_feedback(analysis)
+
+            # 5. 创建反馈（AI返回的summary/strengths/weaknesses/suggestions）
+            feedback_data = {
+                'summary': ai_result.get('summary', ''),
+                'strengths': ai_result.get('strengths', []),
+                'weaknesses': ai_result.get('weaknesses', []),
+                'structure_recommendations': ai_result.get('ats_compatibility', {}).get('recommendations', []),
+                'content_recommendations': ai_result.get('suggestions', []),
+                'keyword_recommendations': ai_result.get('ats_compatibility', {}).get('recommendations', []),
+                'format_recommendations': [],
+                'industry_insights': [],
+                'market_trends': [],
+                'salary_insights': {},
+                'priority_actions': [],
+                'quick_fixes': [],
+                'long_term_improvements': []
+            }
             ResumeFeedback.objects.create(
                 analysis=analysis,
                 **feedback_data
             )
-            
-            # Update resume status
+
             resume.status = 'analyzed'
             resume.analyzed_at = timezone.now()
             resume.save()
-            
             return analysis
-            
         except Resume.DoesNotExist:
             raise ValueError("Resume not found")
         except Exception as e:
-            # Update resume status to failed
             resume.status = 'failed'
             resume.save()
             raise e

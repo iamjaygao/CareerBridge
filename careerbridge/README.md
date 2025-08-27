@@ -97,6 +97,30 @@ The platform is designed to integrate with external microservices:
 - **Resume Matcher Service**: For advanced matching algorithms
 - **AI Analysis Service**: For enhanced resume analysis
 
+#### Integration Guide (ResumeMatcher & JobCrawler as external APIs)
+
+1) Configure services (choose one):
+- Admin/DB-driven: create `ExternalServiceIntegration` records for `resume_matcher` and `job_crawler` with `base_url`, `api_key`, `timeout`, set `is_active=True`.
+- Or env-driven: set `RESUME_MATCHER_BASE_URL`, `RESUME_MATCHER_API_KEY`, `JOB_CRAWLER_BASE_URL`, `JOB_CRAWLER_API_KEY` in `.env` (see `env_template.txt`).
+
+2) Health check:
+- GET `/api/v1/resumes/services/health/` → returns configured status and a `/health` ping result for both services.
+
+3) JobCrawler usage:
+- POST `/api/v1/resumes/jobs/crawl/`
+  - Body: `{ "job_title": "Data Scientist", "location": "SF", "sources": ["indeed","linkedin"], "limit": 20 }`
+  - Effect: calls external crawler; persists jobs into `JobDescription`.
+
+4) ResumeMatcher usage:
+- POST `/api/v1/resumes/matches/external/`
+  - Body: `{ "resume_id": 1, "job_description_id": 123 }`
+  - Effect: calls external matcher; creates/updates `ResumeJobMatch`.
+
+5) Notes and expectations:
+- External services should expose `GET /health` for health probing.
+- Authentication: Bearer token from `api_key` header `Authorization: Bearer <key>`.
+- Timeouts/rate-limits configurable via `ExternalServiceIntegration` or env.
+
 ## 🧪 Testing
 
 ### Run Tests

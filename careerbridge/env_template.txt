@@ -19,10 +19,23 @@ EMAIL_HOST_PASSWORD=your-app-password
 # Redis Settings (optional)
 REDIS_URL=redis://127.0.0.1:6379/1
 
-# External API Settings
+# External API Settings (legacy)
 JOB_CRAWLER_API_URL=https://your-job-crawler-api.com
 RESUME_MATCHER_API_URL=https://your-resume-matcher-api.com
 AI_ANALYSIS_API_URL=https://your-ai-analysis-api.com
+
+# External Services (new unified config used by external_services.config)
+# If you prefer env-based config instead of DB-driven `ExternalServiceIntegration`,
+# set these values and ensure your integrations read from env.
+JOB_CRAWLER_BASE_URL=https://your-job-crawler-api.com
+JOB_CRAWLER_API_KEY=your-job-crawler-api-key
+JOB_CRAWLER_TIMEOUT=30
+JOB_CRAWLER_RATE_LIMIT=100
+
+RESUME_MATCHER_BASE_URL=https://your-resume-matcher-api.com
+RESUME_MATCHER_API_KEY=your-resume-matcher-api-key
+RESUME_MATCHER_TIMEOUT=30
+RESUME_MATCHER_CONFIDENCE=0.7
 
 # Security Settings
 ALLOWED_HOSTS=your-domain.com,www.your-domain.com,localhost,127.0.0.1

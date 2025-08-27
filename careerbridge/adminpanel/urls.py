@@ -31,6 +31,7 @@ urlpatterns = [
     
     # Mentor management
     path('mentors/', views.MentorManagementView.as_view(), name='mentor-management'),
+    path('mentors/applications/', views.MentorApplicationsView.as_view(), name='mentor-applications'),
     
     # System health
     path('health/', views.SystemHealthView.as_view(), name='system-health'),

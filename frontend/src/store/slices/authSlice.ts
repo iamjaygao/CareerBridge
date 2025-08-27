@@ -98,6 +98,14 @@ const authSlice = createSlice({
   name: 'auth',
   initialState,
   reducers: {
+    setUser: (state, action: PayloadAction<User>) => {
+      state.user = action.payload;
+      state.isAuthenticated = true;
+    },
+    clearUser: (state) => {
+      state.user = null;
+      state.isAuthenticated = false;
+    },
     clearError: (state) => {
       state.error = null;
     },
@@ -170,7 +178,9 @@ const authSlice = createSlice({
       })
       .addCase(updateProfile.fulfilled, (state, action) => {
         state.loading = false;
-        state.user = { ...state.user, ...action.payload.userData };
+        if (state.user) {
+          state.user = { ...state.user, ...action.payload.userData } as any;
+        }
         state.message = action.payload.message;
       })
       .addCase(updateProfile.rejected, (state, action) => {
@@ -213,5 +223,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { clearError, clearMessage, logout } = authSlice.actions;
+export const { setUser, clearUser, clearError, clearMessage, logout } = authSlice.actions;
 export default authSlice.reducer; 

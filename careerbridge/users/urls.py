@@ -3,7 +3,7 @@ from .views import (
     RegisterView, LoginView, UserView,
     PasswordChangeView, UsernameChangeStatusView, AvatarUploadView, RefreshTokenView,
     EmailVerificationView, ResendVerificationView, PasswordResetRequestView, 
-    PasswordResetView, UsernameRecoveryView
+    PasswordResetView, UsernameRecoveryView, DashboardView
 )
 
 app_name = 'users'
@@ -21,4 +21,5 @@ urlpatterns = [
     path('change-password/', PasswordChangeView.as_view(), name='change-password'),
     path('username-change-status/', UsernameChangeStatusView.as_view(), name='username-change-status'),
     path('avatar/', AvatarUploadView.as_view(), name='upload-avatar'),
+    path('dashboard/stats/', DashboardView.as_view(), name='dashboard-stats'),
 ]

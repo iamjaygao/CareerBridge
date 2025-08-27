@@ -46,6 +46,30 @@ class MentorProfileDetailSerializer(MentorProfileSerializer):
             'stripe_account_id', 'paypal_email', 'bank_account_info'
         )
 
+class MentorDetailSerializer(MentorProfileSerializer):
+    """Comprehensive mentor detail serializer with services, reviews, and availability"""
+    services = serializers.SerializerMethodField()
+    reviews = serializers.SerializerMethodField()
+    availability = serializers.SerializerMethodField()
+    
+    class Meta(MentorProfileSerializer.Meta):
+        fields = MentorProfileSerializer.Meta.fields + ('services', 'reviews', 'availability')
+    
+    def get_services(self, obj):
+        """Get mentor's active services"""
+        services = obj.services.filter(is_active=True)
+        return MentorServiceSerializer(services, many=True).data
+    
+    def get_reviews(self, obj):
+        """Get mentor's recent reviews"""
+        reviews = obj.reviews.all()[:10]  # Limit to 10 most recent reviews
+        return MentorReviewSerializer(reviews, many=True).data
+    
+    def get_availability(self, obj):
+        """Get mentor's availability"""
+        availability = obj.availabilities.filter(is_active=True)
+        return MentorAvailabilitySerializer(availability, many=True).data
+
 class MentorServiceSerializer(serializers.ModelSerializer):
     """Mentor service serializer"""
     mentor = serializers.PrimaryKeyRelatedField(read_only=True)
@@ -303,6 +327,7 @@ class MentorAvailabilitySlotSerializer(serializers.Serializer):
     start_time = serializers.TimeField()
     end_time = serializers.TimeField()
     is_available = serializers.BooleanField()
+    duration_minutes = serializers.IntegerField()
 
 class MentorRankingSerializer(serializers.Serializer):
     """Serializer for mentor rankings"""

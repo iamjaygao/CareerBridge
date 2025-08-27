@@ -1,72 +1,58 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { Resume, PaginatedResponse } from '../../types';
-import apiClient from '../../services/api/client';
+import resumeService, { Resume } from '../../services/api/resumeService';
 
-// Async thunks
+interface ResumeState {
+  resumes: Resume[];
+  loading: boolean;
+  error: string | null;
+  uploadProgress: number | null;
+}
+
+const initialState: ResumeState = {
+  resumes: [],
+  loading: false,
+  error: null,
+  uploadProgress: null,
+};
+
 export const fetchResumes = createAsyncThunk(
   'resumes/fetchResumes',
-  async (_, { rejectWithValue }) => {
-    try {
-      const response = await apiClient.get<PaginatedResponse<Resume>>('/resumes/');
-      return response;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.error || 'Failed to fetch resumes');
-    }
+  async () => {
+    return await resumeService.getResumes();
   }
 );
 
 export const uploadResume = createAsyncThunk(
   'resumes/uploadResume',
-  async (file: File, { rejectWithValue }) => {
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('title', file.name);
-      
-      const response = await apiClient.post<Resume>('/resumes/', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-      return response;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.error || 'Failed to upload resume');
-    }
+  async ({ file, title }: { file: File; title?: string }) => {
+    return await resumeService.uploadResume(file, title);
   }
 );
 
-// Resume state interface
-interface ResumeState {
-  resumes: Resume[];
-  selectedResume: Resume | null;
-  loading: boolean;
-  error: string | null;
-  totalCount: number;
-  nextPage: string | null;
-  previousPage: string | null;
-}
+export const deleteResume = createAsyncThunk(
+  'resumes/deleteResume',
+  async (id: number) => {
+    await resumeService.deleteResume(id);
+    return id;
+  }
+);
 
-// Initial state
-const initialState: ResumeState = {
-  resumes: [],
-  selectedResume: null,
-  loading: false,
-  error: null,
-  totalCount: 0,
-  nextPage: null,
-  previousPage: null,
-};
+export const analyzeResume = createAsyncThunk(
+  'resumes/analyzeResume',
+  async (id: number) => {
+    return await resumeService.analyzeResume(id);
+  }
+);
 
-// Resume slice
 const resumeSlice = createSlice({
   name: 'resumes',
   initialState,
   reducers: {
-    clearError: (state) => {
-      state.error = null;
+    setUploadProgress: (state, action) => {
+      state.uploadProgress = action.payload;
     },
-    clearSelectedResume: (state) => {
-      state.selectedResume = null;
+    resetUploadProgress: (state) => {
+      state.uploadProgress = null;
     },
   },
   extraReducers: (builder) => {
@@ -78,18 +64,14 @@ const resumeSlice = createSlice({
       })
       .addCase(fetchResumes.fulfilled, (state, action) => {
         state.loading = false;
-        state.resumes = action.payload.results;
-        state.totalCount = action.payload.count;
-        state.nextPage = action.payload.next || null;
-        state.previousPage = action.payload.previous || null;
+        state.resumes = action.payload;
       })
       .addCase(fetchResumes.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload as string;
-      });
+        state.error = action.error.message || 'Failed to fetch resumes';
+      })
 
     // Upload resume
-    builder
       .addCase(uploadResume.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -97,14 +79,51 @@ const resumeSlice = createSlice({
       .addCase(uploadResume.fulfilled, (state, action) => {
         state.loading = false;
         state.resumes.unshift(action.payload);
-        state.totalCount += 1;
+        state.uploadProgress = null;
       })
       .addCase(uploadResume.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload as string;
+        state.error = action.error.message || 'Failed to upload resume';
+        state.uploadProgress = null;
+      })
+
+    // Delete resume
+      .addCase(deleteResume.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(deleteResume.fulfilled, (state, action) => {
+        state.loading = false;
+        state.resumes = state.resumes.filter(resume => resume.id !== action.payload);
+      })
+      .addCase(deleteResume.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.error.message || 'Failed to delete resume';
+      })
+
+    // Analyze resume
+      .addCase(analyzeResume.pending, (state, action) => {
+        const resume = state.resumes.find(r => r.id === action.meta.arg);
+        if (resume) {
+          resume.status = 'analyzing';
+        }
+      })
+      .addCase(analyzeResume.fulfilled, (state, action) => {
+        const index = state.resumes.findIndex(r => r.id === action.payload.id);
+        if (index !== -1) {
+          state.resumes[index] = action.payload;
+        }
+      })
+      .addCase(analyzeResume.rejected, (state, action) => {
+        const resume = state.resumes.find(r => r.id === action.meta.arg);
+        if (resume) {
+          resume.status = 'failed';
+        }
+        state.error = action.error.message || 'Failed to analyze resume';
       });
   },
 });
 
-export const { clearError, clearSelectedResume } = resumeSlice.actions;
-export default resumeSlice.reducer; 
+export const { setUploadProgress, resetUploadProgress } = resumeSlice.actions;
+
+export default resumeSlice.reducer;

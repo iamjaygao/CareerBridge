@@ -443,4 +443,86 @@ class RefreshTokenView(TokenRefreshView):
     )
     def post(self, request, *args, **kwargs):
         return super().post(request, *args, **kwargs)
+
+class DashboardView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    @swagger_auto_schema(
+        operation_description="Get user dashboard statistics",
+        responses={
+            200: openapi.Response(
+                description="Dashboard data retrieved successfully",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'stats': openapi.Schema(
+                            type=openapi.TYPE_OBJECT,
+                            properties={
+                                'upcomingAppointments': openapi.Schema(type=openapi.TYPE_INTEGER),
+                                'resumesUploaded': openapi.Schema(type=openapi.TYPE_INTEGER),
+                                'mentorSessions': openapi.Schema(type=openapi.TYPE_INTEGER),
+                                'profileViews': openapi.Schema(type=openapi.TYPE_INTEGER),
+                            }
+                        ),
+                        'activities': openapi.Schema(
+                            type=openapi.TYPE_ARRAY,
+                            items=openapi.Schema(
+                                type=openapi.TYPE_OBJECT,
+                                properties={
+                                    'id': openapi.Schema(type=openapi.TYPE_STRING),
+                                    'type': openapi.Schema(type=openapi.TYPE_STRING),
+                                    'description': openapi.Schema(type=openapi.TYPE_STRING),
+                                    'timestamp': openapi.Schema(type=openapi.TYPE_STRING),
+                                }
+                            )
+                        )
+                    }
+                )
+            ),
+            401: openapi.Response(description="Authentication required")
+        }
+    )
+    def get(self, request):
+        """Get dashboard statistics for the current user"""
+        user = request.user
+        
+        # Get upcoming appointments count
+        from appointments.models import Appointment
+        upcoming_appointments = Appointment.objects.filter(
+            user=user,
+            status__in=['pending', 'confirmed']
+        ).count()
+        
+        # Get resumes count
+        from resumes.models import Resume
+        resumes_uploaded = Resume.objects.filter(user=user).count()
+        
+        # Get mentor sessions count (completed appointments)
+        mentor_sessions = Appointment.objects.filter(
+            user=user,
+            status='completed'
+        ).count()
+        
+        # Profile views (placeholder - could be implemented later)
+        profile_views = 0
+        
+        # Recent activities (placeholder)
+        activities = [
+            {
+                'id': '1',
+                'type': 'appointment',
+                'description': 'You have an upcoming appointment',
+                'timestamp': timezone.now().isoformat()
+            }
+        ]
+        
+        return Response({
+            'stats': {
+                'upcomingAppointments': upcoming_appointments,
+                'resumesUploaded': resumes_uploaded,
+                'mentorSessions': mentor_sessions,
+                'profileViews': profile_views,
+            },
+            'activities': activities
+        }, status=status.HTTP_200_OK)        
         

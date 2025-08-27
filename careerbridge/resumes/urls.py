@@ -34,14 +34,16 @@ urlpatterns = [
     path('jobs/', views.JobDescriptionListView.as_view(), name='job-list'),
     path('jobs/<int:pk>/', views.JobDescriptionDetailView.as_view(), name='job-detail'),
     
-    # External service integration - TODO: Implement these views
-    # path('jobs/crawl/', views.ExternalJobCrawlerView.as_view(), name='external-job-crawl'),
-    # path('jobs/crawl/status/', views.JobCrawlerStatusView.as_view(), name='job-crawler-status'),
+    # External service integration
+    path('jobs/crawl/', views.ExternalJobCrawlerView.as_view(), name='external-job-crawl'),
     
     # Resume-Job matching with external service
     path('matches/', views.ResumeJobMatchView.as_view(), name='match-list'),
     path('matches/<int:pk>/', views.ResumeJobMatchDetailView.as_view(), name='match-detail'),
-    # path('matches/external/', views.ExternalResumeMatcherView.as_view(), name='external-match'),  # TODO: Implement
+    path('matches/external/', views.ExternalResumeMatcherView.as_view(), name='external-match'),
+
+    # External services health
+    path('services/health/', views.ExternalServicesHealthView.as_view(), name='external-services-health'),
     
     # Job recommendations
     path('recommendations/', views.JobRecommendationView.as_view(), name='job-recommendations'),

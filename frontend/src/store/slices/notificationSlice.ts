@@ -1,13 +1,24 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { Notification, PaginatedResponse } from '../../types';
+import { PaginatedResponse } from '../../types';
 import apiClient from '../../services/api/client';
+
+// Backend notification interface
+interface BackendNotification {
+  id: number;
+  title: string;
+  message: string;
+  type: 'info' | 'success' | 'warning' | 'error';
+  is_read: boolean;
+  created_at: string;
+  user_id: number;
+}
 
 // Async thunks
 export const fetchNotifications = createAsyncThunk(
   'notifications/fetchNotifications',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await apiClient.get<PaginatedResponse<Notification>>('/notifications/');
+      const response = await apiClient.get<PaginatedResponse<BackendNotification>>('/notifications/');
       return response;
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.error || 'Failed to fetch notifications');
@@ -22,7 +33,7 @@ export const markNotificationAsRead = createAsyncThunk(
       const response = await apiClient.post<{ message: string }>('/notifications/mark-read/', {
         notification_ids: notificationIds,
       });
-      return { notificationIds, message: response.message };
+      return { notificationIds, message: response.data.message };
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.error || 'Failed to mark notification as read');
     }
@@ -34,7 +45,7 @@ export const getUnreadCount = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await apiClient.get<{ unread_count: number }>('/notifications/unread-count/');
-      return response.unread_count;
+      return response.data.unread_count;
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.error || 'Failed to get unread count');
     }
@@ -43,7 +54,7 @@ export const getUnreadCount = createAsyncThunk(
 
 // Notification state interface
 interface NotificationState {
-  notifications: Notification[];
+  notifications: BackendNotification[];
   loading: boolean;
   error: string | null;
   totalCount: number;
@@ -88,10 +99,10 @@ const notificationSlice = createSlice({
       })
       .addCase(fetchNotifications.fulfilled, (state, action) => {
         state.loading = false;
-        state.notifications = action.payload.results;
-        state.totalCount = action.payload.count;
-        state.nextPage = action.payload.next || null;
-        state.previousPage = action.payload.previous || null;
+        state.notifications = action.payload.data.results;
+        state.totalCount = action.payload.data.count;
+        state.nextPage = action.payload.data.next || null;
+        state.previousPage = action.payload.data.previous || null;
       })
       .addCase(fetchNotifications.rejected, (state, action) => {
         state.loading = false;
