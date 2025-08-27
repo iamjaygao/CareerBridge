@@ -8,7 +8,7 @@ import {
   Alert,
   Typography,
 } from '@mui/material';
-import { Grid } from '@mui/material';
+import { Grid, Pagination } from '@mui/material';
 import { Search as SearchIcon } from '@mui/icons-material';
 import { AppDispatch, RootState } from '../../store';
 import { fetchMentors, setFilters, clearFilters } from '../../store/slices/mentorSlice';
@@ -35,12 +35,13 @@ const MentorListPage: React.FC = () => {
     severity: 'success',
   });
   const [favorites, setFavorites] = useState<number[]>([]);
+  const [page, setPage] = useState(1);
   const [bookingDialogOpen, setBookingDialogOpen] = useState(false);
   const [selectedMentor, setSelectedMentor] = useState<Mentor | null>(null);
 
   useEffect(() => {
-    dispatch(fetchMentors(filters));
-  }, [dispatch, filters]);
+    dispatch(fetchMentors({ ...filters, page }));
+  }, [dispatch, filters, page]);
 
   const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
     const value = event.target.value;
@@ -162,6 +163,10 @@ const MentorListPage: React.FC = () => {
           </Grid>
         )}
       </Grid>
+
+      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+        <Pagination page={page} onChange={(_, p) => setPage(p)} count={10} color="primary" />
+      </Box>
 
       <Snackbar
         open={snackbar.open}

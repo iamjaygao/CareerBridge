@@ -1,0 +1,54 @@
+version: '3.9'
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-careerbridge}
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+  web:
+    build: .
+    depends_on:
+      - db
+    environment:
+      DJANGO_ENV: production
+      DB_ENGINE: postgresql
+      DB_NAME: ${DB_NAME:-careerbridge}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_HOST: db
+      DB_PORT: 5432
+      ALLOWED_HOSTS: 0.0.0.0,localhost,127.0.0.1
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  worker:
+    build: .
+    command: celery -A careerbridge.celery_app worker --loglevel=info
+    depends_on:
+      - web
+      - redis
+    environment:
+      DJANGO_ENV: production
+      REDIS_URL: redis://redis:6379/1
+      DB_ENGINE: postgresql
+      DB_NAME: ${DB_NAME:-careerbridge}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_HOST: db
+      DB_PORT: 5432
+
+volumes:
+  db_data:

@@ -27,73 +27,58 @@ class ExternalServiceClient:
             return None
     
     def _make_request(
-        self, 
-        endpoint: str, 
-        method: str = 'GET', 
-        data: Dict = None, 
+        self,
+        endpoint: str,
+        method: str = 'GET',
+        data: Dict = None,
         user = None
     ) -> Dict:
-        """Make HTTP request to external service"""
+        """Make HTTP request to external service via centralized utils (with retry/circuit)."""
         if not self.service_config:
             raise ValueError(f"No active configuration found for {self.service_type}")
-        
+
+        from careerbridge.external_services.utils import make_api_request, ExternalServiceError
+
         url = f"{self.service_config.base_url.rstrip('/')}/{endpoint.lstrip('/')}"
         headers = {
             'Content-Type': 'application/json',
             'User-Agent': 'CareerBridge/1.0'
         }
-        
-        # Add authentication headers
+
         if self.service_config.auth_headers:
             headers.update(self.service_config.auth_headers)
-        
-        # Add API key if required
         if self.service_config.api_key:
             headers['Authorization'] = f'Bearer {self.service_config.api_key}'
-        
-        # Prepare request data
-        request_data = {
-            'method': method,
-            'url': url,
-            'headers': headers,
-            'timeout': self.service_config.timeout
-        }
-        
-        if data:
-            request_data['json'] = data
-        
-        # Make request
+
         start_time = time.time()
         try:
-            response = requests.request(**request_data)
+            result = make_api_request(
+                url=url,
+                method=method,
+                headers=headers,
+                data=data or {},
+                timeout=self.service_config.timeout,
+                service=self.service_type
+            )
             request_time = time.time() - start_time
-            
-            # Log the request
             self._log_request(
                 endpoint=endpoint,
                 method=method,
                 request_data=data or {},
-                response_status=response.status_code,
-                response_data=response.json() if response.content else {},
+                response_status=200,
+                response_data=result,
                 request_time=request_time,
-                is_success=response.status_code < 400,
+                is_success=True,
                 user=user
             )
-            
-            if response.status_code >= 400:
-                raise requests.exceptions.RequestException(
-                    f"Service returned {response.status_code}: {response.text}"
-                )
-            
-            return response.json()
-            
-        except requests.exceptions.RequestException as e:
+            return result
+        except ExternalServiceError as e:
             request_time = time.time() - start_time
             self._log_request(
                 endpoint=endpoint,
                 method=method,
                 request_data=data or {},
-                response_status=0,
+                response_status=e.status_code or 0,
                 response_data={},
                 request_time=request_time,
                 is_success=False,

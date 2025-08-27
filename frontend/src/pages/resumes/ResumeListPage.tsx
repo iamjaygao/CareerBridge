@@ -18,7 +18,7 @@ import {
   Alert,
   CircularProgress,
 } from '@mui/material';
-import { Grid } from '@mui/material';
+import { Grid, Pagination } from '@mui/material';
 import {
   CloudUpload as UploadIcon,
   Delete as DeleteIcon,
@@ -56,6 +56,7 @@ const ResumeListPage: React.FC = () => {
   const [analysisResult, setAnalysisResult] = useState<any | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [analysisResumeId, setAnalysisResumeId] = useState<number | null>(null);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     dispatch(fetchResumes());
@@ -258,6 +259,10 @@ const ResumeListPage: React.FC = () => {
           </Grid>
         ))}
       </Grid>
+
+      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+        <Pagination page={page} onChange={(_, p) => setPage(p)} count={10} color="primary" />
+      </Box>
 
       {/* Upload Dialog */}
       <UploadResumeDialog

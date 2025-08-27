@@ -1,0 +1,40 @@
+{
+  "summary": {
+    "total": 5,
+    "passed": 3,
+    "failed": 2,
+    "success_rate": 60.0
+  },
+  "results": [
+    {
+      "test": "管理员登录",
+      "success": true,
+      "message": "成功登录管理员: admin_test",
+      "timestamp": "2025-08-27T15:18:50.462541"
+    },
+    {
+      "test": "管理员健康检查",
+      "success": true,
+      "message": "管理员面板健康检查正常",
+      "timestamp": "2025-08-27T15:18:50.464755"
+    },
+    {
+      "test": "用户管理",
+      "success": false,
+      "message": "获取失败，状态码: 403",
+      "timestamp": "2025-08-27T15:18:50.466368"
+    },
+    {
+      "test": "导师申请管理",
+      "success": false,
+      "message": "获取失败，状态码: 403",
+      "timestamp": "2025-08-27T15:18:50.467988"
+    },
+    {
+      "test": "系统统计",
+      "success": true,
+      "message": "获取到系统统计数据",
+      "timestamp": "2025-08-27T15:18:50.470998"
+    }
+  ]
+}

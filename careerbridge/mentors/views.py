@@ -8,6 +8,8 @@ from django.utils import timezone
 from datetime import date, timedelta, datetime
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
+from django.conf import settings
+import stripe
 
 from .models import (
     MentorProfile, MentorService, MentorAvailability, MentorSession,
@@ -148,6 +150,80 @@ class MentorRankingView(APIView):
             
             return Response(mentors)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class StripeConnectCreateAccountView(APIView):
+    """Create or fetch Stripe Connect account for the authenticated mentor"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="Create Stripe Connect account for current mentor and return account_id",
+        responses={200: openapi.Response(description="Account created", examples={"application/json": {"account_id": "acct_..."}})}
+    )
+    def post(self, request):
+        stripe.api_key = getattr(settings, 'STRIPE_SECRET_KEY', None)
+        if not stripe.api_key:
+            return Response({'error': 'Stripe not configured'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        profile = getattr(request.user, 'mentor_profile', None)
+        if not profile:
+            return Response({'error': 'Not a mentor'}, status=status.HTTP_403_FORBIDDEN)
+
+        if profile.stripe_account_id:
+            return Response({'account_id': profile.stripe_account_id}, status=status.HTTP_200_OK)
+
+        acct = stripe.Account.create(type='standard')
+        profile.stripe_account_id = acct['id']
+        profile.save()
+        return Response({'account_id': acct['id']}, status=status.HTTP_200_OK)
+
+class StripeConnectCreateAccountLinkView(APIView):
+    """Create an onboarding account link for the mentor's Stripe account"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="Create Stripe Connect account onboarding link",
+        manual_parameters=[
+            openapi.Parameter('return_url', openapi.IN_QUERY, description='Return URL after onboarding', type=openapi.TYPE_STRING),
+            openapi.Parameter('refresh_url', openapi.IN_QUERY, description='Refresh URL if onboarding is interrupted', type=openapi.TYPE_STRING),
+        ],
+        responses={200: openapi.Response(description="Link created", examples={"application/json": {"url": "https://connect.stripe.com/..."}})}
+    )
+    def post(self, request):
+        stripe.api_key = getattr(settings, 'STRIPE_SECRET_KEY', None)
+        if not stripe.api_key:
+            return Response({'error': 'Stripe not configured'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        profile = getattr(request.user, 'mentor_profile', None)
+        if not profile or not profile.stripe_account_id:
+            return Response({'error': 'Stripe account not found. Create account first.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        return_url = request.query_params.get('return_url') or request.build_absolute_uri('/')
+        refresh_url = request.query_params.get('refresh_url') or request.build_absolute_uri('/settings')
+
+        link = stripe.AccountLink.create(
+            account=profile.stripe_account_id,
+            refresh_url=refresh_url,
+            return_url=return_url,
+            type='account_onboarding'
+        )
+        return Response({'url': link['url']}, status=status.HTTP_200_OK)
+
+class StripeConnectStatusView(APIView):
+    """Return current mentor's Stripe Connect/KYC status"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        profile = getattr(request.user, 'mentor_profile', None)
+        if not profile:
+            return Response({'error': 'Not a mentor'}, status=status.HTTP_403_FORBIDDEN)
+        return Response({
+            'stripe_account_id': profile.stripe_account_id,
+            'payouts_enabled': profile.payouts_enabled,
+            'charges_enabled': profile.charges_enabled,
+            'kyc_disabled_reason': profile.kyc_disabled_reason,
+            'kyc_due_by': profile.kyc_due_by.isoformat() if profile.kyc_due_by else null,
+            'capabilities': profile.stripe_capabilities,
+        })
 
 class MentorServiceView(generics.ListCreateAPIView):
     """List and create mentor services"""

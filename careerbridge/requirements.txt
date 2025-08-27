@@ -17,3 +17,19 @@ uritemplate==4.2.0
 openai==1.54.0
 requests==2.31.0
 python-decouple==3.8
+
+# Payments
+stripe==10.5.0
+
+# Monitoring
+sentry-sdk==2.14.0
+
+# Async tasks
+celery==5.4.0
+redis==5.0.8
+django-storages==1.14.4
+boto3==1.34.158
+
+# Real-time communication
+channels==4.0.0
+channels-redis==4.1.0

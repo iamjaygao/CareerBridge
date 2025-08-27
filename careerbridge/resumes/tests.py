@@ -1,4 +1,52 @@
 from django.test import TestCase
+from django.urls import reverse
+from django.contrib.auth import get_user_model
+from rest_framework.test import APIClient
+from careerbridge.external_services.utils import get_circuit_breaker, _service_breakers, _service_metrics
+from unittest.mock import patch
+import requests
+from django.urls import reverse
+
+class LegalEndpointsTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username='u1', email='u1@example.com', password='pass')
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+    def test_export_flow_status_none_then_accepted(self):
+        status_url = reverse('resumes:data-export-status')
+        r0 = self.client.get(status_url)
+        self.assertEqual(r0.status_code, 200)
+        self.assertIn('status', r0.data)
+
+        export_url = reverse('resumes:data-export')
+        r1 = self.client.post(export_url)
+        self.assertIn(r1.status_code, (200, 202))
+        self.assertIn('job_id', r1.data)
+
+    @patch('careerbridge.external_services.utils.requests.request')
+    def test_circuit_breaker_opens_on_failures(self, mock_request):
+        # Force 5 consecutive failures to trip breaker
+        mock_request.side_effect = requests.exceptions.RequestException('fail')
+        from careerbridge.external_services.utils import make_api_request
+        service = 'test_service'
+        for _ in range(5):
+            with self.assertRaises(Exception):
+                make_api_request(url='http://x', service=service)
+        # Next call should raise circuit open
+        with self.assertRaises(Exception) as cm:
+            make_api_request(url='http://x', service=service)
+        self.assertIn('Circuit open', str(cm.exception))
+
+    @patch('careerbridge.resumes.external_services.ExternalServiceManager.crawl_and_store_jobs')
+    def test_external_job_crawler_502_on_error(self, mock_crawl):
+        mock_crawl.side_effect = Exception('downstream')
+        url = reverse('resumes:external-job-crawl')
+        r = self.client.post(url, {'job_title': 'DS', 'location': 'SF'}, format='json')
+        self.assertEqual(r.status_code, 502)
+        self.assertTrue(r.data.get('fallback'))
+from django.test import TestCase
 from django.contrib.auth import get_user_model
 from .models import Resume, ResumeComparison, UserDataConsent, DataRetentionPolicy
 from django.core.files.uploadedfile import SimpleUploadedFile

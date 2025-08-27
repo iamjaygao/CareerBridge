@@ -24,6 +24,12 @@ class MentorProfile(models.Model):
     stripe_account_id = models.CharField(max_length=100, blank=True, help_text="Stripe Connect account ID for payments")
     paypal_email = models.EmailField(blank=True, help_text="PayPal email for receiving payments")
     bank_account_info = models.JSONField(default=dict, blank=True, help_text="Bank account information for wire transfers")
+    # Stripe Connect KYC / capabilities
+    payouts_enabled = models.BooleanField(default=False, help_text="Stripe Connect payouts enabled")
+    charges_enabled = models.BooleanField(default=False, help_text="Stripe Connect charges enabled")
+    kyc_disabled_reason = models.CharField(max_length=255, blank=True, help_text="If disabled, Stripe reason")
+    kyc_due_by = models.DateTimeField(null=True, blank=True, help_text="KYC requirements due by")
+    stripe_capabilities = models.JSONField(default=dict, blank=True, help_text="Stripe capabilities snapshot")
     
     # Status and review
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')

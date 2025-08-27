@@ -27,12 +27,46 @@ INSTALLED_APPS = [
     'notifications',
     'resumes',
     'users',
+    'chat',
+    'search',
 
     'rest_framework',
     'rest_framework_simplejwt',
     'drf_yasg',
     'corsheaders',
+    'channels',
 ]
+
+REST_FRAMEWORK = {
+    'DEFAULT_THROTTLE_RATES': {
+        'user': '1000/day',
+        'anon': '100/day',
+        'burst': '20/min',
+    },
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.UserRateThrottle',
+        'rest_framework.throttling.AnonRateThrottle',
+    ],
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 20,
+}
+
+import os
+SENTRY_DSN = os.environ.get('SENTRY_DSN')
+if SENTRY_DSN:
+    import sentry_sdk
+    from sentry_sdk.integrations.django import DjangoIntegration
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        integrations=[DjangoIntegration()],
+        traces_sample_rate=0.2,
+        send_default_pii=False,
+    )
+
+# Celery/Redis
+CELERY_BROKER_URL = os.environ.get('REDIS_URL', 'redis://redis:6379/1')
+CELERY_RESULT_BACKEND = os.environ.get('REDIS_URL', 'redis://redis:6379/1')
+CELERY_TASK_ALWAYS_EAGER = False
 
 AUTH_USER_MODEL = 'users.User'
 AUTHENTICATION_BACKENDS = [
@@ -69,6 +103,17 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'careerbridge.wsgi.application'
+
+# Channels configuration for WebSocket support
+ASGI_APPLICATION = 'careerbridge.asgi.application'
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            "hosts": [os.environ.get('REDIS_URL', 'redis://redis:6379/1')],
+        },
+    },
+}
 
 
 # Password validation

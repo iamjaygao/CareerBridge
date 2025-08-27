@@ -77,14 +77,15 @@ urlpatterns = [
     # path('legal/consent/', views.DataConsentView.as_view(), name='data-consent'),
     # path('legal/consent/revoke/', views.RevokeConsentView.as_view(), name='revoke-consent'),
     
-    # Data deletion - TODO: Implement these views
-    # path('data/deletion/request/', views.DataDeletionRequestView.as_view(), name='data-deletion-request'),
-    # path('data/deletion/verify/<int:request_id>/<str:token>/', views.DataDeletionVerificationView.as_view(), name='data-deletion-verify'),
-    # path('data/deletion/status/', views.DataDeletionStatusView.as_view(), name='data-deletion-status'),
+    # Data deletion
+    path('data/deletion/request/', views.DataDeletionRequestView.as_view(), name='data-deletion-request'),
+    path('data/deletion/verify/<int:request_id>/<str:token>/', views.DataDeletionVerificationView.as_view(), name='data-deletion-verify'),
+    path('data/deletion/status/', views.DataDeletionStatusView.as_view(), name='data-deletion-status'),
     
-    # Privacy and data rights - TODO: Implement these views
-    # path('privacy/rights/', views.PrivacyRightsView.as_view(), name='privacy-rights'),
-    # path('privacy/export/', views.DataExportView.as_view(), name='data-export'),
+    # Privacy and data rights
+    path('privacy/rights/', views.PrivacyRightsView.as_view(), name='privacy-rights'),
+    path('privacy/export/', views.DataExportView.as_view(), name='data-export'),
+    path('privacy/export/status/', views.DataExportStatusView.as_view(), name='data-export-status'),
     # path('privacy/retention/', views.DataRetentionView.as_view(), name='data-retention'),
     
     # External service management - TODO: Implement these views

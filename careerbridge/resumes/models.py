@@ -893,3 +893,49 @@ class ServiceUsageLog(models.Model):
     
     def __str__(self):
         return f"{self.service.name} - {self.endpoint} - {self.timestamp}"
+
+class DataDeletionRequest(models.Model):
+    """User-initiated data deletion request (Right to be Forgotten)"""
+    STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('verified', 'Verified'),
+        ('processing', 'Processing'),
+        ('completed', 'Completed'),
+        ('rejected', 'Rejected'),
+    )
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    reason = models.TextField(blank=True)
+    token = models.CharField(max_length=64, unique=True)
+    requested_at = models.DateTimeField(auto_now_add=True)
+    verified_at = models.DateTimeField(null=True, blank=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-requested_at']
+
+    def __str__(self):
+        return f"DeletionRequest {self.id} - {self.user.username} - {self.status}"
+
+class DataExportJob(models.Model):
+    """User data export job for portability (GDPR/CCPA)"""
+    STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('processing', 'Processing'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+    )
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    download_url = models.URLField(blank=True)
+    error_message = models.TextField(blank=True)
+    requested_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-requested_at']
+
+    def __str__(self):
+        return f"DataExportJob {self.id} - {self.user.username} - {self.status}"

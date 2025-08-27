@@ -114,8 +114,6 @@ const SystemHealthCard: React.FC<{ health: SystemHealth }> = ({ health }) => {
     }
   };
 
-
-
   return (
     <Card>
       <CardContent>
@@ -174,6 +172,49 @@ const SystemHealthCard: React.FC<{ health: SystemHealth }> = ({ health }) => {
             sx={{ mt: 0.5 }}
           />
         </Box>
+      </CardContent>
+    </Card>
+  );
+};
+
+const ServiceMetricsCard: React.FC = () => {
+  const [metrics, setMetrics] = useState<Record<string, any> | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchMetrics = async () => {
+      try {
+        const res = await fetch('/api/v1/services/metrics/');
+        if (!res.ok) throw new Error('Not available');
+        const data = await res.json();
+        setMetrics(data);
+      } catch (e: any) {
+        setError(e.message);
+      }
+    };
+    fetchMetrics();
+  }, []);
+
+  return (
+    <Card>
+      <CardContent>
+        <Typography variant="h6" gutterBottom>
+          External Services Circuit Metrics
+        </Typography>
+        {!metrics && !error && <Typography variant="body2">Loading...</Typography>}
+        {error && <Alert severity="warning">{error}</Alert>}
+        {metrics && (
+          <Box>
+            {Object.entries(metrics).map(([service, values]) => (
+              <Box key={service} sx={{ mb: 1 }}>
+                <Typography variant="subtitle2">{service}</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  success: {values.success || 0} · timeout: {values.timeout || 0} · conn_error: {values.conn_error || 0} · request_error: {values.request_error || 0} · circuit_open: {values.open_events || 0}
+                </Typography>
+              </Box>
+            ))}
+          </Box>
+        )}
       </CardContent>
     </Card>
   );
@@ -396,6 +437,13 @@ const AdminDashboardPage: React.FC = () => {
                 </CardContent>
               </Card>
             </Grid>
+
+            {/* External Services Circuit Metrics (staff-only, dev-only) */}
+            {process.env.NODE_ENV !== 'production' && (
+              <Grid item xs={12}>
+                <ServiceMetricsCard />
+              </Grid>
+            )}
 
             {/* Quick Actions */}
             <Grid item xs={12}>

@@ -1,212 +1,176 @@
-# CareerBridge
+# CareerBridge - AI-Powered Career Platform
 
-A comprehensive career development platform that provides resume analysis, job matching, mentorship, and career guidance services.
+## Overview
 
-## 🚀 Features
+CareerBridge is a comprehensive career development platform that connects job seekers with AI-powered resume analysis, mentor services, and personalized job recommendations. The platform integrates external AI services for enhanced functionality while maintaining a robust, scalable architecture.
 
-### Core Functionality
-- **Resume Management**: Upload, analyze, and optimize resumes with AI-powered insights
-- **Job Matching**: Match resumes with job descriptions using advanced algorithms
-- **Mentorship System**: Connect with industry mentors for career guidance
-- **Appointment Booking**: Schedule and manage mentoring sessions
-- **Tier-based Services**: Free, Premium, and Enterprise subscription tiers
-- **Referral Program**: Invite friends and earn rewards
+## Features
 
-### Legal Compliance & Data Protection
-- **GDPR/CCPA Compliance**: User consent management and data rights
-- **Data Retention Policies**: Automated data lifecycle management
-- **Privacy Controls**: Granular consent for data collection and processing
-- **Right to be Forgotten**: User-initiated data deletion requests
-- **Legal Disclaimers**: Comprehensive terms and privacy policies
+### Core Features
+- **Resume Analysis**: AI-powered resume scoring and feedback using OpenAI
+- **Mentor Services**: Book sessions with industry experts
+- **Job Recommendations**: Personalized job matching based on resume analysis
+- **Payment Processing**: Stripe integration for secure transactions
+- **External Service Integration**: Modular API-based integration with ResumeMatcher and JobCrawler
 
-### Technical Features
-- **RESTful API**: Complete API documentation with Swagger/OpenAPI
-- **JWT Authentication**: Secure token-based authentication
-- **File Management**: Secure resume file upload and storage
-- **External Service Integration**: Microservices architecture for scalability
-- **Automated Testing**: Comprehensive test coverage
+### Advanced Features
+- **Stripe Connect**: Mentor payout system with configurable platform fees
+- **Legal Compliance**: GDPR-compliant data deletion and export functionality
+- **Circuit Breaker**: Resilient external service integration with metrics
+- **Docker Deployment**: Containerized application with production-ready configuration
+- **CI/CD Pipeline**: Automated testing and deployment with GitHub Actions
 
-## 🛠️ Installation
+## Recent Optimizations (P2)
 
-### Prerequisites
-- Python 3.8+
-- Django 5.2+
-- SQLite (development) / PostgreSQL (production)
+### Performance & UX Improvements
+- **Unified Pagination**: All list pages (mentors, resumes, appointments) now use consistent pagination with 20 items per page
+- **Popular Data Caching**: Implemented 5-minute TTL cache for popular jobs, skills, and industries to reduce API calls
+- **Pre-fetching**: Popular data is pre-loaded on app initialization for faster dashboard rendering
+- **Enhanced Dashboard**: Added trending data section showing popular jobs, skills, and industries with visual chips
+- **Payment UX**: Improved payment demo page with loading states, error handling, and success feedback
 
-### Setup
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd CareerBridge/careerbridge
-   ```
+### Technical Enhancements
+- **DRF Pagination**: Configured default PageNumberPagination with 20 items per page for consistent API responses
+- **Frontend Resilience**: Enhanced error handling with retry logic for external service calls
+- **Cache Management**: Centralized cache utilities with automatic TTL expiration and manual refresh capabilities
 
-2. **Create virtual environment**
-   ```bash
-   python3 -m venv myvenv
-   source myvenv/bin/activate  # On Windows: myvenv\Scripts\activate
-   ```
+## External Service Integration
 
-3. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
+### ResumeMatcher
+- **Purpose**: AI-powered resume-to-job matching using semantic analysis
+- **Integration**: RESTful API proxy with circuit breaker protection
+- **Features**: Confidence scoring, explainable matches, skill alignment
 
-4. **Run migrations**
-   ```bash
-   python manage.py migrate
-   ```
+### JobCrawler
+- **Purpose**: Automated job data collection from multiple sources
+- **Integration**: Scheduled ETL pipeline with data normalization
+- **Sources**: LinkedIn, Indeed, RemoteOK, Glassdoor
 
-5. **Create superuser**
-   ```bash
-   python manage.py createsuperuser
-   ```
+## Payment Integration
 
-6. **Start development server**
-   ```bash
-   python manage.py runserver
-   ```
+### Stripe PaymentIntents
+- **Secure Processing**: Tokenized payment handling with PCI compliance
+- **Idempotency**: Prevents duplicate charges with unique keys
+- **Webhooks**: Real-time payment status updates and refund processing
 
-## 📚 API Documentation
+### Stripe Connect for Mentors
+- **Onboarding**: Express account creation with KYC verification
+- **Payouts**: Direct transfers to mentor accounts with configurable fees
+- **Status Tracking**: Real-time KYC and capability status updates
 
-### Swagger UI
-Access the interactive API documentation at: http://localhost:8000/swagger/
+## Legal Compliance
 
-### ReDoc
-Alternative API documentation at: http://localhost:8000/redoc/
+### Data Rights Management
+- **Data Deletion**: User-initiated account deletion with verification
+- **Data Export**: Asynchronous export with secure signed URLs
+- **Privacy Rights**: Comprehensive privacy information and controls
 
-### API Endpoints
-- **Users**: `/api/v1/users/` - Registration, authentication, profile management
-- **Resumes**: `/api/v1/resumes/` - Resume upload, analysis, comparison
-- **Mentors**: `/api/v1/mentors/` - Mentor profiles, availability, reviews
-- **Appointments**: `/api/v1/appointments/` - Booking and session management
-- **Admin Panel**: `/api/v1/adminpanel/` - Administrative functions
-- **Notifications**: `/api/v1/notifications/` - User notifications
+## Deployment
 
-## 🔧 Configuration
+### Docker Setup
+```bash
+# Development
+docker-compose up
+
+# Production
+docker-compose -f docker-compose.prod.yml up -d
+```
 
 ### Environment Variables
-- `SECRET_KEY`: Django secret key
-- `DEBUG`: Set to False in production
-- `ALLOWED_HOSTS`: List of allowed hostnames
-- `EMAIL_HOST_USER`: Email configuration for notifications
-- `EMAIL_HOST_PASSWORD`: Email password/app password
+```bash
+# External Services
+JOB_CRAWLER_API_KEY=your_key
+RESUME_MATCHER_API_KEY=your_key
+
+# Stripe
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_PUBLISHABLE_KEY=pk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+
+# Monitoring
+SENTRY_DSN=https://...
+
+# Storage (Optional)
+USE_S3=true
+AWS_ACCESS_KEY_ID=your_key
+AWS_SECRET_ACCESS_KEY=your_secret
+AWS_STORAGE_BUCKET_NAME=your_bucket
+```
+
+## Development
+
+### Backend Setup
+```bash
+cd careerbridge
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py runserver
+```
+
+### Frontend Setup
+```bash
+cd frontend
+npm install
+npm start
+```
 
 ### External Services
-The platform is designed to integrate with external microservices:
-- **Job Crawler Service**: For fetching job postings
-- **Resume Matcher Service**: For advanced matching algorithms
-- **AI Analysis Service**: For enhanced resume analysis
+The platform is designed to work with external ResumeMatcher and JobCrawler services. These can be:
+- Deployed as separate microservices
+- Integrated via API proxies
+- Mocked for development using the provided test endpoints
 
-#### Integration Guide (ResumeMatcher & JobCrawler as external APIs)
+## Testing
 
-1) Configure services (choose one):
-- Admin/DB-driven: create `ExternalServiceIntegration` records for `resume_matcher` and `job_crawler` with `base_url`, `api_key`, `timeout`, set `is_active=True`.
-- Or env-driven: set `RESUME_MATCHER_BASE_URL`, `RESUME_MATCHER_API_KEY`, `JOB_CRAWLER_BASE_URL`, `JOB_CRAWLER_API_KEY` in `.env` (see `env_template.txt`).
-
-2) Health check:
-- GET `/api/v1/resumes/services/health/` → returns configured status and a `/health` ping result for both services.
-
-3) JobCrawler usage:
-- POST `/api/v1/resumes/jobs/crawl/`
-  - Body: `{ "job_title": "Data Scientist", "location": "SF", "sources": ["indeed","linkedin"], "limit": 20 }`
-  - Effect: calls external crawler; persists jobs into `JobDescription`.
-
-4) ResumeMatcher usage:
-- POST `/api/v1/resumes/matches/external/`
-  - Body: `{ "resume_id": 1, "job_description_id": 123 }`
-  - Effect: calls external matcher; creates/updates `ResumeJobMatch`.
-
-5) Notes and expectations:
-- External services should expose `GET /health` for health probing.
-- Authentication: Bearer token from `api_key` header `Authorization: Bearer <key>`.
-- Timeouts/rate-limits configurable via `ExternalServiceIntegration` or env.
-
-## 🧪 Testing
-
-### Run Tests
+### Backend Tests
 ```bash
-# Run all tests
 python manage.py test
-
-# Run specific app tests
-python manage.py test resumes
-python manage.py test users
-python manage.py test mentors
 ```
 
-### Test Coverage
-- Model tests for all apps
-- API endpoint tests
-- Service layer tests
-- Legal compliance tests
-
-## 📋 Legal Compliance
-
-### Data Protection
-- **User Consent**: Track and manage user consent for data processing
-- **Data Retention**: Automated deletion based on configured policies
-- **Data Rights**: Support for GDPR/CCPA data subject rights
-- **Privacy Policy**: Comprehensive privacy policy management
-
-### Compliance Features
-- Consent tracking for data collection, processing, and sharing
-- Automated data retention and deletion
-- User-initiated data deletion requests
-- Legal disclaimer management
-- Audit trails for compliance
-
-## 🏗️ Architecture
-
-### Project Structure
-```
-careerbridge/
-├── careerbridge/          # Main project settings
-├── users/                 # User management and authentication
-├── resumes/              # Resume management and analysis
-├── mentors/              # Mentor profiles and availability
-├── appointments/         # Booking and session management
-├── notifications/        # User notification system
-├── adminpanel/          # Administrative functions
-└── media/               # File storage
+### Frontend Tests
+```bash
+npm test
 ```
 
-### Key Models
-- **User**: Extended user model with subscription and referral tracking
-- **Resume**: Resume storage and analysis results
-- **ResumeComparison**: Multi-resume comparison functionality
-- **UserSubscription**: Tier-based subscription management
-- **UserDataConsent**: Legal compliance tracking
-- **DataRetentionPolicy**: Automated data lifecycle management
+### E2E Testing
+See `DEPLOYMENT.md` for comprehensive staging environment testing checklist.
 
-## 🤝 Contributing
+## Monitoring & Observability
+
+### Circuit Breaker Metrics
+- **Debug Endpoint**: `/api/v1/services/metrics/` (admin only)
+- **Sentry Integration**: Error tracking and performance monitoring
+- **Health Checks**: External service availability monitoring
+
+### Performance Monitoring
+- **Frontend**: Performance monitoring with error boundaries
+- **Backend**: Request/response logging with Sentry integration
+- **External Services**: Circuit breaker with fallback mechanisms
+
+## Security
+
+### Production Security Checklist
+- [ ] HTTPS enforcement with HSTS
+- [ ] Secure cookie configuration
+- [ ] CORS policy implementation
+- [ ] Rate limiting on external service endpoints
+- [ ] Input validation and sanitization
+- [ ] Regular security updates
+
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Add tests for new functionality
+4. Add tests
 5. Submit a pull request
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-## 📞 Support
+## Support
 
-For support and questions:
-- Email: contact@careerbridge.com
-- Documentation: http://localhost:8000/swagger/
-- Issues: GitHub Issues page
-
-## 🔄 Version History
-
-### v1.0.0 (Current)
-- Initial release with core functionality
-- Legal compliance features
-- API documentation
-- Tier-based subscription system
-- Referral program
-- External service integration framework
-
----
-
-**Note**: This is a development version. For production deployment, ensure all security settings are properly configured and external services are integrated. 
+For support and questions, please open an issue in the GitHub repository or contact the development team. 

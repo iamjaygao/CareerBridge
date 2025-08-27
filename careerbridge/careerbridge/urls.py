@@ -17,6 +17,9 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from . import views
+from .external_services.health_check import health_checker
+from django.http import JsonResponse, HttpResponseForbidden, HttpResponseNotFound
+from django.conf import settings
 
 #swagger UI setup for drf-yasg  
 from drf_yasg.views import get_schema_view
@@ -62,6 +65,18 @@ urlpatterns = [
     path('api/v1/notifications/', include('notifications.urls')), # Notifications for users
     path('api/v1/resumes/', include('resumes.urls')), # Resume management
     path('api/v1/payments/', include('payments.urls')), # Payment management
+    path('api/v1/chat/', include('chat.urls')), # Real-time chat
+    path('api/v1/search/', include('search.urls')), # Search functionality
+
+    # service metrics (admin-only, debug-only)
+    path('api/v1/services/metrics/',
+         (lambda request: (
+             HttpResponseNotFound() if not getattr(settings, 'DEBUG', False)
+             else (JsonResponse(__import__('careerbridge.external_services.utils', fromlist=['get_service_metrics']).get_service_metrics())
+                   if (request.user.is_authenticated and request.user.is_staff)
+                   else HttpResponseForbidden())
+         )),
+         name='service-metrics'),
 
     # swagger documentation
     path('swagger<format>/', schema_view.without_ui(cache_timeout=0), name='schema-json'),

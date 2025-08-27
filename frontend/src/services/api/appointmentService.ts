@@ -7,6 +7,7 @@ export interface AppointmentFilters {
   date_to?: string;
   mentor_id?: number;
   sort_by?: string;
+  page?: number;
 }
 
 export interface FeedbackData {

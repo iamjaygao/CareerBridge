@@ -33,6 +33,8 @@ from .referral_service import ReferralService, PricingService
 from .external_services import ExternalServiceManager
 from .models import ExternalServiceIntegration
 import requests
+from .models import DataDeletionRequest, DataExportJob
+import secrets
 
 class ResumeListView(generics.ListCreateAPIView):
     """Resume List and Create View with tier support"""
@@ -196,10 +198,16 @@ class ResumeFeedbackView(generics.RetrieveAPIView):
     def get(self, request, *args, **kwargs):
         return super().get(request, *args, **kwargs)
 
+from rest_framework.throttling import UserRateThrottle
+
+class BurstRateThrottle(UserRateThrottle):
+    scope = 'burst'
+
 class ExternalJobCrawlerView(generics.CreateAPIView):
     """Trigger external job crawling and store results"""
     serializer_class = ExternalJobCrawlRequestSerializer
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [BurstRateThrottle]
     manager = ExternalServiceManager()
 
     @swagger_auto_schema(
@@ -215,19 +223,23 @@ class ExternalJobCrawlerView(generics.CreateAPIView):
         sources = serializer.validated_data.get('sources')
         limit = serializer.validated_data.get('limit', 20)
 
-        stored = self.manager.crawl_and_store_jobs(
-            job_title=job_title,
-            location=location,
-            sources=sources,
-            limit=limit,
-            user=request.user
-        )
-        return Response(JobDescriptionSerializer(stored, many=True).data, status=status.HTTP_200_OK)
+        try:
+            stored = self.manager.crawl_and_store_jobs(
+                job_title=job_title,
+                location=location,
+                sources=sources,
+                limit=limit,
+                user=request.user
+            )
+            return Response(JobDescriptionSerializer(stored, many=True).data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({'error': 'External service unavailable', 'fallback': True}, status=status.HTTP_502_BAD_GATEWAY)
 
 class ExternalResumeMatcherView(generics.CreateAPIView):
     """Match a resume to an existing job description via external ResumeMatcher service"""
     serializer_class = ExternalResumeMatchRequestSerializer
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [BurstRateThrottle]
     manager = ExternalServiceManager()
 
     @swagger_auto_schema(
@@ -241,10 +253,13 @@ class ExternalResumeMatcherView(generics.CreateAPIView):
         resume = get_object_or_404(Resume, id=serializer.validated_data['resume_id'], user=request.user)
         job = get_object_or_404(JobDescription, id=serializer.validated_data['job_description_id'])
 
-        match = self.manager.match_resume_to_external_jd(resume=resume, job_description=job, user=request.user)
-        if not match:
-            return Response({'error': 'Matching failed'}, status=status.HTTP_400_BAD_REQUEST)
-        return Response(ResumeJobMatchSerializer(match).data, status=status.HTTP_200_OK)
+        try:
+            match = self.manager.match_resume_to_external_jd(resume=resume, job_description=job, user=request.user)
+            if not match:
+                return Response({'error': 'Matching failed'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(ResumeJobMatchSerializer(match).data, status=status.HTTP_200_OK)
+        except Exception:
+            return Response({'error': 'External service unavailable', 'fallback': True}, status=status.HTTP_502_BAD_GATEWAY)
 
 class ExternalServicesHealthView(generics.GenericAPIView):
     """Health check for external service integrations (ResumeMatcher, JobCrawler)"""
@@ -1399,3 +1414,85 @@ class FreeDaysUsageView(generics.CreateAPIView):
                 {'error': f'Error using free days: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+class DataDeletionRequestView(generics.CreateAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @swagger_auto_schema(operation_description="Create a data deletion request")
+    def post(self, request, *args, **kwargs):
+        tok = secrets.token_hex(16)
+        req = DataDeletionRequest.objects.create(user=request.user, token=tok)
+        return Response({'request_id': req.id, 'token': req.token, 'status': req.status})
+
+
+class DataDeletionVerificationView(generics.GenericAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @swagger_auto_schema(operation_description="Verify a data deletion request by token")
+    def post(self, request, request_id, token, *args, **kwargs):
+        req = get_object_or_404(DataDeletionRequest, id=request_id, user=request.user)
+        if req.token != token:
+            return Response({'error': 'Invalid token'}, status=status.HTTP_400_BAD_REQUEST)
+        req.status = 'verified'
+        req.verified_at = timezone.now()
+        req.save()
+        return Response({'request_id': req.id, 'status': req.status})
+
+
+class DataDeletionStatusView(generics.RetrieveAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        latest = DataDeletionRequest.objects.filter(user=request.user).order_by('-requested_at').first()
+        if not latest:
+            return Response({'status': 'none'})
+        return Response({'request_id': latest.id, 'status': latest.status})
+
+
+class PrivacyRightsView(generics.GenericAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        return Response({'rights': ['access', 'rectification', 'erasure', 'portability', 'restriction', 'objection']})
+
+
+class DataExportView(generics.CreateAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        job = DataExportJob.objects.create(user=request.user)
+        try:
+            from .tasks import build_user_data_export
+            build_user_data_export.delay(job.id)
+        except Exception:
+            # fallback sync (dev only)
+            from .tasks import build_user_data_export as sync_task
+            sync_task(job.id)
+        return Response({'job_id': job.id, 'status': job.status}, status=status.HTTP_202_ACCEPTED)
+
+class DataExportStatusView(generics.RetrieveAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        job = DataExportJob.objects.filter(user=request.user).order_by('-requested_at').first()
+        if not job:
+            return Response({'status': 'none'})
+        # Optionally presign S3 URLs when USE_S3 is enabled
+        download_url = job.download_url
+        try:
+            from django.conf import settings as dj_settings
+            if getattr(dj_settings, 'USE_S3', False) and download_url and download_url.startswith('https://'):
+                import boto3, os
+                s3 = boto3.client('s3', region_name=os.environ.get('AWS_S3_REGION_NAME', 'us-east-1'))
+                bucket = os.environ.get('AWS_STORAGE_BUCKET_NAME')
+                key = download_url.split(f"https://{bucket}.s3.amazonaws.com/")[-1]
+                presigned = s3.generate_presigned_url(
+                    'get_object',
+                    Params={'Bucket': bucket, 'Key': key},
+                    ExpiresIn=600
+                )
+                download_url = presigned
+        except Exception:
+            pass
+        return Response({'job_id': job.id, 'status': job.status, 'download_url': download_url})

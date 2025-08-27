@@ -1,0 +1,106 @@
+{
+  "summary": {
+    "total": 16,
+    "passed": 12,
+    "failed": 4,
+    "success_rate": 75.0
+  },
+  "results": [
+    {
+      "test": "后端API可访问性",
+      "success": true,
+      "message": "后端API正常运行",
+      "timestamp": "2025-08-27T13:43:31.760354"
+    },
+    {
+      "test": "前端可访问性",
+      "success": true,
+      "message": "前端服务正常运行",
+      "timestamp": "2025-08-27T13:43:31.791516"
+    },
+    {
+      "test": "用户登录",
+      "success": false,
+      "message": "登录异常: 'email'",
+      "timestamp": "2025-08-27T13:43:31.977926"
+    },
+    {
+      "test": "仪表板统计",
+      "success": true,
+      "message": "获取到统计数据: 2 项",
+      "timestamp": "2025-08-27T13:43:31.981128"
+    },
+    {
+      "test": "热门工作搜索",
+      "success": true,
+      "message": "获取到 10 个热门工作",
+      "timestamp": "2025-08-27T13:43:31.982773"
+    },
+    {
+      "test": "热门技能搜索",
+      "success": true,
+      "message": "获取到 10 个热门技能",
+      "timestamp": "2025-08-27T13:43:31.984643"
+    },
+    {
+      "test": "热门行业搜索",
+      "success": true,
+      "message": "获取到 10 个热门行业",
+      "timestamp": "2025-08-27T13:43:31.987821"
+    },
+    {
+      "test": "导师列表",
+      "success": true,
+      "message": "获取到导师数据",
+      "timestamp": "2025-08-27T13:43:31.993739"
+    },
+    {
+      "test": "导师分页",
+      "success": true,
+      "message": "分页功能正常",
+      "timestamp": "2025-08-27T13:43:31.996956"
+    },
+    {
+      "test": "预约列表",
+      "success": true,
+      "message": "获取到预约数据",
+      "timestamp": "2025-08-27T13:43:31.998928"
+    },
+    {
+      "test": "简历列表",
+      "success": true,
+      "message": "获取到简历数据",
+      "timestamp": "2025-08-27T13:43:32.001452"
+    },
+    {
+      "test": "管理员健康检查",
+      "success": false,
+      "message": "检查失败，状态码: 403",
+      "timestamp": "2025-08-27T13:43:32.003969"
+    },
+    {
+      "test": "用户管理",
+      "success": false,
+      "message": "获取失败，状态码: 403",
+      "timestamp": "2025-08-27T13:43:32.006041"
+    },
+    {
+      "test": "聊天房间列表",
+      "success": true,
+      "message": "获取到聊天房间数据",
+      "timestamp": "2025-08-27T13:43:32.009010"
+    },
+    {
+      "test": "支付意图创建",
+      "success": false,
+      "message": "创建失败，状态码: 400",
+      "timestamp": "2025-08-27T13:43:32.255466"
+    },
+    {
+      "test": "Swagger文档",
+      "success": true,
+      "message": "API文档可访问",
+      "timestamp": "2025-08-27T13:43:32.259180"
+    }
+  ]
+}

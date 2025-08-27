@@ -12,6 +12,7 @@ import {
   TextField,
   MenuItem,
   Typography,
+  Pagination,
 } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
 import { AppDispatch, RootState } from '../../store';
@@ -55,14 +56,16 @@ const AppointmentListPage: React.FC = () => {
     message: '',
     severity: 'success',
   });
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     const defaultFilters: AppointmentFilters = {
       status: tabValue === 0 ? 'upcoming' : 'past',
+      page,
     };
     dispatch(setFilters(defaultFilters));
     dispatch(fetchAppointments(defaultFilters));
-  }, [dispatch, tabValue]);
+  }, [dispatch, tabValue, page]);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -194,6 +197,10 @@ const AppointmentListPage: React.FC = () => {
             </Grid>
           )}
         </Grid>
+
+        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+          <Pagination page={page} onChange={(_, p) => setPage(p)} count={10} color="primary" />
+        </Box>
       </TabPanel>
 
       <TabPanel value={tabValue} index={1}>
@@ -225,6 +232,10 @@ const AppointmentListPage: React.FC = () => {
             </Grid>
           )}
         </Grid>
+
+        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+          <Pagination page={page} onChange={(_, p) => setPage(p)} count={10} color="primary" />
+        </Box>
       </TabPanel>
 
       <Snackbar

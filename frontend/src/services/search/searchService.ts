@@ -36,6 +36,8 @@ export interface SearchQuery {
   limit?: number;
 }
 
+import { fetchWithRetry } from '../api/searchService';
+
 class SearchService {
   private baseURL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
   private searchCache = new Map<string, SearchSuggestion[]>();
@@ -53,7 +55,7 @@ class SearchService {
     }
 
     try {
-      const response = await fetch(
+      const response = await fetchWithRetry(
         `${this.baseURL}/search/suggestions/?q=${encodeURIComponent(query)}&limit=${limit}`,
         {
           headers: {
@@ -84,7 +86,7 @@ class SearchService {
   // Get trending searches
   async getTrendingSearches(limit: number = 10): Promise<SearchSuggestion[]> {
     try {
-      const response = await fetch(
+      const response = await fetchWithRetry(
         `${this.baseURL}/search/trending/?limit=${limit}`,
         {
           headers: {
@@ -107,7 +109,7 @@ class SearchService {
   // Get popular skills
   async getPopularSkills(limit: number = 20): Promise<SearchSuggestion[]> {
     try {
-      const response = await fetch(
+      const response = await fetchWithRetry(
         `${this.baseURL}/search/popular-skills/?limit=${limit}`,
         {
           headers: {
@@ -130,7 +132,7 @@ class SearchService {
   // Get popular industries
   async getPopularIndustries(limit: number = 15): Promise<SearchSuggestion[]> {
     try {
-      const response = await fetch(
+      const response = await fetchWithRetry(
         `${this.baseURL}/search/popular-industries/?limit=${limit}`,
         {
           headers: {
@@ -183,7 +185,7 @@ class SearchService {
         });
       }
 
-      const response = await fetch(`${this.baseURL}/search/?${params}`, {
+      const response = await fetchWithRetry(`${this.baseURL}/search/?${params}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
         },

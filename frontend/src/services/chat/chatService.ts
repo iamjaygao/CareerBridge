@@ -1,5 +1,5 @@
 import { io, Socket } from 'socket.io-client';
-import { ChatMessage, ChatParticipant } from '../../components/chat/ChatWindow';
+import { Message as ChatMessage, ChatParticipant } from '../../services/api/chatService';
 
 export interface ChatRoom {
   id: string;

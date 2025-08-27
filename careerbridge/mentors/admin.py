@@ -6,8 +6,8 @@ from .models import (
 
 @admin.register(MentorProfile)
 class MentorProfileAdmin(admin.ModelAdmin):
-    list_display = ('user', 'current_position', 'industry', 'status', 'is_verified', 'average_rating', 'total_reviews', 'total_sessions', 'total_earnings', 'created_at')
-    list_filter = ('status', 'industry', 'years_of_experience', 'is_verified', 'created_at')
+    list_display = ('user', 'current_position', 'industry', 'status', 'is_verified', 'payouts_enabled', 'charges_enabled', 'average_rating', 'total_reviews', 'total_sessions', 'total_earnings', 'created_at')
+    list_filter = ('status', 'industry', 'years_of_experience', 'is_verified', 'payouts_enabled', 'charges_enabled', 'created_at')
     search_fields = ('user__username', 'user__email', 'current_position', 'industry')
     readonly_fields = ('average_rating', 'total_reviews', 'total_sessions', 'total_earnings', 'ranking_score', 'created_at', 'updated_at')
     
@@ -19,7 +19,7 @@ class MentorProfileAdmin(admin.ModelAdmin):
             'fields': ('is_verified', 'verification_badge', 'specializations')
         }),
         ('Payment Information', {
-            'fields': ('stripe_account_id', 'paypal_email', 'bank_account_info'),
+            'fields': ('stripe_account_id', 'payouts_enabled', 'charges_enabled', 'kyc_disabled_reason', 'kyc_due_by', 'stripe_capabilities', 'paypal_email', 'bank_account_info'),
             'classes': ('collapse',)
         }),
         ('Status & Review', {

@@ -44,4 +44,9 @@ urlpatterns = [
     path('profile/update/', views.MentorProfileUpdateView.as_view(), name='mentor-profile-update'),
     path('services/<int:pk>/update/', views.MentorServiceUpdateView.as_view(), name='mentor-service-update'),
     path('availability/<int:pk>/update/', views.MentorAvailabilityUpdateView.as_view(), name='mentor-availability-update'),
+
+    # Stripe Connect onboarding
+    path('connect/create-account/', views.StripeConnectCreateAccountView.as_view(), name='connect-create-account'),
+    path('connect/account-link/', views.StripeConnectCreateAccountLinkView.as_view(), name='connect-account-link'),
+    path('connect/status/', views.StripeConnectStatusView.as_view(), name='connect-status'),
 ]

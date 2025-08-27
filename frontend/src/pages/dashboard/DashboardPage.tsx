@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { Grid, Paper, Typography, Box, Button } from '@mui/material';
+import { Grid, Paper, Typography, Box, Button, Chip } from '@mui/material';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../store';
 import PageHeader from '../../components/common/PageHeader';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import ErrorAlert from '../../components/common/ErrorAlert';
 import { useNavigate } from 'react-router-dom';
-import { Description, Event, People, Upload } from '@mui/icons-material';
+import { Description, Event, People, Upload, TrendingUp } from '@mui/icons-material';
 import dashboardService, { DashboardStats, RecentActivity } from '../../services/api/dashboardService';
+import { getPopularJobs, getPopularSkills, getPopularIndustries } from '../../services/api/searchService';
 
 
 
@@ -23,14 +24,25 @@ const DashboardPage: React.FC = () => {
     profileViews: 0,
   });
   const [activities, setActivities] = useState<RecentActivity[]>([]);
+  const [popularData, setPopularData] = useState<{
+    jobs: string[];
+    skills: string[];
+    industries: string[];
+  }>({ jobs: [], skills: [], industries: [] });
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
         setLoading(true);
-        const data = await dashboardService.getDashboardData();
+        const [data, jobs, skills, industries] = await Promise.all([
+          dashboardService.getDashboardData(),
+          getPopularJobs(),
+          getPopularSkills(),
+          getPopularIndustries()
+        ]);
         setStats(data.stats);
         setActivities(data.activities);
+        setPopularData({ jobs, skills, industries });
       } catch (err) {
         setError('Failed to load dashboard data. Please try again later.');
         console.error('Dashboard data fetch error:', err);
@@ -174,6 +186,51 @@ const DashboardPage: React.FC = () => {
               >
                 Find Mentor
               </Button>
+            </Box>
+          </Paper>
+        </Grid>
+      </Grid>
+
+      {/* Popular Data Section */}
+      <Grid container spacing={3} sx={{ mt: 3 }}>
+        <Grid item xs={12} md={4}>
+          <Paper sx={{ p: 3 }}>
+            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <TrendingUp />
+              Popular Jobs
+            </Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 2 }}>
+              {popularData.jobs.slice(0, 8).map((job, index) => (
+                <Chip key={index} label={job} size="small" variant="outlined" />
+              ))}
+            </Box>
+          </Paper>
+        </Grid>
+        
+        <Grid item xs={12} md={4}>
+          <Paper sx={{ p: 3 }}>
+            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <TrendingUp />
+              Popular Skills
+            </Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 2 }}>
+              {popularData.skills.slice(0, 8).map((skill, index) => (
+                <Chip key={index} label={skill} size="small" variant="outlined" color="primary" />
+              ))}
+            </Box>
+          </Paper>
+        </Grid>
+        
+        <Grid item xs={12} md={4}>
+          <Paper sx={{ p: 3 }}>
+            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <TrendingUp />
+              Popular Industries
+            </Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 2 }}>
+              {popularData.industries.slice(0, 8).map((industry, index) => (
+                <Chip key={index} label={industry} size="small" variant="outlined" color="secondary" />
+              ))}
             </Box>
           </Paper>
         </Grid>

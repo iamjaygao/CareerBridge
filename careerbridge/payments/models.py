@@ -3,6 +3,41 @@ from django.conf import settings
 from django.utils import timezone
 from decimal import Decimal
 
+class PaymentSettings(models.Model):
+    """Global payment settings (platform defaults)"""
+
+    platform_fee_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal('15.00'),
+        help_text="Default platform fee percentage if service-specific not set"
+    )
+    allow_service_override = models.BooleanField(
+        default=True,
+        help_text="Allow MentorService.platform_fee_percentage to override global setting"
+    )
+    stripe_connect_enabled = models.BooleanField(
+        default=True,
+        help_text="Use Stripe Connect transfers when mentor has stripe_account_id"
+    )
+
+    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Payment Settings"
+        verbose_name_plural = "Payment Settings"
+
+    def __str__(self):
+        return f"Payment Settings (platform_fee={self.platform_fee_percentage}%)"
+
+    def save(self, *args, **kwargs):
+        # Enforce singleton: only one PaymentSettings row allowed
+        if not self.pk and PaymentSettings.objects.exists():
+            from django.core.exceptions import ValidationError
+            raise ValidationError("Only one PaymentSettings instance is allowed.")
+        super().save(*args, **kwargs)
+
 class Payment(models.Model):
     """Payment model for handling all payment transactions"""
     

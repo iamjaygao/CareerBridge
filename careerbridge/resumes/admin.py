@@ -3,7 +3,9 @@ from django.utils.html import format_html
 from .models import (
     Resume, ResumeAnalysis, ResumeFeedback,
     ResumeComparison, ResumeTemplate, ResumeExport,
-    JobDescription, ResumeJobMatch
+    JobDescription, ResumeJobMatch,
+    ExternalServiceIntegration, ServiceUsageLog,
+    DataDeletionRequest, DataExportJob
 )
 
 @admin.register(Resume)
@@ -182,3 +184,35 @@ class ResumeJobMatchAdmin(admin.ModelAdmin):
             color, obj.match_level.title()
         )
     match_level_display.short_description = "Match Level"
+
+@admin.register(ExternalServiceIntegration)
+class ExternalServiceIntegrationAdmin(admin.ModelAdmin):
+    list_display = (
+        'name', 'service_type', 'base_url', 'is_active', 'rate_limit', 'timeout', 'created_at'
+    )
+    list_filter = ('service_type', 'is_active', 'created_at')
+    search_fields = ('name', 'base_url')
+    readonly_fields = ('created_at', 'updated_at')
+
+@admin.register(ServiceUsageLog)
+class ServiceUsageLogAdmin(admin.ModelAdmin):
+    list_display = (
+        'service', 'endpoint', 'request_method', 'response_status', 'request_time', 'timestamp', 'is_success'
+    )
+    list_filter = ('service__service_type', 'is_success', 'timestamp')
+    search_fields = ('endpoint', 'error_message')
+    readonly_fields = ('timestamp',)
+
+@admin.register(DataDeletionRequest)
+class DataDeletionRequestAdmin(admin.ModelAdmin):
+    list_display = ('user', 'status', 'requested_at', 'verified_at', 'processed_at')
+    list_filter = ('status', 'requested_at')
+    search_fields = ('user__username', 'user__email')
+    readonly_fields = ('requested_at', 'verified_at', 'processed_at')
+
+@admin.register(DataExportJob)
+class DataExportJobAdmin(admin.ModelAdmin):
+    list_display = ('user', 'status', 'requested_at', 'completed_at')
+    list_filter = ('status', 'requested_at')
+    search_fields = ('user__username', 'user__email')
+    readonly_fields = ('requested_at', 'completed_at')

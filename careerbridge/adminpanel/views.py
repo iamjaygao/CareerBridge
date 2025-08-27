@@ -17,12 +17,13 @@ from .serializers import (
     DashboardStatsSerializer, UserManagementSerializer, MentorManagementSerializer,
     AppointmentManagementSerializer, SystemHealthSerializer
 )
+from .permissions import IsAdminOrStaff, IsAdminUser
 
 User = get_user_model()
 
 class AdminDashboardView(generics.GenericAPIView):
     """Admin dashboard"""
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdminOrStaff]
     
     def get(self, request):
         """Get dashboard statistics"""
@@ -82,19 +83,19 @@ class AdminDashboardView(generics.GenericAPIView):
 class SystemStatsListView(generics.ListAPIView):
     """System statistics list"""
     serializer_class = SystemStatsSerializer
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdminOrStaff]
     queryset = SystemStats.objects.all()
 
 class SystemStatsDetailView(generics.RetrieveAPIView):
     """System statistics details"""
     serializer_class = SystemStatsSerializer
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdminOrStaff]
     queryset = SystemStats.objects.all()
 
 class AdminActionListView(generics.ListAPIView):
     """Admin action log list"""
     serializer_class = AdminActionSerializer
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdminOrStaff]
     queryset = AdminAction.objects.all()
     
     def get_queryset(self):
@@ -629,7 +630,7 @@ class MentorManagementView(generics.GenericAPIView):
 
 class SystemHealthView(generics.GenericAPIView):
     """System health status"""
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdminOrStaff]
     
     def get(self, request):
         """Get system health status"""

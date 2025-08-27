@@ -7,6 +7,9 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.db.models import Sum, Count
 from datetime import datetime, timedelta
+import uuid
+import stripe
+from django.conf import settings
 
 from .models import Payment, PaymentMethod, Refund, PaymentWebhook
 from .serializers import (
@@ -44,16 +47,69 @@ def create_payment_intent(request):
                 mentor = get_object_or_404(MentorProfile, id=serializer.validated_data['mentor_id'])
                 payment_data['mentor'] = mentor
             
+            # Compute platform fee/mentor earnings using MentorService percentages when available
+            from decimal import Decimal
+            from payments.models import PaymentSettings
+            platform_fee_pct = Decimal('15.00')
+            settings_obj = PaymentSettings.objects.order_by('-updated_at').first()
+            if settings_obj:
+                platform_fee_pct = settings_obj.platform_fee_percentage
+            # Service-specific override
+            if payment_data.get('appointment') and getattr(payment_data['appointment'], 'service', None):
+                service = payment_data['appointment'].service
+                if not settings_obj or settings_obj.allow_service_override:
+                    platform_fee_pct = getattr(service, 'platform_fee_percentage', platform_fee_pct)
+            platform_fee = Decimal(str(payment_data['amount'])) * (platform_fee_pct / Decimal('100'))
+            mentor_earnings = Decimal(str(payment_data['amount'])) - platform_fee
+            payment_data['platform_fee'] = platform_fee
+            payment_data['mentor_earnings'] = mentor_earnings
+
             payment = Payment.objects.create(**payment_data)
-            
-            # For now, return mock payment intent data
-            # In production, this would integrate with Stripe/PayPal
-            return Response({
-                'payment_id': payment.id,
-                'client_secret': f'pi_mock_{payment.id}_secret',
-                'amount': payment.amount,
-                'currency': payment.currency,
-            })
+
+            # Stripe PaymentIntent creation
+            if payment.provider == 'stripe':
+                stripe.api_key = getattr(settings, 'STRIPE_SECRET_KEY', None)
+                if not stripe.api_key:
+                    return Response({'error': 'Stripe not configured'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+                # Prepare Connect transfer data if mentor has a connected account
+                transfer_data = None
+                connect_enabled = True if not settings_obj else settings_obj.stripe_connect_enabled
+                if connect_enabled and payment.mentor and getattr(payment.mentor, 'stripe_account_id', ''):
+                    transfer_data = {
+                        'destination': payment.mentor.stripe_account_id
+                    }
+
+                intent = stripe.PaymentIntent.create(
+                    amount=int(payment.amount * 100),
+                    currency=payment.currency.lower(),
+                    metadata={
+                        'payment_id': str(payment.id),
+                        'user_id': str(request.user.id),
+                        'payment_type': payment.payment_type,
+                    },
+                    description=payment.description or 'CareerBridge payment',
+                    automatic_payment_methods={'enabled': True},
+                    idempotency_key=f"pi_{payment.id}_{uuid.uuid4()}",
+                    application_fee_amount=int(payment.platform_fee * 100) if transfer_data else None,
+                    transfer_data=transfer_data
+                )
+
+                payment.provider_payment_id = intent['id']
+                payment.status = 'processing'
+                payment.save()
+
+                return Response({
+                    'payment_id': payment.id,
+                    'provider': payment.provider,
+                    'payment_intent_id': intent['id'],
+                    'client_secret': intent['client_secret'],
+                    'amount': payment.amount,
+                    'currency': payment.currency,
+                })
+
+            # Other providers placeholder
+            return Response({'payment_id': payment.id, 'amount': payment.amount, 'currency': payment.currency})
             
         except Exception as e:
             return Response(
@@ -70,22 +126,22 @@ def confirm_payment(request):
     serializer = PaymentConfirmationSerializer(data=request.data)
     if serializer.is_valid():
         payment_intent_id = serializer.validated_data['payment_intent_id']
-        
+
         try:
-            # Extract payment ID from mock payment intent ID
-            payment_id = payment_intent_id.split('_')[2]
-            payment = get_object_or_404(Payment, id=payment_id, user=request.user)
-            
-            # Update payment status
-            payment.status = 'completed'
-            payment.paid_at = timezone.now()
-            payment.save()
-            
-            return Response({
-                'payment_id': payment.id,
-                'status': 'completed',
-                'message': 'Payment confirmed successfully'
-            })
+            # Confirm via Stripe if Stripe provider
+            stripe.api_key = getattr(settings, 'STRIPE_SECRET_KEY', None)
+            payment = Payment.objects.filter(user=request.user, provider='stripe', provider_payment_id=payment_intent_id).first()
+            if not payment:
+                return Response({'error': 'Payment not found'}, status=status.HTTP_404_NOT_FOUND)
+
+            intent = stripe.PaymentIntent.retrieve(payment_intent_id)
+            if intent['status'] in ['succeeded', 'requires_capture']:
+                payment.status = 'completed'
+                payment.paid_at = timezone.now()
+                payment.save()
+                return Response({'payment_id': payment.id, 'status': 'completed'})
+            else:
+                return Response({'payment_id': payment.id, 'status': intent['status']}, status=status.HTTP_202_ACCEPTED)
             
         except Exception as e:
             return Response(
@@ -125,25 +181,35 @@ def process_refund(request, payment_id):
         )
     
     try:
-        # Create refund record
-        refund = Refund.objects.create(
-            payment=payment,
-            amount=payment.amount,
-            currency=payment.currency,
-            reason='requested_by_customer',
-            description='User requested refund'
-        )
+        if payment.provider == 'stripe':
+            stripe.api_key = getattr(settings, 'STRIPE_SECRET_KEY', None)
+            if not stripe.api_key:
+                return Response({'error': 'Stripe not configured'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            refund_obj = stripe.Refund.create(
+                payment_intent=payment.provider_payment_id,
+                amount=int(payment.amount * 100),
+                idempotency_key=f"rf_{payment.id}_{uuid.uuid4()}"
+            )
+
+            refund = Refund.objects.create(
+                payment=payment,
+                amount=payment.amount,
+                currency=payment.currency,
+                reason='requested_by_customer',
+                description='User requested refund',
+                provider_refund_id=refund_obj['id'],
+                status='completed',
+                processed_at=timezone.now()
+            )
+
+            payment.status = 'refunded'
+            payment.refunded_at = timezone.now()
+            payment.save()
+
+            return Response({'refund_id': refund.id, 'status': 'refunded'})
         
-        # Update payment status
-        payment.status = 'refunded'
-        payment.refunded_at = timezone.now()
-        payment.save()
-        
-        return Response({
-            'refund_id': refund.id,
-            'status': 'refunded',
-            'message': 'Refund processed successfully'
-        })
+        return Response({'error': 'Unsupported provider'}, status=status.HTTP_400_BAD_REQUEST)
         
     except Exception as e:
         return Response(
@@ -283,18 +349,73 @@ def payment_statistics(request):
 @csrf_exempt
 def stripe_webhook(request):
     """Handle Stripe webhooks"""
-    # For now, just log the webhook
-    # In production, this would verify the signature and process the event
-    webhook = PaymentWebhook.objects.create(
+    payload = request.body
+    sig_header = request.META.get('HTTP_STRIPE_SIGNATURE', '')
+    endpoint_secret = getattr(settings, 'STRIPE_WEBHOOK_SECRET', None)
+    if not endpoint_secret:
+        return HttpResponse(status=500)
+
+    try:
+        event = stripe.Webhook.construct_event(
+            payload=payload, sig_header=sig_header, secret=endpoint_secret
+        )
+    except ValueError:
+        return HttpResponse(status=400)
+    except stripe.error.SignatureVerificationError:
+        return HttpResponse(status=400)
+
+    # Early idempotency: drop if event already recorded
+    if PaymentWebhook.objects.filter(event_id=event['id']).exists():
+        return HttpResponse(status=200)
+
+    PaymentWebhook.objects.create(
         provider='stripe',
-        event_type='payment_intent.succeeded',
-        event_id=f'evt_{timezone.now().timestamp()}',
+        event_type=event['type'],
+        event_id=event['id'],
         status='processed',
-        payload=request.body.decode(),
+        payload=event,
         headers=dict(request.headers),
         processed_at=timezone.now()
     )
-    
+
+    # Handle PaymentIntent succeeded
+    if event['type'] == 'payment_intent.succeeded':
+        intent = event['data']['object']
+        payment = Payment.objects.filter(provider='stripe', provider_payment_id=intent['id']).first()
+        if payment and payment.status != 'completed':
+            payment.status = 'completed'
+            payment.paid_at = timezone.now()
+            payment.save()
+    elif event['type'] == 'payment_intent.payment_failed':
+        intent = event['data']['object']
+        payment = Payment.objects.filter(provider='stripe', provider_payment_id=intent['id']).first()
+        if payment:
+            payment.status = 'failed'
+            payment.save()
+    elif event['type'] in ['charge.refunded', 'refund.updated']:
+        data_obj = event['data']['object']
+        # Try to find by payment_intent on charge
+        payment_intent_id = data_obj.get('payment_intent') if isinstance(data_obj, dict) else None
+        if payment_intent_id:
+            payment = Payment.objects.filter(provider='stripe', provider_payment_id=payment_intent_id).first()
+            if payment and payment.status != 'refunded':
+                payment.status = 'refunded'
+                payment.refunded_at = timezone.now()
+                payment.save()
+    elif event['type'] == 'account.updated':
+        acct = event['data']['object']
+        account_id = acct.get('id')
+        from mentors.models import MentorProfile
+        mentor = MentorProfile.objects.filter(stripe_account_id=account_id).first()
+        if mentor:
+            mentor.payouts_enabled = bool(acct.get('payouts_enabled'))
+            mentor.charges_enabled = bool(acct.get('charges_enabled'))
+            mentor.kyc_disabled_reason = acct.get('requirements', {}).get('disabled_reason', '') if acct.get('requirements') else ''
+            due_by = acct.get('requirements', {}).get('current_deadline') if acct.get('requirements') else None
+            mentor.kyc_due_by = timezone.datetime.fromtimestamp(due_by, tz=timezone.utc) if due_by else None
+            mentor.stripe_capabilities = acct.get('capabilities', {}) or {}
+            mentor.save()
+
     return HttpResponse(status=200)
 
 @csrf_exempt

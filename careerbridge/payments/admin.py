@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 from django.db.models import Sum, Count
-from .models import Payment, PaymentMethod, Refund, PaymentWebhook
+from .models import Payment, PaymentMethod, Refund, PaymentWebhook, PaymentSettings
 
 @admin.register(Payment)
 class PaymentAdmin(admin.ModelAdmin):
@@ -216,6 +216,11 @@ class PaymentWebhookAdmin(admin.ModelAdmin):
         updated = queryset.update(status='failed')
         self.message_user(request, f'{updated} webhooks marked as failed.')
     mark_as_failed.short_description = "Mark selected webhooks as failed"
+
+@admin.register(PaymentSettings)
+class PaymentSettingsAdmin(admin.ModelAdmin):
+    list_display = ('platform_fee_percentage', 'allow_service_override', 'stripe_connect_enabled', 'updated_at')
+    readonly_fields = ('created_at', 'updated_at')
 
 # Payment Statistics Admin
 class PaymentStatisticsAdmin(admin.ModelAdmin):

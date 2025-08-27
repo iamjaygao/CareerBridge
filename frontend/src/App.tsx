@@ -14,6 +14,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import LoadingSpinner from './components/common/LoadingSpinner';
 import PerformanceMonitor from './components/common/PerformanceMonitor';
 import theme from './theme';
+import { preloadPopularData } from './services/api/searchService';
 
 // Lazy load pages for better performance
 const LoginPage = lazy(() => import('./pages/auth/LoginPage'));
@@ -30,12 +31,15 @@ const UploadResumePage = lazy(() => import('./pages/resumes/UploadResumePage'));
 const ResumeAnalysisPage = lazy(() => import('./pages/resumes/ResumeAnalysisPage'));
 const ProfilePage = lazy(() => import('./pages/profile/ProfilePage'));
 const SettingsPage = lazy(() => import('./pages/settings/SettingsPage'));
+const ChatListPage = lazy(() => import('./pages/chat/ChatListPage'));
+const ChatRoomPage = lazy(() => import('./pages/chat/ChatRoomPage'));
 const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage'));
 const UserManagementPage = lazy(() => import('./pages/admin/UserManagementPage'));
 const MentorApplicationsPage = lazy(() => import('./pages/admin/MentorApplicationsPage'));
 const AppointmentManagementPage = lazy(() => import('./pages/admin/AppointmentManagementPage'));
 const SystemSettingsPage = lazy(() => import('./pages/admin/SystemSettingsPage'));
 const NotFoundPage = lazy(() => import('./pages/error/NotFoundPage'));
+const PaymentDemoPage = lazy(() => import('./pages/payments/PaymentDemoPage'));
 
 const { store, persistor } = configureStore();
 
@@ -46,6 +50,11 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 };
 
 function App() {
+  // Pre-load popular data on app initialization
+  React.useEffect(() => {
+    preloadPopularData();
+  }, []);
+
   return (
     <ErrorBoundary>
       <Provider store={store}>
@@ -189,6 +198,30 @@ function App() {
                         <ProtectedRoute>
                           <MainLayout>
                             <SystemSettingsPage />
+                          </MainLayout>
+                        </ProtectedRoute>
+                      } />
+
+                      <Route path="/payments/demo" element={
+                        <ProtectedRoute>
+                          <MainLayout>
+                            <PaymentDemoPage />
+                          </MainLayout>
+                        </ProtectedRoute>
+                      } />
+                      
+                      <Route path="/chat" element={
+                        <ProtectedRoute>
+                          <MainLayout>
+                            <ChatListPage />
+                          </MainLayout>
+                        </ProtectedRoute>
+                      } />
+                      
+                      <Route path="/chat/:roomId" element={
+                        <ProtectedRoute>
+                          <MainLayout>
+                            <ChatRoomPage />
                           </MainLayout>
                         </ProtectedRoute>
                       } />

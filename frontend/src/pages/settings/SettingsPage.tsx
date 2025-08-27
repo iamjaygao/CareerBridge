@@ -16,6 +16,7 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
+  Alert,
 } from '@mui/material';
 import { Grid } from '@mui/material';
 import {
@@ -24,6 +25,7 @@ import {
   Accessibility as AccessibilityIcon,
   Palette as PaletteIcon,
   Save as SaveIcon,
+  Lock as LockIcon,
 } from '@mui/icons-material';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../../store';
@@ -39,12 +41,27 @@ import { useNotification } from '../../components/common/NotificationProvider';
 import PageHeader from '../../components/common/PageHeader';
 import ResponsiveContainer from '../../components/common/ResponsiveContainer';
 import settingsService from '../../services/api/settingsService';
+import PaymentIcon from '@mui/icons-material/Payment';
 
 const SettingsPage: React.FC = () => {
   const dispatch = useDispatch();
   const settings = useSelector((state: RootState) => state.settings);
   const { showSuccess } = useNotification();
   const [hasChanges, setHasChanges] = useState(false);
+  const [privacyMsg, setPrivacyMsg] = useState<string | null>(null);
+  const [kycStatus, setKycStatus] = useState<any | null>(null);
+
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/v1/mentors/connect/status/');
+        if (res.ok) {
+          const data = await res.json();
+          setKycStatus(data);
+        }
+      } catch {}
+    })();
+  }, []);
 
   const handleThemeChange = (theme: 'light' | 'dark') => {
     dispatch(setTheme(theme));
@@ -277,6 +294,86 @@ const SettingsPage: React.FC = () => {
                   </ListItemSecondaryAction>
                 </ListItem>
               </List>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Privacy & Data Actions */}
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <LockIcon sx={{ mr: 1 }} />
+                <Typography variant="h6">Privacy & Data</Typography>
+              </Box>
+              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                <Button variant="outlined" onClick={async () => {
+                  setPrivacyMsg(null);
+                  const res = await fetch('/api/v1/resumes/data/deletion/request/', { method: 'POST' });
+                  const data = await res.json();
+                  if (!res.ok) return setPrivacyMsg(data.error || 'Failed to request deletion');
+                  setPrivacyMsg(`Deletion requested. Token: ${data.token}`);
+                }}>Request Deletion</Button>
+                <Button variant="outlined" onClick={async () => {
+                  setPrivacyMsg(null);
+                  const res = await fetch('/api/v1/resumes/privacy/export/', { method: 'POST' });
+                  const data = await res.json();
+                  if (!res.ok) return setPrivacyMsg(data.error || 'Failed to request export');
+                  setPrivacyMsg('Export job started. Check status shortly.');
+                }}>Request Export</Button>
+                <Button variant="contained" onClick={async () => {
+                  setPrivacyMsg(null);
+                  const res = await fetch('/api/v1/resumes/privacy/export/status/');
+                  const data = await res.json();
+                  if (!res.ok) return setPrivacyMsg('Failed to fetch export status');
+                  if (data.status === 'completed' && data.download_url) {
+                    setPrivacyMsg('Export ready. Downloading...');
+                    window.location.href = data.download_url;
+                  } else {
+                    setPrivacyMsg(`Export status: ${data.status}`);
+                  }
+                }}>Check Export Status</Button>
+              </Box>
+              {privacyMsg && <Alert severity="info" sx={{ mt: 2 }}>{privacyMsg}</Alert>}
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Mentor Connect Onboarding */}
+        <Grid item xs={12}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <PaymentIcon sx={{ mr: 1 }} />
+                <Typography variant="h6">Mentor Payments (Stripe Connect)</Typography>
+              </Box>
+              {kycStatus && (
+                <Box sx={{ mb: 2 }}>
+                  {(!kycStatus.payouts_enabled || !kycStatus.charges_enabled) ? (
+                    <Alert severity="warning">Your Stripe account is not fully enabled. Please complete onboarding. {kycStatus.kyc_disabled_reason && `(Reason: ${kycStatus.kyc_disabled_reason})`}</Alert>
+                  ) : (
+                    <Alert severity="success">Stripe Connect is fully enabled for payouts and charges.</Alert>
+                  )}
+                </Box>
+              )}
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <Button variant="outlined" onClick={async () => {
+                  const res = await fetch('/api/v1/mentors/connect/create-account/', { method: 'POST' });
+                  const data = await res.json();
+                  if (!res.ok) return alert(data.error || 'Failed to create account');
+                  alert(`Account ID: ${data.account_id}`);
+                }}>Create/Fetch Account</Button>
+                <Button variant="contained" onClick={async () => {
+                  const params = new URLSearchParams({
+                    return_url: window.location.origin + '/settings',
+                    refresh_url: window.location.origin + '/settings'
+                  });
+                  const res = await fetch(`/api/v1/mentors/connect/account-link/?${params}`, { method: 'POST' });
+                  const data = await res.json();
+                  if (!res.ok) return alert(data.error || 'Failed to create account link');
+                  window.location.href = data.url;
+                }}>Start Onboarding</Button>
+              </Box>
             </CardContent>
           </Card>
         </Grid>
