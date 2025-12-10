@@ -17,6 +17,7 @@ from .serializers import (
     PaymentMethodCreateSerializer, RefundSerializer, RefundCreateSerializer,
     PaymentIntentSerializer, PaymentConfirmationSerializer, PaymentStatisticsSerializer
 )
+from adminpanel.permissions import IsAdminUser, is_admin_level
 
 # Payment Views
 @api_view(['POST'])
@@ -271,79 +272,218 @@ class RefundDetailView(generics.RetrieveAPIView):
 
 # Statistics View
 @api_view(['GET'])
-@permission_classes([permissions.IsAdminUser])
+@permission_classes([IsAdminUser])
 def payment_statistics(request):
     """Get payment statistics for admin"""
-    today = timezone.now().date()
-    week_ago = today - timedelta(days=7)
-    month_ago = today - timedelta(days=30)
+    import logging
+    logger = logging.getLogger(__name__)
     
-    # Overall statistics
-    total_payments = Payment.objects.count()
-    total_amount = Payment.objects.filter(status='completed').aggregate(
-        total=Sum('amount')
-    )['total'] or 0
+    logger.info(">>> DEBUG: entering payment_statistics")
     
-    successful_payments = Payment.objects.filter(status='completed').count()
-    failed_payments = Payment.objects.filter(status='failed').count()
-    refunded_payments = Payment.objects.filter(status='refunded').count()
+    # Check if Payment model has any data
+    total_payment_count = Payment.objects.count()
+    logger.info(f">>> DEBUG: Total payments in database: {total_payment_count}")
     
-    # Time-based statistics
-    payments_today = Payment.objects.filter(created_at__date=today).count()
-    payments_this_week = Payment.objects.filter(created_at__date__gte=week_ago).count()
-    payments_this_month = Payment.objects.filter(created_at__date__gte=month_ago).count()
+    if total_payment_count == 0:
+        logger.warning(">>> DEBUG: No payments found in database - returning zeros")
+        return Response({
+            'total_payments': 0,
+            'total_amount': 0.0,
+            'successful_payments': 0,
+            'failed_payments': 0,
+            'refunded_payments': 0,
+            'success_rate': 0.0,
+            'avg_payment': 0.0,
+            'average_payment_amount': 0.0,
+            'platform_fees': 0.0,
+            'mentor_earnings': 0.0,
+            'payments_today': 0,
+            'payments_this_week': 0,
+            'payments_this_month': 0,
+            'revenue_today': 0.0,
+            'revenue_this_week': 0.0,
+            'revenue_this_month': 0.0,
+            'pending_payouts': 0.0,
+            'debug_message': 'No payment data found in database'
+        })
     
-    revenue_today = Payment.objects.filter(
-        status='completed', created_at__date=today
-    ).aggregate(total=Sum('amount'))['total'] or 0
-    
-    revenue_this_week = Payment.objects.filter(
-        status='completed', created_at__date__gte=week_ago
-    ).aggregate(total=Sum('amount'))['total'] or 0
-    
-    revenue_this_month = Payment.objects.filter(
-        status='completed', created_at__date__gte=month_ago
-    ).aggregate(total=Sum('amount'))['total'] or 0
-    
-    # Success rate
-    success_rate = 0
-    if total_payments > 0:
-        success_rate = (successful_payments / total_payments) * 100
-    
-    # Average payment amount
-    avg_payment = 0
-    if successful_payments > 0:
-        avg_payment = total_amount / successful_payments
-    
-    # Platform fees and mentor earnings
-    platform_fees = Payment.objects.filter(status='completed').aggregate(
-        total=Sum('platform_fee')
-    )['total'] or 0
-    
-    mentor_earnings = Payment.objects.filter(status='completed').aggregate(
-        total=Sum('mentor_earnings')
-    )['total'] or 0
-    
-    data = {
-        'total_payments': total_payments,
-        'total_amount': total_amount,
-        'successful_payments': successful_payments,
-        'failed_payments': failed_payments,
-        'refunded_payments': refunded_payments,
-        'success_rate': round(success_rate, 2),
-        'avg_payment': round(avg_payment, 2),
-        'platform_fees': platform_fees,
-        'mentor_earnings': mentor_earnings,
-        'payments_today': payments_today,
-        'payments_this_week': payments_this_week,
-        'payments_this_month': payments_this_month,
-        'revenue_today': revenue_today,
-        'revenue_this_week': revenue_this_week,
-        'revenue_this_month': revenue_this_month,
-    }
-    
-    serializer = PaymentStatisticsSerializer(data)
-    return Response(serializer.data)
+    try:
+        today = timezone.now().date()
+        week_ago = today - timedelta(days=7)
+        month_ago = today - timedelta(days=30)
+        
+        logger.info(f">>> DEBUG: Date range - today: {today}, week_ago: {week_ago}, month_ago: {month_ago}")
+        
+        # Overall statistics - handle empty datasets safely
+        total_payments = Payment.objects.count()
+        logger.info(f">>> DEBUG: total_payments count: {total_payments}")
+        
+        total_amount_result = Payment.objects.filter(status='completed').aggregate(
+            total=Sum('amount')
+        )
+        # Convert Decimal to float explicitly
+        total_amount_raw = total_amount_result['total']
+        if total_amount_raw is None:
+            total_amount = 0.0
+        else:
+            # Handle both Decimal and float types
+            from decimal import Decimal
+            if isinstance(total_amount_raw, Decimal):
+                total_amount = float(total_amount_raw)
+            else:
+                total_amount = float(total_amount_raw)
+        logger.info(f">>> DEBUG: total_amount (completed): {total_amount}, type: {type(total_amount)}")
+        
+        successful_payments = Payment.objects.filter(status='completed').count()
+        failed_payments = Payment.objects.filter(status='failed').count()
+        refunded_payments = Payment.objects.filter(status='refunded').count()
+        
+        logger.info(f">>> DEBUG: successful: {successful_payments}, failed: {failed_payments}, refunded: {refunded_payments}")
+        
+        # Time-based statistics
+        payments_today = Payment.objects.filter(created_at__date=today).count()
+        payments_this_week = Payment.objects.filter(created_at__date__gte=week_ago).count()
+        payments_this_month = Payment.objects.filter(created_at__date__gte=month_ago).count()
+        
+        logger.info(f">>> DEBUG: payments_today: {payments_today}, this_week: {payments_this_week}, this_month: {payments_this_month}")
+        
+        revenue_today_result = Payment.objects.filter(
+            status='completed', created_at__date=today
+        ).aggregate(total=Sum('amount'))
+        # Convert Decimal to float explicitly
+        from decimal import Decimal
+        revenue_today_raw = revenue_today_result['total']
+        if revenue_today_raw is None:
+            revenue_today = 0.0
+        else:
+            revenue_today = float(revenue_today_raw) if isinstance(revenue_today_raw, Decimal) else float(revenue_today_raw)
+        logger.info(f">>> DEBUG: revenue_today: {revenue_today}")
+        
+        revenue_this_week_result = Payment.objects.filter(
+            status='completed', created_at__date__gte=week_ago
+        ).aggregate(total=Sum('amount'))
+        revenue_this_week_raw = revenue_this_week_result['total']
+        if revenue_this_week_raw is None:
+            revenue_this_week = 0.0
+        else:
+            revenue_this_week = float(revenue_this_week_raw) if isinstance(revenue_this_week_raw, Decimal) else float(revenue_this_week_raw)
+        
+        revenue_this_month_result = Payment.objects.filter(
+            status='completed', created_at__date__gte=month_ago
+        ).aggregate(total=Sum('amount'))
+        revenue_this_month_raw = revenue_this_month_result['total']
+        if revenue_this_month_raw is None:
+            revenue_this_month = 0.0
+        else:
+            revenue_this_month = float(revenue_this_month_raw) if isinstance(revenue_this_month_raw, Decimal) else float(revenue_this_month_raw)
+        
+        # Success rate
+        success_rate = 0.0
+        if total_payments > 0:
+            success_rate = float((successful_payments / total_payments) * 100)
+        
+        # Average payment amount
+        avg_payment = 0.0
+        if successful_payments > 0:
+            avg_payment = float(total_amount / successful_payments)
+        
+        # Platform fees and mentor earnings
+        platform_fees_result = Payment.objects.filter(status='completed').aggregate(
+            total=Sum('platform_fee')
+        )
+        # Convert Decimal to float explicitly
+        from decimal import Decimal
+        platform_fees_raw = platform_fees_result['total']
+        if platform_fees_raw is None:
+            platform_fees = 0.0
+        else:
+            platform_fees = float(platform_fees_raw) if isinstance(platform_fees_raw, Decimal) else float(platform_fees_raw)
+        logger.info(f">>> DEBUG: platform_fees: {platform_fees}, type: {type(platform_fees)}")
+        
+        mentor_earnings_result = Payment.objects.filter(status='completed').aggregate(
+            total=Sum('mentor_earnings')
+        )
+        mentor_earnings_raw = mentor_earnings_result['total']
+        if mentor_earnings_raw is None:
+            mentor_earnings = 0.0
+        else:
+            mentor_earnings = float(mentor_earnings_raw) if isinstance(mentor_earnings_raw, Decimal) else float(mentor_earnings_raw)
+        logger.info(f">>> DEBUG: mentor_earnings: {mentor_earnings}, type: {type(mentor_earnings)}")
+        
+        # Calculate pending payouts (sum of mentor_earnings for completed payments not yet paid out)
+        # This is a simplified calculation - in production, track actual payout status
+        pending_payouts = float(mentor_earnings)  # Simplified: all mentor earnings are pending until paid
+        
+        # Ensure all values are JSON-serializable (no Decimal, no None)
+        data = {
+            'total_payments': int(total_payments),
+            'total_amount': float(total_amount),
+            'successful_payments': int(successful_payments),
+            'failed_payments': int(failed_payments),
+            'refunded_payments': int(refunded_payments),
+            'success_rate': round(float(success_rate), 2),
+            'avg_payment': round(float(avg_payment), 2),
+            'average_payment_amount': round(float(avg_payment), 2),  # Add this field for serializer
+            'platform_fees': float(platform_fees),
+            'mentor_earnings': float(mentor_earnings),
+            'payments_today': int(payments_today),
+            'payments_this_week': int(payments_this_week),
+            'payments_this_month': int(payments_this_month),
+            'revenue_today': float(revenue_today),
+            'revenue_this_week': float(revenue_this_week),
+            'revenue_this_month': float(revenue_this_month),
+            'pending_payouts': float(pending_payouts),  # Add pending_payouts field
+        }
+        
+        # Verify all values are JSON-serializable
+        import json
+        try:
+            json.dumps(data)
+            logger.info(f">>> DEBUG: payment_statistics data is JSON-serializable: {data}")
+        except (TypeError, ValueError) as e:
+            logger.error(f">>> DEBUG: payment_statistics data is NOT JSON-serializable: {e}")
+            logger.error(f">>> DEBUG: Problematic data: {data}")
+        
+        serializer = PaymentStatisticsSerializer(data=data)
+        if serializer.is_valid():
+            logger.info(">>> DEBUG: serializer is valid, returning validated_data")
+            return Response(serializer.validated_data)
+        else:
+            logger.error(f">>> DEBUG: FINANCIAL API SERIALIZER ERROR: {serializer.errors}")
+            # Return data directly if serializer fails, but log the error
+            logger.error(">>> DEBUG: Returning raw data due to serializer validation failure")
+            return Response(data, status=status.HTTP_200_OK)
+            
+    except Exception as e:
+        logger.error(f">>> DEBUG: FINANCIAL API ERROR: {str(e)}", exc_info=True)
+        import traceback
+        logger.error(f">>> DEBUG: Traceback: {traceback.format_exc()}")
+        # Return error with details for debugging
+        return Response(
+            {
+                'error': 'Failed to retrieve payment statistics',
+                'detail': str(e),
+                'exception_type': type(e).__name__,
+                'total_payments': 0,
+                'total_amount': 0.0,
+                'successful_payments': 0,
+                'failed_payments': 0,
+                'refunded_payments': 0,
+                'success_rate': 0.0,
+                'avg_payment': 0.0,
+                'average_payment_amount': 0.0,
+                'platform_fees': 0.0,
+                'mentor_earnings': 0.0,
+                'payments_today': 0,
+                'payments_this_week': 0,
+                'payments_this_month': 0,
+                'revenue_today': 0.0,
+                'revenue_this_week': 0.0,
+                'revenue_this_month': 0.0,
+                'pending_payouts': 0.0,
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 # Webhook Views
 @csrf_exempt

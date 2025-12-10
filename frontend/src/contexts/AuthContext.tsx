@@ -47,17 +47,44 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   }, [dispatch, logout]);
 
+  // Restore authentication state from localStorage on page refresh
   const initializeAuth = useCallback(async () => {
     try {
-      if (authService.isAuthenticated()) {
-        if (authService.needsTokenRefresh()) {
-          await refreshToken();
-        }
-        
-        const storedUser = authService.getStoredUser();
-        if (storedUser) {
+      // Directly read from localStorage to restore state immediately
+      const accessToken = localStorage.getItem('access_token');
+      const userStr = localStorage.getItem('user');
+      
+      if (accessToken && userStr) {
+        try {
+          const storedUser = JSON.parse(userStr) as User;
+          // Restore user state immediately (synchronously)
           setUserState(storedUser);
           dispatch(setUser(storedUser));
+          
+          // Optionally refresh token if needed (async, non-blocking)
+          if (authService.needsTokenRefresh()) {
+            try {
+              await refreshToken();
+            } catch (refreshError) {
+              // If refresh fails, keep the existing token and user
+              console.warn('Token refresh failed, using existing token:', refreshError);
+            }
+          }
+        } catch (parseError) {
+          console.error('Failed to parse stored user:', parseError);
+          // Clear invalid data
+          localStorage.removeItem('user');
+          localStorage.removeItem('access_token');
+        }
+      } else if (accessToken && !userStr) {
+        // Token exists but no user data - try to refresh to get user
+        try {
+          if (authService.needsTokenRefresh()) {
+            await refreshToken();
+          }
+        } catch (refreshError) {
+          console.error('Failed to restore user with token refresh:', refreshError);
+          authService.logout();
         }
       }
     } catch (error) {

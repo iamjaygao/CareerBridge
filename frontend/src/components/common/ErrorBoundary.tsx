@@ -43,7 +43,7 @@ class ErrorBoundary extends Component<Props, State> {
     return {
       hasError: true,
       error,
-      errorId: this.generateErrorId(),
+      errorId: ErrorBoundary.generateErrorId(),
     };
   }
 

@@ -1,6 +1,7 @@
 from rest_framework import generics, status, permissions
 from rest_framework.response import Response
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.db.models import Q, Count
@@ -18,13 +19,21 @@ from .serializers import (
 )
 
 class NotificationListView(generics.ListAPIView):
-    """User notification list"""
+    """User notification list with role-based filtering"""
     serializer_class = NotificationListSerializer
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
         user = self.request.user
-        queryset = Notification.objects.filter(user=user)
+        user_role = getattr(user, 'role', None)
+        
+        # Filter notifications where:
+        # 1. notification.user == current_user (user-specific)
+        # OR
+        # 2. notification.target_role == current_user.role (role-based)
+        queryset = Notification.objects.filter(
+            Q(user=user) | Q(target_role=user_role)
+        )
         
         # Apply filter conditions
         serializer = NotificationFilterSerializer(data=self.request.query_params)
@@ -57,7 +66,11 @@ class NotificationDetailView(generics.RetrieveAPIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
-        return Notification.objects.filter(user=self.request.user)
+        user = self.request.user
+        user_role = getattr(user, 'role', None)
+        return Notification.objects.filter(
+            Q(user=user) | Q(target_role=user_role)
+        )
     
     def retrieve(self, request, *args, **kwargs):
         """Get notification details and mark as read"""
@@ -74,10 +87,12 @@ class NotificationMarkReadView(generics.GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
             notification_ids = serializer.validated_data['notification_ids']
+            user = request.user
+            user_role = getattr(user, 'role', None)
             
-            # Batch mark as read
+            # Batch mark as read - only for notifications visible to this user
             notifications = Notification.objects.filter(
-                user=request.user,
+                Q(user=user) | Q(target_role=user_role),
                 id__in=notification_ids
             )
             
@@ -99,8 +114,9 @@ class NotificationMarkAllReadView(generics.GenericAPIView):
     
     def post(self, request):
         user = request.user
+        user_role = getattr(user, 'role', None)
         updated_count = Notification.objects.filter(
-            user=user,
+            Q(user=user) | Q(target_role=user_role),
             is_read=False
         ).update(
             is_read=True,
@@ -129,24 +145,30 @@ class NotificationStatsView(generics.GenericAPIView):
     
     def get(self, request):
         user = request.user
+        user_role = getattr(user, 'role', None)
+        
+        # Base queryset filtered by role/user
+        base_queryset = Notification.objects.filter(
+            Q(user=user) | Q(target_role=user_role)
+        )
         
         # Basic statistics
-        total_notifications = Notification.objects.filter(user=user).count()
-        unread_count = Notification.objects.filter(user=user, is_read=False).count()
+        total_notifications = base_queryset.count()
+        unread_count = base_queryset.filter(is_read=False).count()
         read_count = total_notifications - unread_count
         
         # Statistics by type
-        notifications_by_type = Notification.objects.filter(user=user).values(
+        notifications_by_type = base_queryset.values(
             'notification_type'
         ).annotate(count=Count('id')).order_by('-count')
         
         # Statistics by priority
-        notifications_by_priority = Notification.objects.filter(user=user).values(
+        notifications_by_priority = base_queryset.values(
             'priority'
         ).annotate(count=Count('id')).order_by('-count')
         
         # Recent notifications
-        recent_notifications = Notification.objects.filter(user=user).order_by('-created_at')[:5]
+        recent_notifications = base_queryset.order_by('-created_at')[:5]
         
         # Convert to dictionary format
         type_stats = {item['notification_type']: item['count'] for item in notifications_by_type}
@@ -166,27 +188,28 @@ class NotificationStatsView(generics.GenericAPIView):
 class NotificationCreateView(generics.CreateAPIView):
     """Create notification (Admin function)"""
     serializer_class = NotificationCreateSerializer
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdminUser]
     
     def perform_create(self, serializer):
+        # Admin can create notifications for specific users or roles
         serializer.save()
 
 class NotificationTemplateListView(generics.ListAPIView):
     """Notification template list (Admin function)"""
     serializer_class = NotificationTemplateSerializer
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdminUser]
     queryset = NotificationTemplate.objects.filter(is_active=True)
 
 class NotificationTemplateDetailView(generics.RetrieveUpdateDestroyAPIView):
     """Notification template details (Admin function)"""
     serializer_class = NotificationTemplateSerializer
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdminUser]
     queryset = NotificationTemplate.objects.all()
 
 class NotificationLogListView(generics.ListAPIView):
     """Notification delivery logs (Admin function)"""
     serializer_class = NotificationLogSerializer
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdminUser]
     queryset = NotificationLog.objects.all()
     
     def get_queryset(self):
@@ -216,22 +239,26 @@ class NotificationLogListView(generics.ListAPIView):
 class NotificationBatchListView(generics.ListCreateAPIView):
     """Batch notification task list (Admin function)"""
     serializer_class = NotificationBatchSerializer
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdminUser]
     queryset = NotificationBatch.objects.all()
 
 class NotificationBatchDetailView(generics.RetrieveAPIView):
     """Batch notification task details (Admin function)"""
     serializer_class = NotificationBatchSerializer
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdminUser]
     queryset = NotificationBatch.objects.all()
 
 class NotificationUnreadCountView(generics.GenericAPIView):
-    """Get unread notification count"""
+    """Get unread notification count with role-based filtering"""
     permission_classes = [permissions.IsAuthenticated]
     
     def get(self, request):
         user = request.user
-        unread_count = Notification.objects.filter(user=user, is_read=False).count()
+        user_role = getattr(user, 'role', None)
+        unread_count = Notification.objects.filter(
+            Q(user=user) | Q(target_role=user_role),
+            is_read=False
+        ).count()
         
         return Response({
             'unread_count': unread_count
@@ -242,7 +269,11 @@ class NotificationDeleteView(generics.DestroyAPIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
-        return Notification.objects.filter(user=self.request.user)
+        user = self.request.user
+        user_role = getattr(user, 'role', None)
+        return Notification.objects.filter(
+            Q(user=user) | Q(target_role=user_role)
+        )
     
     def destroy(self, request, *args, **kwargs):
         notification = self.get_object()
@@ -255,7 +286,10 @@ class NotificationDeleteAllView(generics.GenericAPIView):
     
     def post(self, request):
         user = request.user
-        deleted_count = Notification.objects.filter(user=user).delete()[0]
+        user_role = getattr(user, 'role', None)
+        deleted_count = Notification.objects.filter(
+            Q(user=user) | Q(target_role=user_role)
+        ).delete()[0]
         
         return Response({
             'message': f'{deleted_count} notifications deleted successfully',

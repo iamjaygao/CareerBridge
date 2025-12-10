@@ -23,13 +23,39 @@ class Notification(models.Model):
     
     PRIORITY_CHOICES = (
         ('low', 'Low'),
+        ('normal', 'Normal'),
         ('medium', 'Medium'),
         ('high', 'High'),
+        ('critical', 'Critical'),
         ('urgent', 'Urgent'),
     )
     
+    TARGET_ROLE_CHOICES = (
+        ('superadmin', 'Super Admin'),
+        ('admin', 'Admin'),
+        ('staff', 'Staff'),
+        ('mentor', 'Mentor'),
+        ('student', 'Student'),
+    )
+    
+    # Target information - either specific user OR role-based
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.CASCADE, 
+        related_name='notifications',
+        null=True,
+        blank=True,
+        help_text="Specific user target (if null, targets all users with target_role)"
+    )
+    target_role = models.CharField(
+        max_length=20,
+        choices=TARGET_ROLE_CHOICES,
+        null=True,
+        blank=True,
+        help_text="Role-based target (if user is null, all users with this role see it)"
+    )
+    
     # Basic information
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='notifications')
     notification_type = models.CharField(max_length=50, choices=NOTIFICATION_TYPE_CHOICES)
     title = models.CharField(max_length=200, help_text="Notification title")
     message = models.TextField(help_text="Notification content")
@@ -37,7 +63,7 @@ class Notification(models.Model):
     # Status and priority
     is_read = models.BooleanField(default=False, help_text="Whether read")
     is_sent = models.BooleanField(default=False, help_text="Whether sent")
-    priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='medium')
+    priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='normal')
     
     # Related objects
     related_appointment = models.ForeignKey('appointments.Appointment', on_delete=models.SET_NULL, null=True, blank=True)
@@ -56,12 +82,20 @@ class Notification(models.Model):
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['user', 'is_read']),
+            models.Index(fields=['target_role', 'is_read']),
             models.Index(fields=['notification_type', 'created_at']),
             models.Index(fields=['priority', 'created_at']),
         ]
     
     def __str__(self):
-        return f"{self.user.username} - {self.title}"
+        target = self.user.username if self.user else f"Role: {self.target_role}"
+        return f"{target} - {self.title}"
+    
+    def clean(self):
+        """Validate that either user or target_role is set"""
+        from django.core.exceptions import ValidationError
+        if not self.user and not self.target_role:
+            raise ValidationError("Either 'user' or 'target_role' must be set")
     
     def mark_as_read(self):
         """Mark as read"""

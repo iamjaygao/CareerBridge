@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { useNavigate, Link as RouterLink, useLocation } from 'react-router-dom';
 import {
   Container,
   Paper,
@@ -16,7 +16,7 @@ import { LockOutlined } from '@mui/icons-material';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
-import { login, clearError } from '../../store/slices/authSlice';
+import { loginUser, clearError } from '../../store/slices/authSlice';
 import { RootState, AppDispatch } from '../../store';
 
 // Validation schema
@@ -33,7 +33,11 @@ interface LoginFormData {
 const LoginPage: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { loading, error, isAuthenticated } = useSelector((state: RootState) => state.auth);
+  
+  // Get redirect path from location state
+  const redirectTo = (location.state as any)?.redirectTo || '/dashboard';
 
   const {
     register,
@@ -46,9 +50,9 @@ const LoginPage: React.FC = () => {
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/dashboard');
+      navigate(redirectTo, { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, navigate, redirectTo]);
 
   // Clear error when component unmounts
   useEffect(() => {
@@ -60,8 +64,33 @@ const LoginPage: React.FC = () => {
   const onSubmit = async (data: LoginFormData) => {
     try {
       const loginData = { login: data.login, password: data.password };
-      await dispatch(login(loginData)).unwrap();
-      navigate('/dashboard');
+      const result = await dispatch(loginUser(loginData)).unwrap();
+      
+      // Redirect based on real role
+      const realRole = result.user?.role;
+      let targetPath = '/dashboard'; // default
+      
+      switch (realRole) {
+        case 'superadmin':
+          targetPath = '/superadmin';
+          break;
+        case 'admin':
+          targetPath = '/admin';
+          break;
+        case 'staff':
+          targetPath = '/staff';
+          break;
+        case 'mentor':
+          targetPath = '/mentor';
+          break;
+        case 'student':
+          targetPath = '/dashboard';
+          break;
+        default:
+          targetPath = '/dashboard';
+      }
+      
+      navigate(targetPath, { replace: true });
     } catch (error) {
       // Error is handled by the slice
     }

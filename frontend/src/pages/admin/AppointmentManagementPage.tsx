@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Container,
   Card,
   CardContent,
   Typography,
@@ -39,7 +38,6 @@ import {
   Cancel as CancelIcon,
 } from '@mui/icons-material';
 
-import PageHeader from '../../components/common/PageHeader';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import SkeletonLoader from '../../components/common/SkeletonLoader';
 import adminService from '../../services/api/adminService';
@@ -95,97 +93,55 @@ const AppointmentManagementPage: React.FC = () => {
   const fetchAppointments = async () => {
     try {
       setLoading(true);
-      // TODO: Replace with actual appointments API
-      // For now, we'll use mock data since the backend doesn't have a specific appointments endpoint
-      const mockAppointments: Appointment[] = [
-        {
-          id: 1,
-          student: {
-            id: 1,
-            username: 'john_student',
-            email: 'john.student@example.com',
-            first_name: 'John',
-            last_name: 'Student',
-          },
-          mentor: {
-            id: 2,
-            username: 'jane_mentor',
-            email: 'jane.mentor@example.com',
-            first_name: 'Jane',
-            last_name: 'Mentor',
-            expertise_areas: ['React', 'Node.js'],
-          },
-          status: 'scheduled',
-          scheduled_at: '2024-01-25T10:00:00Z',
-          duration: 60,
-          topic: 'React Best Practices',
-          notes: 'Student wants to learn about React hooks and state management',
-          meeting_link: 'https://meet.google.com/abc-defg-hij',
-          created_at: '2024-01-20T15:30:00Z',
-          updated_at: '2024-01-20T15:30:00Z',
-          payment_status: 'completed',
-          amount: 50.00,
-        },
-        {
-          id: 2,
-          student: {
-            id: 3,
-            username: 'bob_student',
-            email: 'bob.student@example.com',
-            first_name: 'Bob',
-            last_name: 'Student',
-          },
-          mentor: {
-            id: 4,
-            username: 'alice_mentor',
-            email: 'alice.mentor@example.com',
-            first_name: 'Alice',
-            last_name: 'Mentor',
-            expertise_areas: ['Python', 'Data Science'],
-          },
-          status: 'completed',
-          scheduled_at: '2024-01-24T14:00:00Z',
-          duration: 90,
-          topic: 'Python Data Analysis',
-          notes: 'Completed successfully, student was very satisfied',
-          created_at: '2024-01-19T10:15:00Z',
-          updated_at: '2024-01-24T15:30:00Z',
-          payment_status: 'completed',
-          amount: 75.00,
-        },
-        {
-          id: 3,
-          student: {
-            id: 5,
-            username: 'sarah_student',
-            email: 'sarah.student@example.com',
-            first_name: 'Sarah',
-            last_name: 'Student',
-          },
-          mentor: {
-            id: 2,
-            username: 'jane_mentor',
-            email: 'jane.mentor@example.com',
-            first_name: 'Jane',
-            last_name: 'Mentor',
-            expertise_areas: ['React', 'Node.js'],
-          },
-          status: 'cancelled',
-          scheduled_at: '2024-01-23T16:00:00Z',
-          duration: 60,
-          topic: 'Node.js Backend Development',
-          notes: 'Cancelled by student due to emergency',
-          created_at: '2024-01-18T12:00:00Z',
-          updated_at: '2024-01-22T09:00:00Z',
-          payment_status: 'refunded',
-          amount: 50.00,
-        },
-      ];
-      setAppointments(mockAppointments);
-      setTotalPages(1);
-    } catch (err) {
-      setError('Failed to load appointments');
+      setError(null);
+      
+      // Build query parameters
+      const params: any = {
+        page: page,
+      };
+      
+      if (searchTerm) {
+        params.search = searchTerm;
+      }
+      
+      if (statusFilter !== 'all') {
+        params.status = statusFilter;
+      }
+      
+      if (paymentFilter !== 'all') {
+        params.payment_status = paymentFilter;
+      }
+      
+      const data = await adminService.getAppointments(params);
+      
+      // Handle different response formats
+      let appointmentsData: Appointment[] = [];
+      if (Array.isArray(data)) {
+        appointmentsData = data;
+        setTotalPages(1);
+      } else if (data.results && Array.isArray(data.results)) {
+        appointmentsData = data.results;
+        setTotalPages(data.total_pages || Math.ceil((data.count || 0) / (data.page_size || 10)) || 1);
+      } else if (data.data && Array.isArray(data.data)) {
+        appointmentsData = data.data;
+        setTotalPages(data.total_pages || 1);
+      } else {
+        console.warn('Unexpected appointments response format:', data);
+        appointmentsData = [];
+        setTotalPages(1);
+      }
+      
+      setAppointments(appointmentsData);
+    } catch (err: any) {
+      const errorMessage = err?.response?.data?.detail 
+        || err?.response?.data?.error
+        || err?.message 
+        || 'Failed to load appointments';
+      setError(errorMessage);
       console.error('Error fetching appointments:', err);
+      // Set empty array on error to prevent showing stale mock data
+      setAppointments([]);
+      setTotalPages(1);
     } finally {
       setLoading(false);
     }
@@ -290,15 +246,17 @@ const AppointmentManagementPage: React.FC = () => {
 
   return (
     <>
-      <PageHeader
-        title="Appointment Management"
-        breadcrumbs={[
-          { label: 'Admin', path: '/admin' },
-          { label: 'Appointments', path: '/admin/appointments' },
-        ]}
-      />
+      {/* Page Header */}
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
+          Appointment Management
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Manage all appointments and sessions
+        </Typography>
+      </Box>
 
-      <Container maxWidth="xl">
+      <Box>
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
             {error}
@@ -404,14 +362,24 @@ const AppointmentManagementPage: React.FC = () => {
                         <TableCell>
                           <Box sx={{ display: 'flex', alignItems: 'center' }}>
                             <Avatar sx={{ mr: 2, width: 32, height: 32 }}>
-                              {appointment.mentor.first_name.charAt(0)}
+                              {typeof appointment.mentor === 'object' 
+                                ? (appointment.mentor as any).user 
+                                  ? ((appointment.mentor as any).user.first_name?.[0] || (appointment.mentor as any).user.username?.[0] || 'M')
+                                  : ((appointment.mentor as any).first_name?.[0] || (appointment.mentor as any).username?.[0] || 'M')
+                                : 'M'}
                             </Avatar>
                             <Box>
                               <Typography variant="body2" fontWeight="medium">
-                                {appointment.mentor.first_name} {appointment.mentor.last_name}
+                                {typeof appointment.mentor === 'object' 
+                                  ? (appointment.mentor as any).user
+                                    ? `${(appointment.mentor as any).user.first_name || ''} ${(appointment.mentor as any).user.last_name || ''}`.trim() || (appointment.mentor as any).user.username
+                                    : `${(appointment.mentor as any).first_name || ''} ${(appointment.mentor as any).last_name || ''}`.trim() || (appointment.mentor as any).username
+                                  : 'Mentor'}
                               </Typography>
                               <Typography variant="caption" color="text.secondary">
-                                {appointment.mentor.expertise_areas.slice(0, 2).join(', ')}
+                                {typeof appointment.mentor === 'object' && appointment.mentor.expertise_areas
+                                  ? appointment.mentor.expertise_areas.slice(0, 2).join(', ')
+                                  : 'N/A'}
                               </Typography>
                             </Box>
                           </Box>
@@ -491,7 +459,7 @@ const AppointmentManagementPage: React.FC = () => {
             )}
           </CardContent>
         </Card>
-      </Container>
+      </Box>
 
       {/* Appointment Detail Dialog */}
       <Dialog open={dialogOpen} onClose={handleDialogClose} maxWidth="md" fullWidth>
@@ -530,11 +498,19 @@ const AppointmentManagementPage: React.FC = () => {
                     </Typography>
                     <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                       <Avatar sx={{ mr: 2, width: 48, height: 48 }}>
-                        {selectedAppointment.mentor.first_name.charAt(0)}
+                        {typeof selectedAppointment.mentor === 'object' 
+                          ? (selectedAppointment.mentor as any).user
+                            ? ((selectedAppointment.mentor as any).user.first_name?.[0] || (selectedAppointment.mentor as any).user.username?.[0] || 'M')
+                            : ((selectedAppointment.mentor as any).first_name?.[0] || (selectedAppointment.mentor as any).username?.[0] || 'M')
+                          : 'M'}
                       </Avatar>
                       <Box>
                         <Typography variant="body1" fontWeight="medium">
-                          {selectedAppointment.mentor.first_name} {selectedAppointment.mentor.last_name}
+                          {typeof selectedAppointment.mentor === 'object' 
+                            ? (selectedAppointment.mentor as any).user
+                              ? `${(selectedAppointment.mentor as any).user.first_name || ''} ${(selectedAppointment.mentor as any).user.last_name || ''}`.trim() || (selectedAppointment.mentor as any).user.username
+                              : `${(selectedAppointment.mentor as any).first_name || ''} ${(selectedAppointment.mentor as any).last_name || ''}`.trim() || (selectedAppointment.mentor as any).username
+                            : 'Mentor'}
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
                           {selectedAppointment.mentor.email}

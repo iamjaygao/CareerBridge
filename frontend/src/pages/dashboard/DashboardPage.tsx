@@ -22,6 +22,11 @@ const DashboardPage: React.FC = () => {
     resumesUploaded: 0,
     mentorSessions: 0,
     profileViews: 0,
+    totalResumes: 0,
+    totalAppointments: 0,
+    completedSessions: 0,
+    resumeAnalysisCount: 0,
+    averageResumeScore: 0,
   });
   const [activities, setActivities] = useState<RecentActivity[]>([]);
   const [popularData, setPopularData] = useState<{
@@ -40,8 +45,18 @@ const DashboardPage: React.FC = () => {
           getPopularSkills(),
           getPopularIndustries()
         ]);
-        setStats(data.stats);
-        setActivities(data.activities);
+        // data might be DashboardStats directly or have stats/activities properties
+        if (typeof data === 'object' && data !== null) {
+          const dataAny = data as any;
+          if (dataAny.stats) {
+            setStats(dataAny.stats as DashboardStats);
+          } else if (dataAny.upcomingAppointments !== undefined || dataAny.totalResumes !== undefined) {
+            setStats(dataAny as DashboardStats);
+          }
+          if (dataAny.activities) {
+            setActivities(dataAny.activities as RecentActivity[]);
+          }
+        }
         setPopularData({ jobs, skills, industries });
       } catch (err) {
         setError('Failed to load dashboard data. Please try again later.');

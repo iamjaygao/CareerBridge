@@ -1,8 +1,17 @@
+"""
+CareerBridge main views
+"""
+
 from django.shortcuts import render
 from django.http import JsonResponse
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from django.urls import reverse
+from django.db import connection
+from django.core.cache import cache
+import structlog
+
+logger = structlog.get_logger()
 
 def home(request):
     """Homepage view"""
@@ -33,5 +42,94 @@ def api_root(request):
         'authentication': {
             'login': request.build_absolute_uri('/api/v1/users/login/'),
             'register': request.build_absolute_uri('/api/v1/users/register/'),
+        }
+    })
+
+def health_check(request):
+    """Health check endpoint for the application"""
+    health_status = {
+        "status": "healthy",
+        "service": "CareerBridge",
+        "version": "1.0.0",
+        "components": {}
+    }
+
+    # Check database
+    try:
+        connection.ensure_connection()
+        health_status["components"]["database"] = "healthy"
+    except Exception as e:
+        logger.error("Database health check failed", error=str(e))
+        health_status["components"]["database"] = "unhealthy"
+        health_status["status"] = "unhealthy"
+
+    # Check cache
+    try:
+        cache.set("health_check", "ok", 10)
+        cache_value = cache.get("health_check")
+        if cache_value == "ok":
+            health_status["components"]["cache"] = "healthy"
+        else:
+            health_status["components"]["cache"] = "unhealthy"
+            health_status["status"] = "unhealthy"
+    except Exception as e:
+        logger.error("Cache health check failed", error=str(e))
+        health_status["components"]["cache"] = "unhealthy"
+        health_status["status"] = "unhealthy"
+
+    # Check external services
+    try:
+        # Check JobCrawler health
+        from careerbridge.external_services.third_party_apis.job_crawler import job_crawler_service
+        job_crawler_health = job_crawler_service.check_health()
+        
+        # Check ResumeMatcher health
+        from careerbridge.external_services.third_party_apis.resume_matcher import resume_matcher_service
+        resume_matcher_health = resume_matcher_service.check_health()
+        
+        external_health = {
+            'job_crawler': {
+                'status': job_crawler_health.get('status', 'unknown'),
+                'error': job_crawler_health.get('error', None)
+            },
+            'resume_matcher': {
+                'status': resume_matcher_health.get('status', 'unknown'),
+                'error': resume_matcher_health.get('error', None)
+            },
+            'ai_analyzer': {
+                'status': 'not_implemented',
+                'error': 'AI Analyzer service not yet implemented'
+            }
+        }
+        health_status["components"]["external_services"] = external_health
+    except Exception as e:
+        logger.error("External services health check failed", error=str(e))
+        health_status["components"]["external_services"] = "unhealthy"
+        health_status["status"] = "unhealthy"
+
+    return JsonResponse(health_status)
+
+@api_view(['GET'])
+def ping_endpoint(request):
+    """Ping endpoint for measuring API latency - used by unified health check"""
+    return JsonResponse({
+        'status': 'ok',
+        'timestamp': timezone.now().isoformat()
+    })
+
+def api_info(request):
+    """API information endpoint"""
+    return JsonResponse({
+        "name": "CareerBridge API",
+        "version": "1.0.0",
+        "description": "AI-powered career development platform",
+        "endpoints": {
+            "health": "/health/",
+            "api_docs": "/api/docs/",
+            "admin": "/admin/",
+            "resumes": "/api/resumes/",
+            "mentors": "/api/mentors/",
+            "appointments": "/api/appointments/",
+            "payments": "/api/payments/"
         }
     }) 

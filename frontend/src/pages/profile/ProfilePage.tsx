@@ -21,8 +21,8 @@ import {
   Alert,
   Tabs,
   Tab,
+  Grid,
 } from '@mui/material';
-import { Grid } from '@mui/material';
 import {
   Edit as EditIcon,
   Save as SaveIcon,
@@ -78,8 +78,8 @@ const ProfilePage: React.FC = () => {
 
   const handleCancel = () => {
     setFormData({
-      first_name: user.first_name,
-      last_name: user.last_name,
+      first_name: user.first_name || '',
+      last_name: user.last_name || '',
       username: user.username,
       email: user.email,
       phone: user.phone || '',
@@ -411,7 +411,7 @@ const ProfilePage: React.FC = () => {
                     Member since
                   </Typography>
                   <Typography variant="body1">
-                    {new Date(user.created_at).toLocaleDateString()}
+                    {user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}
                   </Typography>
                 </Grid>
                 <Grid item xs={12} sm={6}>
@@ -419,7 +419,7 @@ const ProfilePage: React.FC = () => {
                     Last login
                   </Typography>
                   <Typography variant="body1">
-                    {new Date(user.last_login).toLocaleDateString()}
+                    {user.last_login ? new Date(user.last_login).toLocaleDateString() : 'N/A'}
                   </Typography>
                 </Grid>
               </Grid>

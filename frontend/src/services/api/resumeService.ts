@@ -3,65 +3,137 @@ import apiClient from './client';
 export interface Resume {
   id: number;
   title: string;
-  file_type: string;
-  file_size: number;
-  status: 'uploaded' | 'analyzing' | 'analyzed' | 'failed';
-  uploaded_at: string;
-  file: string; // Django FileField URL
-  analysis_result?: {
-    skills: string[];
-    experience: string[];
-    education: string[];
-    recommendations: string[];
-  };
+  file: string;
+  status: string;
+  created_at: string;
+  analyzed_at?: string;
 }
 
-const resumeService = {
+class ResumeService {
+  /**
+   * Get all resumes for the current user
+   */
   async getResumes(): Promise<Resume[]> {
-    const response = await apiClient.get<Resume[]>('/resumes/');
-    return response.data;
-  },
-
-  async uploadResume(file: File, title?: string): Promise<Resume> {
-    const formData = new FormData();
-    formData.append('file', file);
-    if (title) {
-      formData.append('title', title);
+    try {
+      const response = await apiClient.get('/resumes/');
+      return response.data.results || response.data;
+    } catch (error) {
+      console.error('Failed to get resumes:', error);
+      throw error;
     }
+  }
 
-    const response = await apiClient.post<Resume>('/resumes/', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-    return response.data;
-  },
+  /**
+   * Get a single resume by ID
+   */
+  async getResume(id: number): Promise<Resume> {
+    try {
+      const response = await apiClient.get(`/resumes/${id}/`);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get resume:', error);
+      throw error;
+    }
+  }
 
+  /**
+   * Upload a new resume
+   */
+  async uploadResume(file: File, title: string): Promise<Resume> {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('title', title);
+
+      const response = await apiClient.post('/resumes/', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Failed to upload resume:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a resume
+   */
   async deleteResume(id: number): Promise<void> {
-    await apiClient.delete(`/resumes/${id}/`);
-  },
+    try {
+      await apiClient.delete(`/resumes/${id}/`);
+    } catch (error) {
+      console.error('Failed to delete resume:', error);
+      throw error;
+    }
+  }
 
-  async analyzeResume(id: number): Promise<Resume> {
-    const response = await apiClient.post<Resume>(`/resumes/analyze/`, { resume_id: id });
-    return response.data;
-  },
+  /**
+   * Analyze a resume
+   */
+  async analyzeResume(id: number, industry?: string, jobTitle?: string): Promise<any> {
+    try {
+      const response = await apiClient.post(`/resumes/${id}/analyze/`, {
+        industry,
+        job_title: jobTitle,
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Failed to analyze resume:', error);
+      throw error;
+    }
+  }
 
-  async downloadResume(id: number): Promise<Blob> {
-    const response = await apiClient.get(`/resumes/${id}/`, {
-      responseType: 'blob',
-    });
-    return response.data;
-  },
+  /**
+   * Get resume analysis results
+   */
+  async getResumeAnalysis(id: number): Promise<any> {
+    try {
+      const response = await apiClient.get(`/resumes/${id}/analysis/`);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get resume analysis:', error);
+      throw error;
+    }
+  }
 
+  /**
+   * Get analysis (alias for getResumeAnalysis)
+   */
   async getAnalysis(id: number): Promise<any> {
-    const response = await apiClient.get(`/resumes/analysis/${id}/`);
-    return response.data;
-  },
+    return this.getResumeAnalysis(id);
+  }
 
+  /**
+   * Get resume feedback
+   */
   async getFeedback(id: number): Promise<any> {
-    const response = await apiClient.get(`/resumes/feedback/${id}/`);
-    return response.data;
-  },
-};
+    try {
+      const response = await apiClient.get(`/resumes/${id}/feedback/`);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get resume feedback:', error);
+      throw error;
+    }
+  }
 
+  /**
+   * Download resume file
+   */
+  async downloadResume(id: number): Promise<Blob> {
+    try {
+      const response = await apiClient.get(`/resumes/${id}/download/`, {
+        responseType: 'blob',
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Failed to download resume:', error);
+      throw error;
+    }
+  }
+}
+
+const resumeService = new ResumeService();
 export default resumeService;
+

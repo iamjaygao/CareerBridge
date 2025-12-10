@@ -17,20 +17,25 @@ import {
   Snackbar,
   Alert,
   CircularProgress,
+  Paper,
+  Grid,
+  Pagination,
 } from '@mui/material';
-import { Grid, Pagination } from '@mui/material';
 import {
   CloudUpload as UploadIcon,
   Delete as DeleteIcon,
   Download as DownloadIcon,
   Assessment as AnalyzeIcon,
   Visibility as ViewIcon,
+  Description as DescriptionIcon,
+  CheckCircle as CheckCircleIcon,
 } from '@mui/icons-material';
 import { AppDispatch, RootState } from '../../store';
 import { fetchResumes, deleteResume, analyzeResume } from '../../store/slices/resumeSlice';
 import PageHeader from '../../components/common/PageHeader';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import ErrorAlert from '../../components/common/ErrorAlert';
+import RegistrationBanner from '../../components/common/RegistrationBanner';
 import UploadResumeDialog from '../../components/resumes/UploadResumeDialog';
 import resumeService from '../../services/api/resumeService';
 import { useNavigate } from 'react-router-dom';
@@ -39,6 +44,7 @@ const ResumeListPage: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
   const { resumes, loading, error } = useSelector((state: RootState) => state.resumes);
+  const { isAuthenticated } = useSelector((state: RootState) => state.auth);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedResumeId, setSelectedResumeId] = useState<number | null>(null);
@@ -59,12 +65,28 @@ const ResumeListPage: React.FC = () => {
   const [page, setPage] = useState(1);
 
   useEffect(() => {
-    dispatch(fetchResumes());
-  }, [dispatch]);
+    // Only fetch resumes if user is authenticated
+    // For unauthenticated users, show the introduction content only
+    if (isAuthenticated) {
+      dispatch(fetchResumes());
+    }
+  }, [dispatch, isAuthenticated]);
 
   const handleUpload = () => {
+    if (!isAuthenticated) {
+      navigate('/login', { state: { redirectTo: '/resumes' } });
+      return;
+    }
     setUploadDialogOpen(true);
   };
+
+  const resumeBenefits = [
+    'AI-powered resume analysis with instant feedback',
+    'Get personalized suggestions to improve your resume',
+    'Match your resume with relevant job opportunities',
+    'Track your resume performance and optimization progress',
+    'Access professional resume templates and examples',
+  ];
 
   const handleDownload = async (resumeId: number) => {
     try {
@@ -141,32 +163,72 @@ const ResumeListPage: React.FC = () => {
     setSelectedResumeId(null);
   };
 
-  if (loading) {
-    return <LoadingSpinner message="Loading resumes..." />;
-  }
+  // For unauthenticated users, don't show loading or error states
+  // They should see the introduction content
+  if (isAuthenticated) {
+    if (loading) {
+      return <LoadingSpinner message="Loading resumes..." />;
+    }
 
-  if (error) {
-    return <ErrorAlert message={error} />;
+    if (error) {
+      return <ErrorAlert message={error} />;
+    }
   }
 
   return (
     <>
       <PageHeader
-        title="My Resumes"
+        title="AI Resume Analysis"
         breadcrumbs={[{ label: 'Resumes', path: '/resumes' }]}
         action={
-          <Button
-            variant="contained"
-            startIcon={<UploadIcon />}
-            onClick={handleUpload}
-          >
-            Upload Resume
-          </Button>
+          isAuthenticated && (
+            <Button
+              variant="contained"
+              startIcon={<UploadIcon />}
+              onClick={handleUpload}
+            >
+              Upload Resume
+            </Button>
+          )
         }
       />
 
-      <Grid container spacing={3}>
-        {resumes.map((resume) => (
+      {!isAuthenticated && (
+        <RegistrationBanner
+          title="Unlock AI-Powered Resume Analysis"
+          description="Sign up for free to upload your resume, get instant AI-powered feedback, and match with the perfect job opportunities."
+        />
+      )}
+
+      {!isAuthenticated && (
+        <Paper sx={{ p: 4, mb: 4, background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+            <DescriptionIcon sx={{ fontSize: 48, color: 'primary.main', mr: 2 }} />
+            <Box>
+              <Typography variant="h5" gutterBottom sx={{ fontWeight: 600 }}>
+                AI-Powered Resume Analysis
+              </Typography>
+              <Typography variant="body1" color="text.secondary">
+                Get instant feedback and improve your resume with AI technology
+              </Typography>
+            </Box>
+          </Box>
+          <Grid container spacing={2}>
+            {resumeBenefits.map((benefit, index) => (
+              <Grid item xs={12} sm={6} key={index}>
+                <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
+                  <CheckCircleIcon sx={{ color: 'success.main', mr: 1, mt: 0.5 }} />
+                  <Typography variant="body2">{benefit}</Typography>
+                </Box>
+              </Grid>
+            ))}
+          </Grid>
+        </Paper>
+      )}
+
+      {isAuthenticated && (
+        <Grid container spacing={3}>
+          {resumes.map((resume) => (
           <Grid item xs={12} sm={6} md={4} key={resume.id}>
             <Card
               sx={{
@@ -200,20 +262,20 @@ const ResumeListPage: React.FC = () => {
                 </Box>
 
                 <Typography variant="body2" color="text.secondary" gutterBottom>
-                  Uploaded: {new Date(resume.uploaded_at).toLocaleDateString()}
+                  Uploaded: {new Date((resume as any).uploaded_at || resume.created_at).toLocaleDateString()}
                 </Typography>
 
                 <Typography variant="body2" color="text.secondary">
-                  File: {resume.file_type.toUpperCase()} ({resume.file_size} bytes)
+                  File: {(resume as any).file_type ? (resume as any).file_type.toUpperCase() : 'PDF'} ({(resume as any).file_size || 0} bytes)
                 </Typography>
 
-                {resume.analysis_result && (
+                {((resume as any).analysis_result || resume.analysis) && (
                   <Box sx={{ mt: 2 }}>
                     <Typography variant="subtitle2" gutterBottom>
                       Analysis Results:
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Skills: {resume.analysis_result.skills.join(', ')}
+                      Skills: {((resume as any).analysis_result?.technical_skills || (resume as any).analysis_result?.skills || resume.analysis?.technical_skills || resume.analysis?.skills || []).join(', ')}
                     </Typography>
                   </Box>
                 )}
@@ -258,11 +320,14 @@ const ResumeListPage: React.FC = () => {
             </Card>
           </Grid>
         ))}
-      </Grid>
+        </Grid>
+      )}
 
-      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
-        <Pagination page={page} onChange={(_, p) => setPage(p)} count={10} color="primary" />
-      </Box>
+      {isAuthenticated && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+          <Pagination page={page} onChange={(_: React.ChangeEvent<unknown>, p: number) => setPage(p)} count={10} color="primary" />
+        </Box>
+      )}
 
       {/* Upload Dialog */}
       <UploadResumeDialog

@@ -27,13 +27,13 @@ AI_ANALYSIS_API_URL=https://your-ai-analysis-api.com
 # External Services (new unified config used by external_services.config)
 # If you prefer env-based config instead of DB-driven `ExternalServiceIntegration`,
 # set these values and ensure your integrations read from env.
-JOB_CRAWLER_BASE_URL=https://your-job-crawler-api.com
-JOB_CRAWLER_API_KEY=your-job-crawler-api-key
+JOB_CRAWLER_BASE_URL=http://localhost:8000  # Independent Job Crawler service
+JOB_CRAWLER_API_KEY=dev-api-key
 JOB_CRAWLER_TIMEOUT=30
 JOB_CRAWLER_RATE_LIMIT=100
 
-RESUME_MATCHER_BASE_URL=https://your-resume-matcher-api.com
-RESUME_MATCHER_API_KEY=your-resume-matcher-api-key
+RESUME_MATCHER_BASE_URL=http://localhost:8002
+RESUME_MATCHER_API_KEY=dev-api-key
 RESUME_MATCHER_TIMEOUT=30
 RESUME_MATCHER_CONFIDENCE=0.7
 

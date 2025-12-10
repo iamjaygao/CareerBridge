@@ -46,16 +46,33 @@ class RegisterSerializer(serializers.ModelSerializer):
         # remove password_confirm from validated data
         validated_data.pop('password_confirm')
 
+        # Get role, default to 'student' if not provided
+        role = validated_data.get('role', 'student')
+        
+        # In development mode (DEBUG=True), automatically verify all users
+        # Admin users are always automatically verified
+        # In production, only admin users are auto-verified
+        is_development = getattr(settings, 'DEBUG', False)
+        email_verified = (role == 'admin') or is_development
+        
         # Create user with default role if not provided
         user = User.objects.create_user(
             email=validated_data['email'],
             username=validated_data['username'],
             password=validated_data['password'],
-            role=validated_data.get('role', 'student')
+            role=role,
+            email_verified=email_verified
         )
         
-        # Send email verification
-        self.send_verification_email(user)
+        # Only send verification email in production for non-admin users
+        if not email_verified:
+            self.send_verification_email(user)
+        elif is_development and role != 'admin':
+            # In development, print verification info to console
+            print(f"\n{'='*60}")
+            print(f"🔓 DEVELOPMENT MODE: User '{user.username}' ({user.email}) is automatically verified!")
+            print(f"   User can login immediately without email verification.")
+            print(f"{'='*60}\n")
         
         return user
     
@@ -105,9 +122,21 @@ class LoginSerializer(serializers.Serializer):
         if not user:
             raise serializers.ValidationError("The username or password is incorrect")
         
-        # Check if email is verified - required for login
-        if not user.email_verified:
-            raise serializers.ValidationError("Please verify your email before logging in. Check your email for the verification link.")
+        # Check if we're in development mode
+        is_development = getattr(settings, 'DEBUG', False)
+        
+        # Admin users can always login without email verification
+        # In development mode, all users can login without email verification
+        # In production, other users need email verification
+        if user.role != 'admin' and not user.email_verified:
+            if is_development:
+                # In development, auto-verify the user and allow login
+                user.email_verified = True
+                user.save()
+                print(f"\n🔓 DEVELOPMENT MODE: Auto-verified user '{user.username}' during login.")
+            else:
+                # In production, require email verification
+                raise serializers.ValidationError("Please verify your email before logging in. Check your email for the verification link.")
             
         refresh = RefreshToken.for_user(user)
         return {

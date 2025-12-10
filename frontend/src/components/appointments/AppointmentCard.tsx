@@ -72,8 +72,9 @@ const AppointmentCard: React.FC<AppointmentCardProps> = ({
       try {
         await dispatch(
           submitFeedback({
-            id: appointment.id,
-            feedback: { rating, comment },
+            appointmentId: appointment.id,
+            rating,
+            comment,
           })
         ).unwrap();
         setFeedbackDialogOpen(false);
@@ -104,7 +105,7 @@ const AppointmentCard: React.FC<AppointmentCardProps> = ({
         <CardContent sx={{ flexGrow: 1 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
             <Avatar
-              src={appointment.mentor.user.avatar}
+              src={typeof appointment.mentor === 'object' ? appointment.mentor.user?.avatar : undefined}
               sx={{
                 width: 48,
                 height: 48,
@@ -115,10 +116,14 @@ const AppointmentCard: React.FC<AppointmentCardProps> = ({
             />
             <Box sx={{ flexGrow: 1 }}>
               <Typography variant="h6">
-                {`${appointment.mentor.user.first_name} ${appointment.mentor.user.last_name}`}
+                {typeof appointment.mentor === 'object' 
+                  ? `${appointment.mentor.user?.first_name || ''} ${appointment.mentor.user?.last_name || ''}`.trim() || appointment.mentor.user?.username
+                  : 'Mentor'}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                {appointment.mentor.current_position}
+                {typeof appointment.mentor === 'object' 
+                  ? (appointment.mentor.current_position || appointment.mentor.expertise?.[0] || 'Mentor')
+                  : 'Mentor'}
               </Typography>
             </Box>
             <Chip
@@ -129,7 +134,7 @@ const AppointmentCard: React.FC<AppointmentCardProps> = ({
           </Box>
 
           <Typography variant="subtitle1" gutterBottom>
-            {appointment.title}
+            Appointment on {appointment.date} at {appointment.time}
           </Typography>
 
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>

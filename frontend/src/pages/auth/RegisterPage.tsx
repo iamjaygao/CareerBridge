@@ -21,7 +21,7 @@ import { PersonAddOutlined } from '@mui/icons-material';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
-import { register as registerUser, clearError } from '../../store/slices/authSlice';
+import { registerUser, clearError } from '../../store/slices/authSlice';
 import { RootState, AppDispatch } from '../../store';
 
 // Validation schema

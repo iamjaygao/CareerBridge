@@ -159,12 +159,57 @@ class JobCrawlerServiceClient(ExternalServiceClient):
         
         response = self._make_request('search', method='POST', data=data, user=user)
         return response
+    
+    def check_health(self) -> Dict:
+        """Check JobCrawler service health"""
+        try:
+            return self._make_request('health')
+        except Exception as e:
+            return {"status": "unhealthy", "error": str(e)}
 
-class ResumeMatcherServiceClient(ExternalServiceClient):
+class ResumeMatcherServiceClient:
     """Client for resume matching service"""
     
     def __init__(self):
-        super().__init__('resume_matcher')
+        from careerbridge.external_services.config import config
+        self.base_url = config.resume_matcher.base_url.rstrip('/')
+        self.api_key = config.resume_matcher.api_key
+        self.timeout = config.resume_matcher.timeout
+    
+    def _make_request(self, endpoint: str, method: str = 'GET', data: Dict = None, user = None) -> Dict:
+        """Make HTTP request to ResumeMatcher API"""
+        import httpx
+        import structlog
+        
+        logger = structlog.get_logger()
+        url = f"{self.base_url}/{endpoint.lstrip('/')}"
+        
+        headers = {
+            'Content-Type': 'application/json',
+            'User-Agent': 'CareerBridge/1.0'
+        }
+        
+        if self.api_key:
+            headers['Authorization'] = f'Bearer {self.api_key}'
+        
+        try:
+            with httpx.Client(timeout=self.timeout) as client:
+                if method.upper() == 'GET':
+                    response = client.get(url, headers=headers)
+                elif method.upper() == 'POST':
+                    response = client.post(url, headers=headers, json=data)
+                else:
+                    raise ValueError(f"Unsupported HTTP method: {method}")
+                
+                response.raise_for_status()
+                return response.json()
+                
+        except httpx.HTTPStatusError as e:
+            logger.error("ResumeMatcher API error", status_code=e.response.status_code, error=str(e))
+            raise
+        except Exception as e:
+            logger.error("ResumeMatcher API request failed", error=str(e))
+            raise
     
     def match_resume_to_jd(
         self, 
@@ -179,11 +224,11 @@ class ResumeMatcherServiceClient(ExternalServiceClient):
             'resume_text': resume_text,
             'job_description': job_description,
             'job_title': job_title,
-            'company': company
+            'company': company,
+            'user_id': str(user.id) if user else None
         }
         
-        response = self._make_request('match', method='POST', data=data, user=user)
-        return response
+        return self._make_request('match', method='POST', data=data, user=user)
     
     def batch_match_resumes(
         self, 
@@ -194,7 +239,8 @@ class ResumeMatcherServiceClient(ExternalServiceClient):
         """Batch match multiple resumes to job descriptions"""
         data = {
             'resumes': resumes,
-            'job_descriptions': job_descriptions
+            'job_descriptions': job_descriptions,
+            'user_id': str(user.id) if user else None
         }
         
         response = self._make_request('batch-match', method='POST', data=data, user=user)
@@ -206,8 +252,7 @@ class ResumeMatcherServiceClient(ExternalServiceClient):
         user = None
     ) -> Dict:
         """Get detailed match analysis"""
-        response = self._make_request(f'matches/{match_id}/analysis', user=user)
-        return response
+        return self._make_request(f'matches/{match_id}/analysis', user=user)
     
     def provide_feedback(
         self, 
@@ -218,17 +263,24 @@ class ResumeMatcherServiceClient(ExternalServiceClient):
     ) -> Dict:
         """Provide feedback on match accuracy"""
         data = {
-            'feedback': feedback,
-            'rating': rating
+            'feedback_text': feedback,
+            'rating': rating,
+            'user_id': str(user.id) if user else None
         }
         
-        response = self._make_request(
+        return self._make_request(
             f'matches/{match_id}/feedback', 
             method='POST', 
             data=data, 
             user=user
         )
-        return response
+    
+    def check_health(self) -> Dict:
+        """Check ResumeMatcher service health"""
+        try:
+            return self._make_request('health')
+        except Exception as e:
+            return {"status": "unhealthy", "error": str(e)}
 
 class AIAnalysisServiceClient(ExternalServiceClient):
     """Client for AI analysis service"""
@@ -438,4 +490,54 @@ class ExternalServiceManager:
             print(f"Error analyzing resume externally: {e}")
             resume.status = 'failed'
             resume.save()
-            return None 
+            return None
+    
+    def check_all_services_health(self) -> Dict[str, Dict]:
+        """Check health of all external services"""
+        health_status = {}
+        
+        try:
+            # Check JobCrawler health
+            job_crawler_health = self.job_crawler.check_health()
+            health_status['job_crawler'] = {
+                'status': job_crawler_health.get('status', 'unknown'),
+                'error': job_crawler_health.get('error', None)
+            }
+        except Exception as e:
+            health_status['job_crawler'] = {
+                'status': 'unhealthy',
+                'error': str(e)
+            }
+        
+        try:
+            # Check ResumeMatcher health
+            resume_matcher_health = self.resume_matcher.check_health()
+            health_status['resume_matcher'] = {
+                'status': resume_matcher_health.get('status', 'unknown'),
+                'error': resume_matcher_health.get('error', None)
+            }
+        except Exception as e:
+            health_status['resume_matcher'] = {
+                'status': 'unhealthy',
+                'error': str(e)
+            }
+        
+        try:
+            # Check AI Analyzer health (if implemented)
+            health_status['ai_analyzer'] = {
+                'status': 'not_implemented',
+                'error': 'AI Analyzer service not yet implemented'
+            }
+        except Exception as e:
+            health_status['ai_analyzer'] = {
+                'status': 'unhealthy',
+                'error': str(e)
+            }
+        
+        return health_status
+
+
+# Service instances for easy import
+job_crawler_service = JobCrawlerServiceClient()
+resume_matcher_service = ResumeMatcherServiceClient()
+external_service_manager = ExternalServiceManager() 

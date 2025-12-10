@@ -4,9 +4,11 @@ import uuid
 
 class User(AbstractUser):
     ROLE_CHOICES = (
+        ('superadmin', 'Super Admin'),
         ('admin', 'Admin'),
         ('mentor', 'Mentor'),
         ('student', 'Student'),
+        ('staff', 'Staff'),
     )
     email = models.EmailField(unique=True)
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='student')

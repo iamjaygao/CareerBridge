@@ -112,12 +112,12 @@ const ChatListPage: React.FC = () => {
                 >
                   <ListItemAvatar>
                     <Badge
-                      badgeContent={room.unread_count}
+                      badgeContent={room.unread_count || room.unreadCount || 0}
                       color="primary"
-                      invisible={room.unread_count === 0}
+                      invisible={(room.unread_count || room.unreadCount || 0) === 0}
                     >
                       <Avatar>
-                        {room.mentor_name.charAt(0)}
+                        {(room.mentor_name || 'M').charAt(0)}
                       </Avatar>
                     </Badge>
                   </ListItemAvatar>
@@ -125,10 +125,10 @@ const ChatListPage: React.FC = () => {
                   <ListItemText
                     primary={
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography variant="subtitle1" sx={{ fontWeight: room.unread_count > 0 ? 600 : 400 }}>
-                          {room.mentor_name}
+                        <Typography variant="subtitle1" sx={{ fontWeight: (room.unread_count || room.unreadCount || 0) > 0 ? 600 : 400 }}>
+                          {room.mentor_name || 'Chat'}
                         </Typography>
-                        {room.unread_count > 0 && (
+                        {(room.unread_count || room.unreadCount || 0) > 0 && (
                           <Box
                             sx={{
                               width: 8,
@@ -146,14 +146,14 @@ const ChatListPage: React.FC = () => {
                           variant="body2"
                           color="text.secondary"
                           sx={{
-                            fontWeight: room.unread_count > 0 ? 500 : 400,
-                            color: room.unread_count > 0 ? 'text.primary' : 'text.secondary',
+                            fontWeight: (room.unread_count || room.unreadCount || 0) > 0 ? 500 : 400,
+                            color: (room.unread_count || room.unreadCount || 0) > 0 ? 'text.primary' : 'text.secondary',
                           }}
                         >
                           {formatLastMessage(room.last_message)}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          {room.last_message ? formatTime(room.last_message.created_at) : ''}
+                          {room.last_message?.created_at ? formatTime(room.last_message.created_at) : ''}
                         </Typography>
                       </Box>
                     }

@@ -7,7 +7,7 @@ This file contains settings specific to the development environment.
 from .settings_base import *
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-k@p%&#5aru7wivstcjgrnd1fhlm=qvvn-e5apz$o^h-ux-4nxw'
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-k@p%&#5aru7wivstcjgrnd1fhlm=qvvn-e5apz$o^h-ux-4nxw')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -40,13 +40,13 @@ SESSION_COOKIE_SECURE = False
 CSRF_COOKIE_SECURE = False
 
 # Payment Configuration
-STRIPE_SECRET_KEY = 'sk_test_your_stripe_secret_key'
-STRIPE_PUBLISHABLE_KEY = 'pk_test_your_stripe_publishable_key'
-STRIPE_WEBHOOK_SECRET = 'whsec_your_stripe_webhook_secret'
+STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY', 'sk_test_your_stripe_secret_key')
+STRIPE_PUBLISHABLE_KEY = os.environ.get('STRIPE_PUBLISHABLE_KEY', 'pk_test_your_stripe_publishable_key')
+STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET', 'whsec_your_stripe_webhook_secret')
 
-PAYPAL_CLIENT_ID = 'your_paypal_client_id'
-PAYPAL_CLIENT_SECRET = 'your_paypal_client_secret'
-PAYPAL_MODE = 'sandbox'  # or 'live'
+PAYPAL_CLIENT_ID = os.environ.get('PAYPAL_CLIENT_ID', 'your_paypal_client_id')
+PAYPAL_CLIENT_SECRET = os.environ.get('PAYPAL_CLIENT_SECRET', 'your_paypal_client_secret')
+PAYPAL_MODE = os.environ.get('PAYPAL_MODE', 'sandbox')  # or 'live'
 
 # Add payments app to INSTALLED_APPS
 INSTALLED_APPS += ['payments'] 

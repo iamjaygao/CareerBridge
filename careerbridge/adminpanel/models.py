@@ -260,3 +260,116 @@ class ContentModeration(models.Model):
     
     def __str__(self):
         return f"{self.get_content_type_display()} - {self.content_id} - {self.get_status_display()}"
+
+
+class SystemSettings(models.Model):
+    """System settings - singleton model for platform-wide configuration"""
+    
+    ANNOUNCEMENT_TYPE_CHOICES = (
+        ('info', 'Info'),
+        ('warning', 'Warning'),
+        ('error', 'Error'),
+        ('success', 'Success'),
+    )
+    
+    THEME_CHOICES = (
+        ('light', 'Light'),
+        ('dark', 'Dark'),
+        ('auto', 'Auto'),
+    )
+    
+    # Platform Settings
+    platform_name = models.CharField(max_length=200, default='CareerBridge', help_text="Platform name")
+    company_name = models.CharField(max_length=200, default='CareerBridge Inc.', help_text="Company name")
+    support_email = models.EmailField(default='support@careerbridge.com', help_text="Support email address")
+    support_phone = models.CharField(max_length=20, default='', blank=True, help_text="Support phone number")
+    office_address = models.TextField(default='', blank=True, help_text="Office address")
+    website_url = models.URLField(default='https://careerbridge.com', help_text="Website URL")
+    
+    # Announcement Settings
+    announcement_enabled = models.BooleanField(default=False, help_text="Enable system announcement")
+    announcement_text = models.TextField(default='', blank=True, help_text="Announcement text")
+    announcement_type = models.CharField(
+        max_length=20, 
+        choices=ANNOUNCEMENT_TYPE_CHOICES, 
+        default='info',
+        help_text="Announcement type"
+    )
+    
+    # Appearance Settings
+    primary_color = models.CharField(max_length=7, default='#2374e1', help_text="Primary color (hex)")
+    accent_color = models.CharField(max_length=7, default='#64748b', blank=True, help_text="Accent color (hex)")
+    logo_url = models.URLField(default='', blank=True, help_text="Logo URL")
+    favicon_url = models.URLField(default='', blank=True, help_text="Favicon URL")
+    theme = models.CharField(
+        max_length=10,
+        choices=THEME_CHOICES,
+        default='light',
+        help_text="Default theme"
+    )
+    
+    # Contact Settings
+    contact_title = models.CharField(max_length=200, default='Contact Us', blank=True, help_text="Contact page title")
+    contact_description = models.TextField(default='', blank=True, help_text="Contact page description")
+    
+    # Contact & Social Links
+    linkedin_url = models.URLField(default='', blank=True, help_text="LinkedIn URL")
+    twitter_url = models.URLField(default='', blank=True, help_text="Twitter URL")
+    instagram_url = models.URLField(default='', blank=True, help_text="Instagram URL")
+    youtube_url = models.URLField(default='', blank=True, help_text="YouTube URL")
+    facebook_url = models.URLField(default='', blank=True, help_text="Facebook URL")
+    
+    # API Keys (stored encrypted in production)
+    openai_api_key = models.CharField(max_length=255, default='', blank=True, help_text="OpenAI API key")
+    stripe_secret_key = models.CharField(max_length=255, default='', blank=True, help_text="Stripe secret key")
+    email_api_key = models.CharField(max_length=255, default='', blank=True, help_text="Email service API key")
+    google_oauth_key = models.CharField(max_length=255, default='', blank=True, help_text="Google OAuth key")
+    
+    # Email Configuration
+    smtp_host = models.CharField(max_length=255, default='', blank=True, help_text="SMTP host")
+    smtp_port = models.IntegerField(default=587, help_text="SMTP port")
+    smtp_username = models.CharField(max_length=255, default='', blank=True, help_text="SMTP username")
+    smtp_from_name = models.CharField(max_length=255, default='CareerBridge', help_text="Email sender name")
+    template_footer_text = models.TextField(default='', blank=True, help_text="Email template footer text")
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='system_settings_updates'
+    )
+    
+    class Meta:
+        verbose_name = "System Settings"
+        verbose_name_plural = "System Settings"
+    
+    def __str__(self):
+        return f"System Settings - {self.platform_name}"
+    
+    def save(self, *args, **kwargs):
+        """Ensure only one SystemSettings instance exists (singleton pattern)"""
+        if not self.pk and SystemSettings.objects.exists():
+            # If instance exists, update it instead of creating new one
+            existing = SystemSettings.objects.first()
+            for field in self._meta.fields:
+                if field.name not in ['id', 'created_at', 'updated_at']:
+                    setattr(existing, field.name, getattr(self, field.name))
+            existing.save()
+            return existing
+        return super().save(*args, **kwargs)
+    
+    @classmethod
+    def get_settings(cls):
+        """Get or create the singleton SystemSettings instance"""
+        settings, created = cls.objects.get_or_create(pk=1)
+        return settings
+    
+    def mask_api_key(self, key_value):
+        """Mask API key for display (show first 4 and last 4 characters)"""
+        if not key_value or len(key_value) < 8:
+            return '****'
+        return f"{key_value[:4]}****{key_value[-4:]}"

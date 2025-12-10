@@ -33,3 +33,26 @@ boto3==1.34.158
 # Real-time communication
 channels==4.0.0
 channels-redis==4.1.0
+
+# Job Crawler Integration
+httpx==0.25.2
+
+# Logging and monitoring
+structlog==23.2.0
+
+# Data validation
+pydantic==2.5.0
+
+# Environment management
+python-dotenv==1.0.0
+
+# Testing
+pytest==7.4.3
+pytest-django==4.7.0
+pytest-cov==4.1.0
+factory-boy==3.3.0
+
+# Development tools
+black==23.11.0
+isort==5.12.0
+flake8==6.1.0

@@ -1,35 +1,105 @@
 import apiClient from './client';
 
 export interface DashboardStats {
+  totalResumes: number;
+  totalAppointments: number;
   upcomingAppointments: number;
-  resumesUploaded: number;
-  mentorSessions: number;
-  profileViews: number;
+  completedSessions: number;
+  resumeAnalysisCount: number;
+  averageResumeScore: number;
+  resumesUploaded?: number;
+  mentorSessions?: number;
+  profileViews?: number;
 }
 
 export interface RecentActivity {
-  id: string;
+  id: number;
   type: string;
+  title: string;
   description: string;
   timestamp: string;
+  link?: string;
 }
 
-export interface DashboardData {
-  stats: DashboardStats;
-  activities: RecentActivity[];
+class DashboardService {
+  /**
+   * Get dashboard statistics
+   */
+  async getDashboardStats(): Promise<DashboardStats> {
+    try {
+      const response = await apiClient.get('/dashboard/stats/');
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get dashboard stats:', error);
+      // Return default stats if API fails
+      return {
+        totalResumes: 0,
+        totalAppointments: 0,
+        upcomingAppointments: 0,
+        completedSessions: 0,
+        resumeAnalysisCount: 0,
+        averageResumeScore: 0,
+      };
+    }
+  }
+
+  /**
+   * Get dashboard data (alias for getDashboardStats)
+   */
+  async getDashboardData(): Promise<DashboardStats> {
+    return this.getDashboardStats();
+  }
+
+  /**
+   * Get recent activities
+   */
+  async getRecentActivities(limit: number = 10): Promise<RecentActivity[]> {
+    try {
+      const response = await apiClient.get('/dashboard/activities/', {
+        params: { limit },
+      });
+      return response.data.results || response.data;
+    } catch (error) {
+      console.error('Failed to get recent activities:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get upcoming appointments
+   */
+  async getUpcomingAppointments(limit: number = 5): Promise<any[]> {
+    try {
+      const response = await apiClient.get('/appointments/', {
+        params: {
+          status: 'confirmed',
+          upcoming: true,
+          limit,
+        },
+      });
+      return response.data.results || response.data;
+    } catch (error) {
+      console.error('Failed to get upcoming appointments:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get recent resumes
+   */
+  async getRecentResumes(limit: number = 5): Promise<any[]> {
+    try {
+      const response = await apiClient.get('/resumes/', {
+        params: { limit, ordering: '-created_at' },
+      });
+      return response.data.results || response.data;
+    } catch (error) {
+      console.error('Failed to get recent resumes:', error);
+      return [];
+    }
+  }
 }
 
-const dashboardService = {
-  async getDashboardData(): Promise<DashboardData> {
-    const response = await apiClient.get<DashboardData>('/users/dashboard/stats/');
-    return response.data;
-  },
-
-  async getRecentActivities(): Promise<RecentActivity[]> {
-    // For now, return activities from the main dashboard data
-    const response = await apiClient.get<DashboardData>('/users/dashboard/stats/');
-    return response.data.activities;
-  },
-};
-
+const dashboardService = new DashboardService();
 export default dashboardService;
+

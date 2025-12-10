@@ -12,7 +12,6 @@ import {
   Search as SearchIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import ResponsiveContainer from '../../components/common/ResponsiveContainer';
 
 const NotFoundPage: React.FC = () => {
   const navigate = useNavigate();
@@ -26,11 +25,11 @@ const NotFoundPage: React.FC = () => {
   };
 
   const handleSearch = () => {
-    navigate('/search');
+    navigate('/');
   };
 
   return (
-    <ResponsiveContainer>
+    <Box sx={{ width: '100%', maxWidth: '1200px', mx: 'auto', px: { xs: 2, sm: 3, md: 6 }, py: { xs: 4, md: 6 } }}>
       <Container maxWidth="md">
         <Box
           sx={{
@@ -118,10 +117,10 @@ const NotFoundPage: React.FC = () => {
                 </Button>
                 <Button
                   variant="text"
-                  onClick={() => navigate('/resumes')}
+                  onClick={() => navigate('/assessment')}
                   size="small"
                 >
-                  My Resumes
+                  Assessment Engine
                 </Button>
                 <Button
                   variant="text"
@@ -142,7 +141,7 @@ const NotFoundPage: React.FC = () => {
           </Paper>
         </Box>
       </Container>
-    </ResponsiveContainer>
+    </Box>
   );
 };
 

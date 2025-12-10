@@ -225,11 +225,10 @@ const MentorDetailPage: React.FC<MentorDetailPageProps> = ({ initialTab }) => {
 
     try {
       const appointmentData = {
-        mentor_id: mentor.id,
-        service_id: bookingForm.service_id,
-        scheduled_date: format(bookingForm.scheduled_date, 'yyyy-MM-dd'),
-        scheduled_time: bookingForm.scheduled_time,
-        user_notes: bookingForm.user_notes,
+        mentor: mentor.id,
+        date: format(bookingForm.scheduled_date, 'yyyy-MM-dd'),
+        time: bookingForm.scheduled_time,
+        notes: bookingForm.user_notes,
       };
 
       await appointmentService.createAppointment(appointmentData);

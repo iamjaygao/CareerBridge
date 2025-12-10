@@ -2,15 +2,21 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { PaginatedResponse } from '../../types';
 import apiClient from '../../services/api/client';
 
-// Backend notification interface
+// Backend notification interface - matches NotificationListSerializer
 interface BackendNotification {
   id: number;
   title: string;
-  message: string;
-  type: 'info' | 'success' | 'warning' | 'error';
+  message?: string; // Included in updated NotificationListSerializer
+  notification_type: string;
+  notification_type_display?: string;
+  type?: 'info' | 'success' | 'warning' | 'error'; // Legacy field
   is_read: boolean;
+  priority?: 'low' | 'normal' | 'medium' | 'high' | 'critical' | 'urgent';
+  priority_display?: string;
+  target_role?: 'superadmin' | 'admin' | 'staff' | 'mentor' | 'student';
+  target_role_display?: string;
   created_at: string;
-  user_id: number;
+  user_id?: number;
 }
 
 // Async thunks
@@ -99,10 +105,27 @@ const notificationSlice = createSlice({
       })
       .addCase(fetchNotifications.fulfilled, (state, action) => {
         state.loading = false;
-        state.notifications = action.payload.data.results;
-        state.totalCount = action.payload.data.count;
-        state.nextPage = action.payload.data.next || null;
-        state.previousPage = action.payload.data.previous || null;
+        // Handle both paginated and non-paginated responses
+        const responseData = action.payload.data;
+        if (responseData.results && Array.isArray(responseData.results)) {
+          // Paginated response
+          state.notifications = responseData.results;
+          state.totalCount = responseData.count || responseData.results.length;
+          state.nextPage = responseData.next || null;
+          state.previousPage = responseData.previous || null;
+        } else if (Array.isArray(responseData)) {
+          // Non-paginated response (plain array)
+          state.notifications = responseData;
+          state.totalCount = responseData.length;
+          state.nextPage = null;
+          state.previousPage = null;
+        } else {
+          // Fallback: empty array
+          state.notifications = [];
+          state.totalCount = 0;
+          state.nextPage = null;
+          state.previousPage = null;
+        }
       })
       .addCase(fetchNotifications.rejected, (state, action) => {
         state.loading = false;

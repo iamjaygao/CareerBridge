@@ -191,20 +191,22 @@ class PaymentConfirmationSerializer(serializers.Serializer):
 class PaymentStatisticsSerializer(serializers.Serializer):
     """Payment statistics serializer"""
     
-    total_payments = serializers.IntegerField()
-    total_amount = serializers.DecimalField(max_digits=12, decimal_places=2)
-    successful_payments = serializers.IntegerField()
-    failed_payments = serializers.IntegerField()
-    refunded_payments = serializers.IntegerField()
-    platform_fees = serializers.DecimalField(max_digits=12, decimal_places=2)
-    mentor_earnings = serializers.DecimalField(max_digits=12, decimal_places=2)
-    average_payment_amount = serializers.DecimalField(max_digits=10, decimal_places=2)
-    success_rate = serializers.FloatField()
+    total_payments = serializers.IntegerField(required=False, default=0)
+    total_amount = serializers.FloatField(required=False, default=0.0)
+    successful_payments = serializers.IntegerField(required=False, default=0)
+    failed_payments = serializers.IntegerField(required=False, default=0)
+    refunded_payments = serializers.IntegerField(required=False, default=0)
+    platform_fees = serializers.FloatField(required=False, default=0.0)
+    mentor_earnings = serializers.FloatField(required=False, default=0.0)
+    average_payment_amount = serializers.FloatField(required=False, default=0.0)
+    avg_payment = serializers.FloatField(required=False, default=0.0)  # Alias for backward compatibility
+    success_rate = serializers.FloatField(required=False, default=0.0)
     
     # Time-based statistics
-    payments_today = serializers.IntegerField()
-    payments_this_week = serializers.IntegerField()
-    payments_this_month = serializers.IntegerField()
-    revenue_today = serializers.DecimalField(max_digits=12, decimal_places=2)
-    revenue_this_week = serializers.DecimalField(max_digits=12, decimal_places=2)
-    revenue_this_month = serializers.DecimalField(max_digits=12, decimal_places=2) 
+    payments_today = serializers.IntegerField(required=False, default=0)
+    payments_this_week = serializers.IntegerField(required=False, default=0)
+    payments_this_month = serializers.IntegerField(required=False, default=0)
+    revenue_today = serializers.FloatField(required=False, default=0.0)
+    revenue_this_week = serializers.FloatField(required=False, default=0.0)
+    revenue_this_month = serializers.FloatField(required=False, default=0.0)
+    pending_payouts = serializers.FloatField(required=False, default=0.0) 

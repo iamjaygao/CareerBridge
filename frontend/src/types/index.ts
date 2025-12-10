@@ -1,50 +1,135 @@
-// User related types
+// User Types
 export interface User {
   id: number;
   username: string;
   email: string;
-  first_name: string;
-  last_name: string;
+  role: 'admin' | 'mentor' | 'student' | 'staff';
   avatar?: string;
-  role: 'user' | 'mentor' | 'admin';
-  is_verified: boolean;
-  created_at: string;
-  last_login: string;
-  // Optional profile fields (may not be implemented in backend yet)
+  first_name?: string;
+  last_name?: string;
   phone?: string;
   location?: string;
   bio?: string;
   linkedin_url?: string;
   github_url?: string;
+  is_verified?: boolean;
+  created_at?: string;
+  last_login?: string;
+  date_joined?: string;
 }
 
-export interface LoginRequest {
-  login: string;
-  password: string;
-}
-
-export interface LoginResponse {
-  access: string;
-  refresh: string;
+// Mentor Types
+export interface Mentor {
+  id: number;
   user: User;
+  expertise: string[];
+  expertise_areas?: string[]; // Alias for expertise
+  skills?: string[]; // Alias for expertise
+  bio: string;
+  rating: number;
+  price_per_hour: number;
+  hourly_rate?: number; // Alias for price_per_hour
+  availability?: any;
+  availability_status?: string;
+  reviews_count?: number;
+  review_count?: number; // Alias for reviews_count
+  completed_sessions?: number;
+  current_position?: string;
+  services?: any[];
+  avatar?: string; // Alias for user.avatar
+  title?: string; // Job title
+  company?: string; // Company name
+  location?: string;
+  experience_years?: number;
+  years_of_experience?: number; // Alias for experience_years
+  industry?: string;
+  education?: string | string[];
+  specializations?: string[];
 }
 
-export interface RegisterRequest {
-  email: string;
-  username: string;
-  password: string;
-  password_confirm: string;
-  first_name: string;
-  last_name: string;
+export interface MentorDetail extends Mentor {
+  education?: string[];
+  experience?: string[];
+  certifications?: string[];
+  languages?: string[];
+  timezone?: string;
+  available_hours?: any;
 }
 
-export interface PasswordChangeRequest {
-  old_password: string;
-  new_password: string;
-  new_password_confirm: string;
+// Appointment Types
+export interface Appointment {
+  id: number;
+  mentor: number | Mentor;
+  user: number | User;
+  date: string;
+  time: string;
+  status: 'pending' | 'confirmed' | 'completed' | 'cancelled' | string;
+  notes?: string;
+  meeting_link?: string;
+  meeting_platform?: string;
+  user_feedback?: any;
+  mentor_feedback?: any;
+  user_rating?: number;
+  scheduled_start?: string;
+  scheduled_end?: string;
+  title?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
-// Common types
+// Resume Types
+export interface Resume {
+  id: number;
+  title: string;
+  file: string;
+  status: 'uploaded' | 'analyzing' | 'analyzed' | 'failed';
+  created_at: string;
+  analyzed_at?: string;
+  uploaded_at?: string; // Alias for created_at
+  file_type?: string;
+  file_size?: number;
+  analysis?: ResumeAnalysis;
+  analysis_result?: ResumeAnalysis; // Alias for analysis
+}
+
+export interface ResumeAnalysis {
+  overall_score: number;
+  structure_score: number;
+  content_score: number;
+  keyword_score: number;
+  ats_score: number;
+  technical_skills: string[];
+  soft_skills: string[];
+  skill_gaps: string[];
+  feedback?: ResumeFeedback;
+}
+
+export interface ResumeFeedback {
+  summary: string;
+  strengths: string[];
+  weaknesses: string[];
+  recommendations: string[];
+}
+
+// Breadcrumb Types
+export interface BreadcrumbItem {
+  label: string;
+  path: string;
+}
+
+// API Response Types
+export interface ApiResponse<T> {
+  status: 'success' | 'error';
+  data?: T;
+  message?: string;
+  error?: {
+    code: string;
+    message: string;
+    details?: any;
+  };
+}
+
+// Pagination Types
 export interface PaginatedResponse<T> {
   count: number;
   next: string | null;
@@ -52,306 +137,273 @@ export interface PaginatedResponse<T> {
   results: T[];
 }
 
-export interface ApiResponse<T = any> {
-  success: boolean;
-  message?: string;
-  data?: T;
-  error?: string;
+// Search Types
+export interface SearchFilters {
+  query?: string;
+  location?: string;
+  industry?: string;
+  skills?: string[];
+  minRating?: number;
+  maxPrice?: number;
 }
 
-// Theme and styling types
-export interface ThemeConfig {
-  mode: 'light' | 'dark';
-  primaryColor: string;
-  secondaryColor: string;
+// Notification Types
+export interface Notification {
+  id: number;
+  type: string;
+  title: string;
+  message: string;
+  read: boolean;
+  created_at: string;
 }
 
-// Route types
-export interface RouteConfig {
-  path: string;
-  element: React.ComponentType;
-  layout?: React.ComponentType;
-  roles?: string[];
-  children?: RouteConfig[];
-}
-
-// Form types
+// Form Types
 export interface FormField {
   name: string;
   label: string;
-  type: 'text' | 'email' | 'password' | 'select' | 'date' | 'file' | 'textarea';
-  required?: boolean;
-  options?: { label: string; value: string | number }[];
-  validation?: {
-    required?: string;
-    pattern?: {
-      value: RegExp;
-      message: string;
-    };
-    minLength?: {
-      value: number;
-      message: string;
-    };
-    maxLength?: {
-      value: number;
-      message: string;
-    };
-  };
-}
-
-// Redux related types
-export interface ReduxAction<T = any> {
   type: string;
-  payload?: T;
-  error?: boolean;
-  meta?: any;
+  required?: boolean;
+  options?: Array<{ value: any; label: string }>;
+  disabled?: boolean;
 }
 
-export interface ReduxState {
-  loading: boolean;
-  error: string | null;
-  data: any;
-}
-
-// API Error types
-export interface ApiError {
-  status: number;
-  code: string;
-  message: string;
-  details?: Record<string, string[]>;
-}
-
-// Notification types
-export interface Notification {
-  id: string;
-  type: 'success' | 'error' | 'warning' | 'info';
-  message: string;
-  title?: string;
-  duration?: number;
-  position?: 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
-}
-
-// File upload types
-export interface FileUploadResponse {
-  url: string;
-  filename: string;
-  size: number;
-  mime_type: string;
-}
-
-export interface FileUploadProgress {
-  progress: number;
-  status: 'pending' | 'uploading' | 'completed' | 'error';
-  error?: string;
-}
-
-// Appointment types
-export interface Appointment {
+// Chat Types
+export interface ChatMessage {
   id: number;
-  user: {
-    id: number;
-    username: string;
-    email: string;
-    first_name: string;
-    last_name: string;
-    avatar?: string;
-  };
-  mentor: {
-    id: number;
-    user: {
-      id: number;
-      username: string;
-      email: string;
-      first_name: string;
-      last_name: string;
-      avatar?: string;
-    };
-    current_position?: string;
-    bio?: string;
-    hourly_rate?: number;
-  };
-  time_slot: {
-    id: number;
-    start_time: string;
-    end_time: string;
-    price: number;
-    currency: string;
-  };
-  title: string;
-  description: string;
-  status: 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'no_show';
-  scheduled_start: string;
-  scheduled_end: string;
-  actual_start?: string;
-  actual_end?: string;
-  price: number;
-  currency: string;
-  is_paid: boolean;
-  payment_method?: string;
-  meeting_link?: string;
-  meeting_platform?: string;
-  meeting_notes?: string;
-  user_rating?: number;
-  user_feedback?: string;
-  mentor_rating?: number;
-  mentor_feedback?: string;
-  cancellation_reason?: string;
-  cancelled_by?: string;
-  cancellation_fee?: number;
-  refund_amount?: number;
-  created_at: string;
-  updated_at: string;
+  sender: number;
+  content: string;
+  timestamp: string;
+  read: boolean;
 }
 
-// Date and time types
-export interface DateRange {
-  start: Date;
-  end: Date;
-}
-
-export interface TimeSlot {
-  start: string;
-  end: string;
-  available: boolean;
-}
-
-// Search and filter types
-export interface SearchFilters {
-  query?: string;
-  sort?: string;
-  order?: 'asc' | 'desc';
-  page?: number;
-  limit?: number;
-  [key: string]: any;
-}
-
-// Chart and analytics types
-export interface ChartData {
-  labels: string[];
-  datasets: {
-    label: string;
-    data: number[];
-    backgroundColor?: string | string[];
-    borderColor?: string | string[];
-  }[];
-}
-
-export interface AnalyticsMetric {
-  label: string;
-  value: number;
-  unit?: string;
-  change?: number;
-  trend?: 'up' | 'down' | 'stable';
-}
-
-export interface BreadcrumbItem {
-  label: string;
-  path: string;
-}
-
-export interface MentorDetail {
+export interface ChatRoom {
   id: number;
-  user: {
-    id: number;
-    username: string;
-    email: string;
-    first_name: string;
-    last_name: string;
-    avatar?: string;
-  };
-  bio: string;
-  years_of_experience: number;
-  current_position: string;
-  industry: string;
-  status: string;
-  average_rating: number;
-  total_reviews: number;
-  total_sessions: number;
-  total_earnings: number;
-  is_verified: boolean;
-  verification_badge: string;
-  specializations: string[];
-  ranking_score: number;
-  is_approved: boolean;
-  created_at: string;
-  updated_at: string;
-  services: MentorService[];
-  reviews: MentorReview[];
-  availability: MentorAvailability[];
+  participants: number[];
+  lastMessage?: ChatMessage;
+  last_message?: ChatMessage; // Alias
+  unreadCount: number;
+  unread_count?: number; // Alias
+  mentor_name?: string;
+  created_at?: string;
 }
 
-export interface MentorService {
+export interface ChatParticipant {
   id: number;
-  service_type: string;
-  title: string;
-  description: string;
-  pricing_model: string;
-  price_per_hour?: number;
-  fixed_price?: number;
-  package_price?: number;
-  package_sessions?: number;
-  duration_minutes: number;
-  display_price: string;
-  is_active: boolean;
-}
-
-export interface MentorReview {
-  id: number;
-  rating: number;
-  comment: string;
-  created_at: string;
-  user: {
-    username: string;
-    avatar?: string;
-  };
-}
-
-export interface MentorAvailability {
-  id: number;
-  day_of_week: number;
-  start_time: string;
-  end_time: string;
-  is_active: boolean;
-}
-
-export interface Mentor {
-  id: number;
-  user: User;
-  first_name?: string;
-  last_name?: string;
+  username: string;
   avatar?: string;
-  title?: string;
-  company?: string;
-  bio: string;
-  industry: string;
-  current_position: string;
-  years_of_experience: number;
-  experience_years?: number;
-  status: string;
-  average_rating: number;
-  total_reviews: number;
-  review_count?: number;
-  total_sessions: number;
-  total_earnings: number;
-  hourly_rate?: number;
-  rating?: number;
-  is_verified: boolean;
-  verification_badge: string;
-  specializations: string[];
-  skills?: string[];
-  ranking_score: number;
-  is_approved: boolean;
-  location?: string;
-  education?: string;
-  availability_status?: string;
-  created_at: string;
-  updated_at: string;
 }
 
+// Filter Types
 export interface MentorFilters {
-  service_type?: string;
-  industry?: string;
-  min_rating?: number;
-  is_verified?: boolean;
   search?: string;
+  expertise?: string | string[];
+  industry?: string;
+  experience_level?: string;
+  specialization?: string;
+  minRating?: number;
+  maxPrice?: number;
 }
+
+export interface AppointmentFilters {
+  status?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  page?: number;
+  sort_by?: string;
+}
+
+// Dashboard Types
+export interface TrendDataPoint {
+  date: string;
+  value: number;
+}
+
+export interface DashboardStats {
+  // ==================== PLATFORM OVERVIEW ====================
+  total_users?: number;
+  total_students?: number;
+  total_mentors?: number;
+  total_admins?: number;
+  total_staff?: number;
+  
+  // ==================== MONTHLY METRICS WITH MoM/YoY ====================
+  new_users_this_month?: number;
+  user_mom?: number | null;
+  user_yoy?: number | null;
+  
+  new_students_this_month?: number;
+  student_mom?: number | null;
+  student_yoy?: number | null;
+  
+  new_mentors_this_month?: number;
+  mentor_mom?: number | null;
+  mentor_yoy?: number | null;
+  
+  new_staff_this_month?: number;
+  staff_mom?: number | null;
+  staff_yoy?: number | null;
+  
+  // ==================== APPOINTMENT METRICS ====================
+  appointments_this_month?: number;
+  appointments_last_month_same_period?: number;
+  appointment_mom?: number | null;
+  appointment_yoy?: number | null;
+  cancellation_rate?: number;
+  
+  // ==================== RESUME METRICS ====================
+  resumes_uploaded_this_month?: number;
+  resume_mom?: number | null;
+  resume_yoy?: number | null;
+  
+  // ==================== TREND DATASETS (7-DAY) ====================
+  users_7_day?: TrendDataPoint[];
+  mentors_7_day?: TrendDataPoint[];
+  appointments_7_day?: TrendDataPoint[];
+  resumes_7_day?: TrendDataPoint[];
+  
+  // ==================== OPERATIONAL METRICS ====================
+  active_mentors?: number;
+  pending_mentor_approvals?: number;
+  pending_resume_reviews?: number;
+  active_admins_today?: number;
+  active_staff_today?: number;
+  
+  // ==================== LEGACY FIELDS (for backward compatibility) ====================
+  students?: number;
+  active_users_today?: number;
+  new_users_today?: number;
+  pending_applications?: number;
+  appointments?: number;
+  total_appointments?: number;
+  appointments_today?: number;
+  completed_today?: number;
+  assessments?: number;
+  job_listings?: number;
+  
+  // System health and performance
+  system_health?: string;
+  avg_response_time?: number | null;  // Can be null if unavailable (unified with api_response_time)
+  error_rate?: number;
+  uptime_percentage?: number;
+  
+  // Financial statistics
+  revenue_today?: number;
+  total_revenue?: number;
+  mentor_earnings?: number;
+  platform_earnings?: number;
+  pending_payouts?: number;
+  revenue_trend?: Array<{ date: string; value: number }>;
+  
+  // Additional legacy fields (for backward compatibility with other dashboards)
+  upcomingAppointments?: number;
+  resumesUploaded?: number;
+  mentorSessions?: number;
+  profileViews?: number;
+  totalResumes?: number;
+  completedSessions?: number;
+  resumeAnalysisCount?: number;
+  averageResumeScore?: number;
+  active_connections?: number;
+}
+
+export interface RecentActivity {
+  id: number;
+  type: string;
+  description: string;
+  timestamp: string;
+}
+
+export interface SystemHealth {
+  system_health: string;
+  backend_status: string;
+  database_status: string;
+  cache_status: string;
+  api_response_time: number | null;  // Can be null if unavailable
+  error_rate: number;
+  uptime_percentage: number;
+  database?: string;
+  cache?: string;
+  status?: string;
+  external_services?: Array<{
+    name: string;
+    status: string;
+    response_time: number;
+    last_check: string;
+  }>;
+  system_metrics?: {
+    cpu_usage: number;
+    memory_usage: number;
+    disk_usage: number;
+    active_connections: number;
+  };
+  last_updated?: string;
+}
+
+export interface SystemSettings {
+  // Platform Settings
+  platform_name: string;
+  company_name: string;
+  support_email: string;
+  support_phone: string;
+  office_address: string;
+  website_url: string;
+  
+  // Contact Settings
+  contact_title?: string;
+  contact_description?: string;
+  
+  // Announcement Settings
+  announcement_enabled: boolean;
+  announcement_title?: string;
+  announcement_text: string;
+  announcement_message?: string; // Alias for announcement_text
+  announcement_type: 'info' | 'warning' | 'error' | 'success';
+  
+  // Appearance Settings
+  primary_color: string;
+  accent_color?: string;
+  secondary_color?: string; // Alias for accent_color
+  logo_url: string;
+  favicon_url: string;
+  theme: 'light' | 'dark' | 'auto';
+  enable_dark_mode?: boolean;
+  
+  // Contact & Social Links
+  contact_email?: string;
+  contact_phone?: string;
+  linkedin_url: string;
+  twitter_url: string;
+  instagram_url: string;
+  youtube_url: string;
+  facebook_url?: string;
+  
+  // API Keys (masked in responses)
+  openai_api_key?: string;
+  stripe_secret_key?: string;
+  stripe_api_key?: string; // Alias for stripe_secret_key
+  email_api_key?: string;
+  smtp_api_key?: string;
+  google_oauth_key?: string;
+  openai_api_key_masked?: string;
+  stripe_secret_key_masked?: string;
+  stripe_api_key_masked?: string;
+  email_api_key_masked?: string;
+  smtp_api_key_masked?: string;
+  google_oauth_key_masked?: string;
+  
+  // Email Configuration
+  smtp_host: string;
+  smtp_port: number;
+  smtp_username: string;
+  smtp_password?: string;
+  smtp_password_masked?: string;
+  smtp_from_name: string;
+  template_footer_text: string;
+  enable_tls?: boolean;
+  
+  // Timestamps
+  created_at?: string;
+  updated_at?: string;
+  updated_by?: number;
+}
+

@@ -51,6 +51,11 @@ urlpatterns = [
     # homepage
     path('', views.home, name='home'),
     
+    # Health check
+    path('health/', views.health_check, name='health-check'),
+    path('api/v1/ping/', views.ping_endpoint, name='ping-endpoint'),  # Unified ping endpoint
+    path('api/info/', views.api_info, name='api-info'),
+    
     # API root
     path('api/v1/', views.api_root, name='api-root'),
     

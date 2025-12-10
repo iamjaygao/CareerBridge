@@ -24,9 +24,15 @@ import {
   CheckCircle as CheckCircleIcon,
   Error as ErrorIcon,
 } from '@mui/icons-material';
-import adminService, { DashboardStats, SystemHealth } from '../../services/api/adminService';
-import PageHeader from '../../components/common/PageHeader';
+import adminService, { AdminDashboardStats, AdminSystemHealth } from '../../services/api/adminService';
+import { DashboardStats, SystemHealth } from '../../types';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import UserManagementPage from './UserManagementPage';
+import MentorApplicationsPage from './MentorApplicationsPage';
+import { useSelector } from 'react-redux';
+import { RootState } from '../../store';
+import { hasAdminAccess } from '../../utils/adminPermissions';
+import { hasFinancialAccess } from '../../utils/roleHelpers';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -123,13 +129,13 @@ const SystemHealthCard: React.FC<{ health: SystemHealth }> = ({ health }) => {
         
         <Box sx={{ mb: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-            {getStatusIcon(health.database_status)}
+            {getStatusIcon(health.database_status || health.database || 'unknown')}
             <Typography variant="body2" sx={{ ml: 1 }}>
-              Database: {health.database_status}
+              Database: {health.database_status || health.database || 'unknown'}
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-            {getStatusIcon(health.cache_status)}
+            {getStatusIcon(health.cache_status || health.cache || 'unknown')}
             <Typography variant="body2" sx={{ ml: 1 }}>
               Cache: {health.cache_status}
             </Typography>
@@ -141,80 +147,37 @@ const SystemHealthCard: React.FC<{ health: SystemHealth }> = ({ health }) => {
         </Typography>
         <Box sx={{ mb: 1 }}>
           <Typography variant="body2" color="text.secondary">
-            CPU Usage: {health.system_metrics.cpu_usage}%
+            CPU Usage: {health.system_metrics?.cpu_usage || 0}%
           </Typography>
           <LinearProgress
             variant="determinate"
-            value={health.system_metrics.cpu_usage}
-            color={health.system_metrics.cpu_usage > 80 ? 'error' : 'primary'}
+            value={health.system_metrics?.cpu_usage || 0}
+            color={(health.system_metrics?.cpu_usage || 0) > 80 ? 'error' : 'primary'}
             sx={{ mt: 0.5 }}
           />
         </Box>
         <Box sx={{ mb: 1 }}>
           <Typography variant="body2" color="text.secondary">
-            Memory Usage: {health.system_metrics.memory_usage}%
+            Memory Usage: {health.system_metrics?.memory_usage || 0}%
           </Typography>
           <LinearProgress
             variant="determinate"
-            value={health.system_metrics.memory_usage}
-            color={health.system_metrics.memory_usage > 80 ? 'error' : 'primary'}
+            value={health.system_metrics?.memory_usage || 0}
+            color={(health.system_metrics?.memory_usage || 0) > 80 ? 'error' : 'primary'}
             sx={{ mt: 0.5 }}
           />
         </Box>
         <Box sx={{ mb: 1 }}>
           <Typography variant="body2" color="text.secondary">
-            Disk Usage: {health.system_metrics.disk_usage}%
+            Disk Usage: {health.system_metrics?.disk_usage || 0}%
           </Typography>
           <LinearProgress
             variant="determinate"
-            value={health.system_metrics.disk_usage}
-            color={health.system_metrics.disk_usage > 80 ? 'error' : 'primary'}
+            value={health.system_metrics?.disk_usage || 0}
+            color={(health.system_metrics?.disk_usage || 0) > 80 ? 'error' : 'primary'}
             sx={{ mt: 0.5 }}
           />
         </Box>
-      </CardContent>
-    </Card>
-  );
-};
-
-const ServiceMetricsCard: React.FC = () => {
-  const [metrics, setMetrics] = useState<Record<string, any> | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const fetchMetrics = async () => {
-      try {
-        const res = await fetch('/api/v1/services/metrics/');
-        if (!res.ok) throw new Error('Not available');
-        const data = await res.json();
-        setMetrics(data);
-      } catch (e: any) {
-        setError(e.message);
-      }
-    };
-    fetchMetrics();
-  }, []);
-
-  return (
-    <Card>
-      <CardContent>
-        <Typography variant="h6" gutterBottom>
-          External Services Circuit Metrics
-        </Typography>
-        {!metrics && !error && <Typography variant="body2">Loading...</Typography>}
-        {error && <Alert severity="warning">{error}</Alert>}
-        {metrics && (
-          <Box>
-            {Object.entries(metrics).map(([service, values]) => (
-              <Box key={service} sx={{ mb: 1 }}>
-                <Typography variant="subtitle2">{service}</Typography>
-                <Typography variant="caption" color="text.secondary">
-                  success: {values.success || 0} · timeout: {values.timeout || 0} · conn_error: {values.conn_error || 0} · request_error: {values.request_error || 0} · circuit_open: {values.open_events || 0}
-                </Typography>
-              </Box>
-            ))}
-          </Box>
-        )}
       </CardContent>
     </Card>
   );
@@ -222,11 +185,15 @@ const ServiceMetricsCard: React.FC = () => {
 
 const AdminDashboardPage: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useSelector((state: RootState) => state.auth);
   const [tabValue, setTabValue] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
-  const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null);
+  const [dashboardStats, setDashboardStats] = useState<AdminDashboardStats | null>(null);
+  const [systemHealth, setSystemHealth] = useState<AdminSystemHealth | null>(null);
+  
+  // Check if user has admin access (admin or superadmin)
+  const canAccessAdmin = hasAdminAccess(user);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -239,50 +206,9 @@ const AdminDashboardPage: React.FC = () => {
         setDashboardStats(stats);
         setSystemHealth(health);
       } catch (err) {
-        setError('Failed to load dashboard data');
+        setError('Failed to load dashboard data. Please check your connection and try again.');
         console.error('Dashboard error:', err);
-        // Fallback to mock data for development
-        setDashboardStats({
-          total_users: 22,
-          active_users_today: 5,
-          new_users_today: 2,
-          total_mentors: 8,
-          active_mentors: 6,
-          pending_applications: 3,
-          total_appointments: 15,
-          appointments_today: 3,
-          completed_today: 2,
-          total_revenue: 1250,
-          revenue_today: 150,
-          avg_response_time: 250,
-          error_rate: 0.5,
-          uptime_percentage: 99.8,
-        });
-        setSystemHealth({
-          database_status: 'healthy',
-          cache_status: 'healthy',
-          external_services: [
-            {
-              name: 'email_service',
-              status: 'healthy',
-              response_time: 150,
-              last_check: new Date().toISOString(),
-            },
-            {
-              name: 'payment_service',
-              status: 'healthy',
-              response_time: 200,
-              last_check: new Date().toISOString(),
-            },
-          ],
-          system_metrics: {
-            cpu_usage: 23.1,
-            memory_usage: 67.8,
-            disk_usage: 45.2,
-            active_connections: 15,
-          },
-          last_updated: new Date().toISOString(),
-        });
+        // Do not set mock data - let error state display
       } finally {
         setLoading(false);
       }
@@ -301,13 +227,10 @@ const AdminDashboardPage: React.FC = () => {
         navigate('/admin/users');
         break;
       case 'review-mentors':
-        navigate('/admin/mentors/applications');
+        navigate('/admin/mentors');
         break;
       case 'view-appointments':
         navigate('/admin/appointments');
-        break;
-      case 'system-settings':
-        navigate('/admin/settings');
         break;
       default:
         console.warn('Unknown quick action:', action);
@@ -320,28 +243,33 @@ const AdminDashboardPage: React.FC = () => {
 
   if (error) {
     return (
-      <Container>
+      <Box>
         <Alert severity="error" sx={{ mt: 2 }}>
           {error}
         </Alert>
-      </Container>
+      </Box>
     );
   }
 
   return (
     <>
-      <PageHeader
-        title="Admin Dashboard"
-        breadcrumbs={[{ label: 'Admin', path: '/admin' }]}
-      />
+      {/* Page Header */}
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
+          Admin Dashboard
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Overview of system metrics and activity
+        </Typography>
+      </Box>
 
-      <Container maxWidth="xl">
+      <Box>
         <Box sx={{ mb: 3 }}>
           <Tabs value={tabValue} onChange={handleTabChange}>
             <Tab label="Overview" />
             <Tab label="Users" />
             <Tab label="Mentors" />
-            <Tab label="System" />
+            {/* System tab removed - only for superadmin */}
           </Tabs>
         </Box>
 
@@ -355,7 +283,6 @@ const AdminDashboardPage: React.FC = () => {
                  subtitle={`Active today: ${dashboardStats?.active_users_today || 0}`}
                  icon={<PeopleIcon />}
                  color="primary"
-                 trend={{ value: 12, isPositive: true }}
                />
              </Grid>
              <Grid item xs={12} md={3}>
@@ -365,7 +292,6 @@ const AdminDashboardPage: React.FC = () => {
                  subtitle={`Active: ${dashboardStats?.active_mentors || 0}`}
                  icon={<SchoolIcon />}
                  color="secondary"
-                 trend={{ value: 8, isPositive: true }}
                />
              </Grid>
              <Grid item xs={12} md={3}>
@@ -375,7 +301,6 @@ const AdminDashboardPage: React.FC = () => {
                  subtitle={`Completed: ${dashboardStats?.completed_today || 0}`}
                  icon={<EventIcon />}
                  color="success"
-                 trend={{ value: 15, isPositive: true }}
                />
              </Grid>
              <Grid item xs={12} md={3}>
@@ -385,7 +310,6 @@ const AdminDashboardPage: React.FC = () => {
                  subtitle={`Total: $${dashboardStats?.total_revenue || 0}`}
                  icon={<MoneyIcon />}
                  color="warning"
-                 trend={{ value: 5, isPositive: true }}
                />
              </Grid>
 
@@ -403,33 +327,33 @@ const AdminDashboardPage: React.FC = () => {
                   </Typography>
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="body2" color="text.secondary">
-                      Average Response Time: {dashboardStats?.avg_response_time || 0}ms
+                      Average Response Time: {dashboardStats?.avg_response_time !== undefined && dashboardStats?.avg_response_time !== null ? `${dashboardStats.avg_response_time.toFixed(2)}ms` : 'Unknown'}
                     </Typography>
                     <LinearProgress
                       variant="determinate"
-                      value={Math.min((dashboardStats?.avg_response_time || 0) / 10, 100)}
+                      value={dashboardStats?.avg_response_time !== undefined && dashboardStats?.avg_response_time !== null ? Math.min((dashboardStats.avg_response_time) / 10, 100) : 0}
                       color="primary"
                       sx={{ mt: 0.5 }}
                     />
                   </Box>
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="body2" color="text.secondary">
-                      Error Rate: {(dashboardStats?.error_rate || 0).toFixed(2)}%
+                      Error Rate: {dashboardStats?.error_rate !== undefined && dashboardStats?.error_rate !== null ? `${dashboardStats.error_rate.toFixed(2)}%` : 'Unknown'}
                     </Typography>
                     <LinearProgress
                       variant="determinate"
-                      value={dashboardStats?.error_rate || 0}
-                      color={dashboardStats?.error_rate && dashboardStats.error_rate > 5 ? 'error' : 'primary'}
+                      value={dashboardStats?.error_rate !== undefined && dashboardStats?.error_rate !== null ? dashboardStats.error_rate : 0}
+                      color={dashboardStats?.error_rate !== undefined && dashboardStats?.error_rate !== null && dashboardStats.error_rate > 5 ? 'error' : 'primary'}
                       sx={{ mt: 0.5 }}
                     />
                   </Box>
                   <Box>
                     <Typography variant="body2" color="text.secondary">
-                      Uptime: {dashboardStats?.uptime_percentage || 100}%
+                      Uptime: {dashboardStats?.uptime_percentage !== undefined && dashboardStats?.uptime_percentage !== null ? `${dashboardStats.uptime_percentage.toFixed(1)}%` : 'Unknown'}
                     </Typography>
                     <LinearProgress
                       variant="determinate"
-                      value={dashboardStats?.uptime_percentage || 100}
+                      value={dashboardStats?.uptime_percentage !== undefined && dashboardStats?.uptime_percentage !== null ? dashboardStats.uptime_percentage : 0}
                       color="success"
                       sx={{ mt: 0.5 }}
                     />
@@ -438,25 +362,57 @@ const AdminDashboardPage: React.FC = () => {
               </Card>
             </Grid>
 
-            {/* External Services Circuit Metrics (staff-only, dev-only) */}
-            {process.env.NODE_ENV !== 'production' && (
-              <Grid item xs={12}>
-                <ServiceMetricsCard />
-              </Grid>
-            )}
+
+            {/* AI Usage Stats - Removed hardcoded values */}
+            {/* TODO: Add backend endpoint for AI usage statistics */}
+            {/* <Grid item xs={12} md={6}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    AI Usage Statistics
+                  </Typography>
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      Resume Analyses (This Month)
+                    </Typography>
+                    <Typography variant="h5" fontWeight="bold">
+                      {aiStats?.resume_analyses || 0}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      Job Matches Generated
+                    </Typography>
+                    <Typography variant="h5" fontWeight="bold">
+                      {aiStats?.job_matches || 0}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">
+                      Average Analysis Time
+                    </Typography>
+                    <Typography variant="h5" fontWeight="bold">
+                      {aiStats?.avg_analysis_time || 0}s
+                    </Typography>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid> */}
 
             {/* Quick Actions */}
-            <Grid item xs={12}>
+            <Grid item xs={12} md={6}>
               <Card>
                 <CardContent>
                   <Typography variant="h6" gutterBottom>
                     Quick Actions
                   </Typography>
-                  <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                     <Button 
                       variant="outlined" 
                       startIcon={<PeopleIcon />}
                       onClick={() => handleQuickAction('manage-users')}
+                      fullWidth
+                      sx={{ justifyContent: 'flex-start' }}
                     >
                       Manage Users
                     </Button>
@@ -464,23 +420,21 @@ const AdminDashboardPage: React.FC = () => {
                       variant="outlined" 
                       startIcon={<SchoolIcon />}
                       onClick={() => handleQuickAction('review-mentors')}
+                      fullWidth
+                      sx={{ justifyContent: 'flex-start' }}
                     >
-                      Review Mentor Applications
+                      Review Mentors
                     </Button>
                     <Button 
                       variant="outlined" 
                       startIcon={<EventIcon />}
                       onClick={() => handleQuickAction('view-appointments')}
+                      fullWidth
+                      sx={{ justifyContent: 'flex-start' }}
                     >
-                      View All Appointments
+                      View Appointments
                     </Button>
-                    <Button 
-                      variant="outlined" 
-                      startIcon={<SpeedIcon />}
-                      onClick={() => handleQuickAction('system-settings')}
-                    >
-                      System Settings
-                    </Button>
+                    {/* System Settings button removed - only for superadmin */}
                   </Box>
                 </CardContent>
               </Card>
@@ -489,26 +443,15 @@ const AdminDashboardPage: React.FC = () => {
         </TabPanel>
 
         <TabPanel value={tabValue} index={1}>
-          <Typography variant="h6">User Management</Typography>
-          <Typography variant="body2" color="text.secondary">
-            User management features will be implemented here.
-          </Typography>
+          <UserManagementPage />
         </TabPanel>
 
         <TabPanel value={tabValue} index={2}>
-          <Typography variant="h6">Mentor Management</Typography>
-          <Typography variant="body2" color="text.secondary">
-            Mentor management features will be implemented here.
-          </Typography>
+          <MentorApplicationsPage />
         </TabPanel>
-
-        <TabPanel value={tabValue} index={3}>
-          <Typography variant="h6">System Administration</Typography>
-          <Typography variant="body2" color="text.secondary">
-            System administration features will be implemented here.
-          </Typography>
-        </TabPanel>
-      </Container>
+        
+        {/* System Settings tab removed - only accessible via /superadmin/system */}
+      </Box>
     </>
   );
 };

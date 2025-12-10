@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Container,
   Card,
   CardContent,
   Typography,
@@ -42,7 +41,6 @@ import {
   Email as EmailIcon,
 } from '@mui/icons-material';
 
-import PageHeader from '../../components/common/PageHeader';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import SkeletonLoader from '../../components/common/SkeletonLoader';
 import adminService from '../../services/api/adminService';
@@ -167,15 +165,17 @@ const MentorApplicationsPage: React.FC = () => {
 
   return (
     <>
-      <PageHeader
-        title="Mentor Applications"
-        breadcrumbs={[
-          { label: 'Admin', path: '/admin' },
-          { label: 'Mentor Applications', path: '/admin/mentors/applications' },
-        ]}
-      />
+      {/* Page Header */}
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
+          Mentor Applications
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Review and manage mentor applications
+        </Typography>
+      </Box>
 
-      <Container maxWidth="xl">
+      <Box>
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
             {error}
@@ -326,7 +326,7 @@ const MentorApplicationsPage: React.FC = () => {
             )}
           </CardContent>
         </Card>
-      </Container>
+      </Box>
 
       {/* Application Detail Dialog */}
       <Dialog open={dialogOpen} onClose={handleDialogClose} maxWidth="md" fullWidth>

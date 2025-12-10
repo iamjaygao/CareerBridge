@@ -1,98 +1,174 @@
 import apiClient from './client';
-
-export interface ChatRoom {
-  id: number;
-  user: number;
-  mentor: number;
-  user_name: string;
-  mentor_name: string;
-  created_at: string;
-  updated_at: string;
-  is_active: boolean;
-  last_message?: {
-    content: string;
-    sender: string;
-    created_at: string;
-    message_type: string;
-  };
-  unread_count: number;
-}
+import { io, Socket } from 'socket.io-client';
 
 export interface Message {
   id: number;
-  chat_room: number;
+  chat_room?: number;
   sender: number;
-  sender_name: string;
+  sender_name?: string;
   sender_avatar?: string;
-  message_type: string;
+  message_type?: string;
   content: string;
-  file?: string;
-  created_at: string;
-  is_read: boolean;
+  timestamp?: string;
+  created_at?: string;
+  read?: boolean;
+  is_read?: boolean;
+}
+
+export interface ChatRoom {
+  id: number;
+  participants: number[];
+  lastMessage?: Message;
+  last_message?: Message; // Alias
+  unreadCount: number;
+  unread_count?: number; // Alias
+  mentor_name?: string;
+  created_at?: string;
 }
 
 export interface ChatParticipant {
   id: number;
-  user: number;
-  user_name: string;
-  user_avatar?: string;
-  chat_room: number;
-  is_online: boolean;
-  last_seen: string;
-  joined_at: string;
+  username: string;
+  avatar?: string;
 }
 
-const chatService = {
-  // Chat Rooms
+class ChatService {
+  private socket: Socket | null = null;
+
+  /**
+   * Initialize WebSocket connection
+   */
+  connect(): Socket {
+    if (!this.socket) {
+      const token = localStorage.getItem('access_token');
+      // Extract base URL without /api/v1 for socket.io
+      const baseURL = apiClient.defaults.baseURL?.replace('/api/v1', '') || 'http://localhost:8001';
+      this.socket = io(baseURL, {
+        auth: {
+          token: token,
+        },
+        transports: ['websocket'],
+      });
+    }
+    return this.socket;
+  }
+
+  /**
+   * Disconnect WebSocket
+   */
+  disconnect(): void {
+    if (this.socket) {
+      this.socket.disconnect();
+      this.socket = null;
+    }
+  }
+
+  /**
+   * Get all chat rooms for the current user
+   */
   async getChatRooms(): Promise<ChatRoom[]> {
-    const response = await apiClient.get<ChatRoom[]>('/chat/rooms/');
-    return response.data;
-  },
+    try {
+      const response = await apiClient.get('/chat/rooms/');
+      return response.data.results || response.data;
+    } catch (error) {
+      console.error('Failed to get chat rooms:', error);
+      throw error;
+    }
+  }
 
-  async createChatRoom(mentorId: number): Promise<ChatRoom> {
-    const response = await apiClient.post<ChatRoom>('/chat/rooms/', {
-      mentor_id: mentorId,
-    });
-    return response.data;
-  },
-
+  /**
+   * Get a single chat room by ID
+   */
   async getChatRoom(roomId: number): Promise<ChatRoom> {
-    const response = await apiClient.get<ChatRoom>(`/chat/rooms/${roomId}/`);
-    return response.data;
-  },
+    try {
+      const response = await apiClient.get(`/chat/rooms/${roomId}/`);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get chat room:', error);
+      throw error;
+    }
+  }
 
-  async markMessagesRead(roomId: number): Promise<void> {
-    await apiClient.post(`/chat/rooms/${roomId}/mark_messages_read/`);
-  },
-
-  async getParticipants(roomId: number): Promise<ChatParticipant[]> {
-    const response = await apiClient.get<ChatParticipant[]>(`/chat/rooms/${roomId}/participants/`);
-    return response.data;
-  },
-
-  // Messages
+  /**
+   * Get messages for a chat room
+   */
   async getMessages(roomId: number): Promise<Message[]> {
-    const response = await apiClient.get<Message[]>(`/chat/messages/?chat_room=${roomId}`);
-    return response.data;
-  },
+    try {
+      const response = await apiClient.get(`/chat/rooms/${roomId}/messages/`);
+      return response.data.results || response.data;
+    } catch (error) {
+      console.error('Failed to get messages:', error);
+      throw error;
+    }
+  }
 
-  async sendMessage(roomId: number, content: string, messageType: string = 'text'): Promise<Message> {
-    const response = await apiClient.post<Message>('/chat/messages/', {
-      chat_room: roomId,
-      content,
-      message_type: messageType,
-    });
-    return response.data;
-  },
+  /**
+   * Send a message
+   */
+  async sendMessage(roomId: number, content: string): Promise<Message> {
+    try {
+      const response = await apiClient.post(`/chat/rooms/${roomId}/messages/`, {
+        content,
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Failed to send message:', error);
+      throw error;
+    }
+  }
 
-  async markMessageRead(messageId: number): Promise<void> {
-    await apiClient.post(`/chat/messages/${messageId}/mark_read/`);
-  },
+  /**
+   * Create or get a chat room with a user
+   */
+  async getOrCreateRoom(userId: number): Promise<ChatRoom> {
+    try {
+      const response = await apiClient.post('/chat/rooms/', {
+        participant_id: userId,
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get or create room:', error);
+      throw error;
+    }
+  }
 
-  async getUnreadCount(): Promise<{ unread_count: number }> {
-    const response = await apiClient.get<{ unread_count: number }>('/chat/messages/unread_count/');
-    return response.data;
-  },
-};
+  /**
+   * Mark messages as read
+   */
+  async markAsRead(roomId: number, messageIds: number[]): Promise<void> {
+    try {
+      await apiClient.post(`/chat/rooms/${roomId}/mark-read/`, {
+        message_ids: messageIds,
+      });
+    } catch (error) {
+      console.error('Failed to mark messages as read:', error);
+      throw error;
+    }
+  }
 
-export default chatService; 
+  /**
+   * Subscribe to new messages in a room
+   */
+  onMessage(roomId: number, callback: (message: Message) => void): void {
+    if (this.socket) {
+      this.socket.on(`room_${roomId}_message`, callback);
+    }
+  }
+
+  /**
+   * Unsubscribe from messages
+   */
+  offMessage(roomId: number, callback?: (message: Message) => void): void {
+    if (this.socket) {
+      if (callback) {
+        this.socket.off(`room_${roomId}_message`, callback);
+      } else {
+        this.socket.off(`room_${roomId}_message`);
+      }
+    }
+  }
+}
+
+const chatService = new ChatService();
+export default chatService;
+

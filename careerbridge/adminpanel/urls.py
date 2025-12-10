@@ -6,6 +6,7 @@ app_name = 'adminpanel'
 urlpatterns = [
     # Dashboard
     path('dashboard/', views.AdminDashboardView.as_view(), name='admin-dashboard'),
+    path('dashboard-stats/', views.DashboardStatsView.as_view(), name='dashboard-stats'),
     
     # System statistics
     path('stats/', views.SystemStatsListView.as_view(), name='system-stats-list'),
@@ -32,7 +33,51 @@ urlpatterns = [
     # Mentor management
     path('mentors/', views.MentorManagementView.as_view(), name='mentor-management'),
     path('mentors/applications/', views.MentorApplicationsView.as_view(), name='mentor-applications'),
+    path('mentors/applications/<int:application_id>/approve/', views.MentorApplicationApproveView.as_view(), name='mentor-application-approve'),
+    path('mentors/applications/<int:application_id>/reject/', views.MentorApplicationRejectView.as_view(), name='mentor-application-reject'),
+    
+    # Appointments management
+    path('appointments/', views.AppointmentManagementView.as_view(), name='appointment-management'),
+    
+    # Jobs management
+    path('jobs/stats/', views.JobStatsView.as_view(), name='job-stats'),
+    path('jobs/crawler/trigger/', views.JobCrawlerTriggerView.as_view(), name='job-crawler-trigger'),
+    path('jobs/clean-expired/', views.JobCleanExpiredView.as_view(), name='job-clean-expired'),
+    
+    # Assessments management
+    path('assessments/stats/', views.AssessmentStatsView.as_view(), name='assessment-stats'),
+    path('assessments/', views.AssessmentListView.as_view(), name='assessment-list'),
+    
+    # Payouts management
+    path('payouts/', views.PayoutListView.as_view(), name='payout-list'),
+    path('payouts/<int:payout_id>/approve/', views.PayoutApproveView.as_view(), name='payout-approve'),
+    path('payouts/<int:payout_id>/reject/', views.PayoutRejectView.as_view(), name='payout-reject'),
+    
+    # Content management
+    path('content/', views.ContentListView.as_view(), name='content-list'),
+    path('content/<int:content_id>/', views.ContentDetailView.as_view(), name='content-detail'),
+    
+    # Promotions management
+    path('promotions/', views.PromotionListView.as_view(), name='promotion-list'),
+    path('promotions/<int:promotion_id>/', views.PromotionDetailView.as_view(), name='promotion-detail'),
+    
+    # System configuration
+    path('system/config/', views.SystemConfigView.as_view(), name='system-config'),
+    path('system/cache/clear/', views.CacheClearView.as_view(), name='cache-clear'),
+    
+    # System settings (new comprehensive settings)
+    path('system/settings/', views.SystemSettingsView.as_view(), name='system-settings'),
+    
+    # Public system settings (no auth required)
+    path('system/settings/public/', views.PublicSystemSettingsView.as_view(), name='public-system-settings'),
+    
+    # System actions
+    path('system/actions/<str:action>/', views.SystemActionsView.as_view(), name='system-actions'),
+    path('system/actions/error-logs/', views.ErrorLogsView.as_view(), name='error-logs'),
     
     # System health
     path('health/', views.SystemHealthView.as_view(), name='system-health'),
+    
+    # Ping endpoint for latency measurement
+    path('ping/', views.PingView.as_view(), name='ping'),
 ]

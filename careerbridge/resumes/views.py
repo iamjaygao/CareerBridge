@@ -263,49 +263,43 @@ class ExternalResumeMatcherView(generics.CreateAPIView):
 
 class ExternalServicesHealthView(generics.GenericAPIView):
     """Health check for external service integrations (ResumeMatcher, JobCrawler)"""
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.AllowAny]  # Allow public access for health checks
 
     @swagger_auto_schema(
         operation_description="Check health/status of configured external services",
         responses={200: 'OK'}
     )
     def get(self, request, *args, **kwargs):
-        results = {}
-        for service_type in ['resume_matcher', 'job_crawler']:
-            try:
-                cfg = ExternalServiceIntegration.objects.filter(service_type=service_type, is_active=True).first()
-                if not cfg:
-                    results[service_type] = {
-                        'configured': False,
-                        'status': 'not_configured'
-                    }
-                    continue
-
-                headers = {'Content-Type': 'application/json', 'User-Agent': 'CareerBridge/1.0'}
-                if cfg.api_key:
-                    headers['Authorization'] = f'Bearer {cfg.api_key}'
-                health_url = f"{cfg.base_url.rstrip('/')}/health"
-                try:
-                    resp = requests.get(health_url, headers=headers, timeout=cfg.timeout)
-                    results[service_type] = {
-                        'configured': True,
-                        'status': 'healthy' if resp.status_code < 400 else 'unhealthy',
-                        'http_status': resp.status_code
-                    }
-                except Exception as e:
-                    results[service_type] = {
-                        'configured': True,
-                        'status': 'unhealthy',
-                        'error': str(e)
-                    }
-            except Exception as e:
-                results[service_type] = {
-                    'configured': False,
-                    'status': 'error',
-                    'error': str(e)
+        try:
+            # Check JobCrawler health
+            from careerbridge.external_services.third_party_apis.job_crawler import job_crawler_service
+            job_crawler_health = job_crawler_service.check_health()
+            
+            # Check ResumeMatcher health
+            from careerbridge.external_services.third_party_apis.resume_matcher import resume_matcher_service
+            resume_matcher_health = resume_matcher_service.check_health()
+            
+            results = {
+                'job_crawler': {
+                    'status': job_crawler_health.get('status', 'unknown'),
+                    'error': job_crawler_health.get('error', None)
+                },
+                'resume_matcher': {
+                    'status': resume_matcher_health.get('status', 'unknown'),
+                    'error': resume_matcher_health.get('error', None)
+                },
+                'ai_analyzer': {
+                    'status': 'not_implemented',
+                    'error': 'AI Analyzer service not yet implemented'
                 }
-
-        return Response(results, status=status.HTTP_200_OK)
+            }
+            
+            return Response(results, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                'error': str(e),
+                'status': 'error'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class ResumeSearchView(generics.ListAPIView):
     """Search resumes with filters"""
@@ -1496,3 +1490,80 @@ class DataExportStatusView(generics.RetrieveAPIView):
         except Exception:
             pass
         return Response({'job_id': job.id, 'status': job.status, 'download_url': download_url})
+
+
+# JobCrawler API proxy views
+class JobCrawlerSearchView(generics.GenericAPIView):
+    """Direct proxy to JobCrawler search endpoint"""
+    permission_classes = [permissions.AllowAny]  # Allow public access for testing
+    
+    def get(self, request, *args, **kwargs):
+        # Extract query parameters
+        query = request.GET.get('query', 'python developer')
+        location = request.GET.get('location', 'San Francisco')
+        limit = int(request.GET.get('limit', 5))
+        
+        try:
+            from careerbridge.external_services.third_party_apis.job_crawler import job_crawler_service
+            result = job_crawler_service.search_jobs(
+                query=query,
+                filters={'location': location},
+                page=1,
+                user=request.user
+            )
+            return Response(result)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class JobCrawlerTrendingView(generics.GenericAPIView):
+    """Direct proxy to JobCrawler trending jobs endpoint"""
+    permission_classes = [permissions.AllowAny]  # Allow public access for testing
+    
+    def get(self, request, *args, **kwargs):
+        try:
+            from careerbridge.external_services.third_party_apis.job_crawler import job_crawler_service
+            result = job_crawler_service.get_trending_jobs(user=request.user)
+            return Response(result)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class JobCrawlerSalaryView(generics.GenericAPIView):
+    """Direct proxy to JobCrawler salary data endpoint"""
+    permission_classes = [permissions.AllowAny]  # Allow public access for testing
+    
+    def get(self, request, *args, **kwargs):
+        job_title = request.GET.get('job_title', 'Software Engineer')
+        location = request.GET.get('location', 'San Francisco')
+        
+        try:
+            from careerbridge.external_services.third_party_apis.job_crawler import job_crawler_service
+            result = job_crawler_service.get_salary_data(
+                job_title=job_title,
+                location=location,
+                user=request.user
+            )
+            return Response(result)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class JobCrawlerSkillsView(generics.GenericAPIView):
+    """Direct proxy to JobCrawler skills data endpoint"""
+    permission_classes = [permissions.AllowAny]  # Allow public access for testing
+    
+    def get(self, request, *args, **kwargs):
+        job_title = request.GET.get('job_title', 'Data Scientist')
+        location = request.GET.get('location', 'New York')
+        
+        try:
+            from careerbridge.external_services.third_party_apis.job_crawler import job_crawler_service
+            result = job_crawler_service.get_skill_demand(
+                job_title=job_title,
+                location=location,
+                user=request.user
+            )
+            return Response(result)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import (
-    SystemStats, AdminAction, SystemConfig, DataExport, ContentModeration
+    SystemStats, AdminAction, SystemConfig, DataExport, ContentModeration, SystemSettings
 )
 from django.utils import timezone
 
@@ -141,26 +141,82 @@ class ContentModerationUpdateSerializer(serializers.ModelSerializer):
         return super().update(instance, validated_data)
 
 class DashboardStatsSerializer(serializers.Serializer):
-    """Dashboard statistics serializer"""
-    # User statistics
+    """Dashboard statistics serializer - aggregated metrics only, no user data"""
+    
+    # ==================== PLATFORM OVERVIEW ====================
     total_users = serializers.IntegerField()
+    total_students = serializers.IntegerField()
+    total_mentors = serializers.IntegerField()
+    total_admins = serializers.IntegerField()
+    total_staff = serializers.IntegerField()
+    
+    # ==================== MONTHLY METRICS WITH MoM/YoY ====================
+    new_users_this_month = serializers.IntegerField()
+    user_mom = serializers.FloatField(allow_null=True)
+    user_yoy = serializers.FloatField(allow_null=True)
+    
+    new_students_this_month = serializers.IntegerField()
+    student_mom = serializers.FloatField(allow_null=True)
+    student_yoy = serializers.FloatField(allow_null=True)
+    
+    new_mentors_this_month = serializers.IntegerField()
+    mentor_mom = serializers.FloatField(allow_null=True)
+    mentor_yoy = serializers.FloatField(allow_null=True)
+    
+    new_staff_this_month = serializers.IntegerField()
+    staff_mom = serializers.FloatField(allow_null=True)
+    staff_yoy = serializers.FloatField(allow_null=True)
+    
+    # ==================== APPOINTMENT METRICS ====================
+    appointments_this_month = serializers.IntegerField()
+    appointments_last_month_same_period = serializers.IntegerField()
+    appointment_mom = serializers.FloatField(allow_null=True)
+    appointment_yoy = serializers.FloatField(allow_null=True)
+    cancellation_rate = serializers.FloatField()
+    
+    # ==================== RESUME METRICS ====================
+    resumes_uploaded_this_month = serializers.IntegerField()
+    resume_mom = serializers.FloatField(allow_null=True)
+    resume_yoy = serializers.FloatField(allow_null=True)
+    
+    # ==================== TREND DATASETS (7-DAY) ====================
+    users_7_day = serializers.ListField()
+    mentors_7_day = serializers.ListField()
+    appointments_7_day = serializers.ListField()
+    resumes_7_day = serializers.ListField()
+    
+    # ==================== OPERATIONAL METRICS ====================
+    active_mentors = serializers.IntegerField()
+    pending_mentor_approvals = serializers.IntegerField()
+    pending_resume_reviews = serializers.IntegerField()
+    active_admins_today = serializers.IntegerField()
+    active_staff_today = serializers.IntegerField()
+    
+    # ==================== LEGACY FIELDS (for backward compatibility) ====================
+    students = serializers.IntegerField()
     active_users_today = serializers.IntegerField()
     new_users_today = serializers.IntegerField()
-    # Mentor statistics
-    total_mentors = serializers.IntegerField()
-    active_mentors = serializers.IntegerField()
     pending_applications = serializers.IntegerField()
-    # Appointment statistics
+    appointments = serializers.IntegerField()
     total_appointments = serializers.IntegerField()
     appointments_today = serializers.IntegerField()
     completed_today = serializers.IntegerField()
-    # Revenue statistics
-    total_revenue = serializers.DecimalField(max_digits=12, decimal_places=2)
-    revenue_today = serializers.DecimalField(max_digits=12, decimal_places=2)
-    # System performance
+    assessments = serializers.IntegerField()
+    job_listings = serializers.IntegerField()
+    
+    # System health and performance
+    system_health = serializers.CharField()
     avg_response_time = serializers.FloatField()
     error_rate = serializers.FloatField()
     uptime_percentage = serializers.FloatField()
+    
+    # Financial statistics
+    revenue_today = serializers.FloatField()
+    total_revenue = serializers.FloatField()
+    mentor_earnings = serializers.FloatField()
+    platform_earnings = serializers.FloatField()
+    pending_payouts = serializers.FloatField()
+    revenue_trend = serializers.ListField()
 
 class UserManagementSerializer(serializers.Serializer):
     """User management serializer"""
@@ -172,7 +228,7 @@ class UserManagementSerializer(serializers.Serializer):
     is_staff = serializers.BooleanField()
     role = serializers.CharField()
     date_joined = serializers.DateTimeField()
-    last_login = serializers.DateTimeField()
+    last_login = serializers.DateTimeField(allow_null=True, required=False)
     total_appointments = serializers.IntegerField()
     total_resumes = serializers.IntegerField()
 
@@ -199,11 +255,19 @@ class MentorManagementSerializer(serializers.Serializer):
     mentor_id = serializers.IntegerField()
     user_id = serializers.IntegerField()
     username = serializers.CharField()
+    name = serializers.CharField()
+    first_name = serializers.CharField(required=False, allow_blank=True)
+    last_name = serializers.CharField(required=False, allow_blank=True)
     email = serializers.EmailField()
     status = serializers.CharField()
     is_approved = serializers.BooleanField()
+    is_verified = serializers.BooleanField()
+    verification_badge = serializers.CharField(required=False, allow_blank=True)
+    specializations = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
+    years_of_experience = serializers.IntegerField(required=False)
     total_sessions = serializers.IntegerField()
     average_rating = serializers.FloatField()
+    hourly_rate = serializers.FloatField(required=False, allow_null=True)
     total_earnings = serializers.DecimalField(max_digits=10, decimal_places=2)
 
 class AppointmentManagementSerializer(serializers.Serializer):
@@ -228,4 +292,83 @@ class SystemHealthSerializer(serializers.Serializer):
     memory_usage = serializers.FloatField()
     cpu_usage = serializers.FloatField()
     active_connections = serializers.IntegerField()
-    error_count_last_hour = serializers.IntegerField() 
+    error_count_last_hour = serializers.IntegerField()
+
+
+class SystemSettingsSerializer(serializers.ModelSerializer):
+    """System settings serializer with API key masking"""
+    
+    # Masked API keys (read-only)
+    openai_api_key_masked = serializers.SerializerMethodField()
+    stripe_secret_key_masked = serializers.SerializerMethodField()
+    email_api_key_masked = serializers.SerializerMethodField()
+    google_oauth_key_masked = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = SystemSettings
+        fields = [
+            # Platform Settings
+            'platform_name', 'company_name', 'support_email', 'support_phone',
+            'office_address', 'website_url',
+            # Contact Settings
+            'contact_title', 'contact_description',
+            # Announcement Settings
+            'announcement_enabled', 'announcement_text', 'announcement_type',
+            # Appearance Settings
+            'primary_color', 'accent_color', 'logo_url', 'favicon_url', 'theme',
+            # Contact & Social Links
+            'linkedin_url', 'twitter_url', 'instagram_url', 'youtube_url', 'facebook_url',
+            # API Keys (masked)
+            'openai_api_key', 'stripe_secret_key', 'email_api_key', 'google_oauth_key',
+            'openai_api_key_masked', 'stripe_secret_key_masked', 
+            'email_api_key_masked', 'google_oauth_key_masked',
+            # Email Configuration
+            'smtp_host', 'smtp_port', 'smtp_username', 'smtp_from_name', 'template_footer_text',
+            # Timestamps
+            'created_at', 'updated_at', 'updated_by',
+        ]
+        read_only_fields = ['created_at', 'updated_at', 'updated_by']
+    
+    def get_openai_api_key_masked(self, obj):
+        """Return masked OpenAI API key"""
+        if obj.openai_api_key:
+            return self._mask_key(obj.openai_api_key)
+        return None
+    
+    def get_stripe_secret_key_masked(self, obj):
+        """Return masked Stripe secret key"""
+        if obj.stripe_secret_key:
+            return self._mask_key(obj.stripe_secret_key)
+        return None
+    
+    def get_email_api_key_masked(self, obj):
+        """Return masked email API key"""
+        if obj.email_api_key:
+            return self._mask_key(obj.email_api_key)
+        return None
+    
+    def get_google_oauth_key_masked(self, obj):
+        """Return masked Google OAuth key"""
+        if obj.google_oauth_key:
+            return self._mask_key(obj.google_oauth_key)
+        return None
+    
+    def _mask_key(self, key_value):
+        """Mask API key (show first 4 and last 4 characters)"""
+        if not key_value or len(key_value) < 8:
+            return '****'
+        return f"{key_value[:4]}****{key_value[-4:]}"
+    
+    def to_representation(self, instance):
+        """Override to always return masked keys in GET requests"""
+        data = super().to_representation(instance)
+        # Replace actual keys with masked versions in response
+        if instance.openai_api_key:
+            data['openai_api_key'] = self._mask_key(instance.openai_api_key)
+        if instance.stripe_secret_key:
+            data['stripe_secret_key'] = self._mask_key(instance.stripe_secret_key)
+        if instance.email_api_key:
+            data['email_api_key'] = self._mask_key(instance.email_api_key)
+        if instance.google_oauth_key:
+            data['google_oauth_key'] = self._mask_key(instance.google_oauth_key)
+        return data 

@@ -217,7 +217,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatRoomId, onClose }) => {
                     {message.sender_name}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    {formatTime(message.created_at)}
+                    {message.created_at ? formatTime(message.created_at) : ''}
                   </Typography>
                   {message.sender === user?.id && (
                     <Chip

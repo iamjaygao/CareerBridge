@@ -83,13 +83,15 @@ const BookingDialog: React.FC<BookingDialogProps> = ({
     }
   }, [open, mentor]);
 
-  const loadAvailableSlots = async () => {
+  const loadAvailableSlots = async (date?: Date) => {
     if (!mentor) return;
     
     try {
       setLoading(true);
-      // Fetch available time slots for the next 7 days
-      const slots = await appointmentService.getAvailableSlots(mentor.id);
+      // Fetch available time slots for the selected date or today
+      const targetDate = date || formData.date || new Date();
+      const dateStr = format(targetDate, 'yyyy-MM-dd');
+      const slots = await appointmentService.getAvailableTimeSlots(mentor.id, dateStr);
       setAvailableSlots(slots);
     } catch (error) {
       console.error('Failed to load available slots:', error);
@@ -114,11 +116,10 @@ const BookingDialog: React.FC<BookingDialogProps> = ({
       setError(null);
 
       const appointmentData = {
-        mentor_id: mentor.id,
-        service_id: 1, // Default service ID
-        scheduled_date: format(formData.date, 'yyyy-MM-dd'),
-        scheduled_time: format(formData.time, 'HH:mm'),
-        user_notes: formData.notes,
+        mentor: mentor.id,
+        date: format(formData.date, 'yyyy-MM-dd'),
+        time: format(formData.time, 'HH:mm'),
+        notes: formData.notes,
       };
 
       await appointmentService.createAppointment(appointmentData);
@@ -142,7 +143,8 @@ const BookingDialog: React.FC<BookingDialogProps> = ({
 
   const getTotalPrice = () => {
     if (!mentor) return 0;
-    return (mentor.hourly_rate || 0) * (formData.duration / 60);
+    const rate = mentor.hourly_rate || mentor.price_per_hour || 0;
+    return rate * (formData.duration / 60);
   };
 
   const renderStepContent = (step: number) => {
@@ -277,7 +279,9 @@ const BookingDialog: React.FC<BookingDialogProps> = ({
                     Mentor
                   </Typography>
                   <Typography variant="body1">
-                    {mentor?.first_name} {mentor?.last_name}
+                    {typeof mentor?.user === 'object' 
+                      ? `${mentor.user.first_name || ''} ${mentor.user.last_name || ''}`.trim() || mentor.user.username
+                      : 'Mentor'}
                   </Typography>
                 </Grid>
                 <Grid item xs={6}>
@@ -341,7 +345,9 @@ const BookingDialog: React.FC<BookingDialogProps> = ({
       <DialogTitle>
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
           <Typography variant="h5">
-            Book Session with {mentor.first_name} {mentor.last_name}
+            Book Session with {typeof mentor?.user === 'object' 
+              ? `${mentor.user.first_name || ''} ${mentor.user.last_name || ''}`.trim() || mentor.user.username
+              : 'Mentor'}
           </Typography>
         </Box>
       </DialogTitle>

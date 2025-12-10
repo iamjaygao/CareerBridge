@@ -56,7 +56,7 @@ const ChatRoomPage: React.FC = () => {
         title={`Chat with ${chatRoom.mentor_name}`}
         breadcrumbs={[
           { label: 'Chats', path: '/chat' },
-          { label: chatRoom.mentor_name, path: `/chat/${roomId}` }
+          { label: chatRoom.mentor_name || 'Chat', path: `/chat/${roomId}` }
         ]}
         action={
           <IconButton onClick={handleBack}>

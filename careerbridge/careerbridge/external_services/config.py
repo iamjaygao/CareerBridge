@@ -43,7 +43,7 @@ class SMSConfig:
 class JobCrawlerConfig:
     """Job crawler API configuration"""
     api_key: Optional[str] = None
-    base_url: str = "https://api.jobcrawler.com"
+    base_url: str = "http://localhost:8000"  # Independent Job Crawler service
     timeout: int = 30
     rate_limit: int = 100  # requests per hour
 
@@ -52,7 +52,7 @@ class JobCrawlerConfig:
 class ResumeMatcherConfig:
     """Resume matching API configuration"""
     api_key: Optional[str] = None
-    base_url: str = "https://api.resumematcher.com"
+    base_url: str = "http://localhost:8002"
     timeout: int = 30
     confidence_threshold: float = 0.7
 
@@ -85,15 +85,15 @@ class ExternalServicesConfig:
         )
         
         self.job_crawler = JobCrawlerConfig(
-            api_key=os.getenv('JOB_CRAWLER_API_KEY'),
-            base_url=os.getenv('JOB_CRAWLER_BASE_URL', 'https://api.jobcrawler.com'),
+            api_key=os.getenv('JOB_CRAWLER_API_KEY', 'dev-api-key'),
+            base_url=os.getenv('JOB_CRAWLER_BASE_URL', 'http://localhost:8000'),
             timeout=int(os.getenv('JOB_CRAWLER_TIMEOUT', '30')),
             rate_limit=int(os.getenv('JOB_CRAWLER_RATE_LIMIT', '100'))
         )
         
         self.resume_matcher = ResumeMatcherConfig(
-            api_key=os.getenv('RESUME_MATCHER_API_KEY'),
-            base_url=os.getenv('RESUME_MATCHER_BASE_URL', 'https://api.resumematcher.com'),
+            api_key=os.getenv('RESUME_MATCHER_API_KEY', 'dev-api-key'),
+            base_url=os.getenv('RESUME_MATCHER_BASE_URL', 'http://localhost:8002'),
             timeout=int(os.getenv('RESUME_MATCHER_TIMEOUT', '30')),
             confidence_threshold=float(os.getenv('RESUME_MATCHER_CONFIDENCE', '0.7'))
         )

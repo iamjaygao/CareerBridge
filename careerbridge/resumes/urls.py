@@ -36,6 +36,8 @@ urlpatterns = [
     
     # External service integration
     path('jobs/crawl/', views.ExternalJobCrawlerView.as_view(), name='external-job-crawl'),
+    path('jobs/search/', views.JobCrawlerSearchView.as_view(), name='job-crawler-search'),
+    path('jobs/trending/', views.JobCrawlerTrendingView.as_view(), name='job-crawler-trending'),
     
     # Resume-Job matching with external service
     path('matches/', views.ResumeJobMatchView.as_view(), name='match-list'),
@@ -44,9 +46,14 @@ urlpatterns = [
 
     # External services health
     path('services/health/', views.ExternalServicesHealthView.as_view(), name='external-services-health'),
+    path('external-services/health/', views.ExternalServicesHealthView.as_view(), name='external-services-health-alt'),
     
     # Job recommendations
     path('recommendations/', views.JobRecommendationView.as_view(), name='job-recommendations'),
+    
+    # Market data endpoints
+    path('market/salary/', views.JobCrawlerSalaryView.as_view(), name='job-crawler-salary'),
+    path('market/skills/', views.JobCrawlerSkillsView.as_view(), name='job-crawler-skills'),
     
     # Auto matching
     path('auto-match/', views.AutoMatchView.as_view(), name='auto-match'),

@@ -9,16 +9,17 @@ class NotificationSerializer(serializers.ModelSerializer):
     
     notification_type_display = serializers.CharField(source='get_notification_type_display', read_only=True)
     priority_display = serializers.CharField(source='get_priority_display', read_only=True)
+    target_role_display = serializers.CharField(source='get_target_role_display', read_only=True)
     
     class Meta:
         model = Notification
         fields = [
             'id', 'notification_type', 'notification_type_display', 'title', 'message',
-            'is_read', 'is_sent', 'priority', 'priority_display', 'related_appointment',
-            'related_resume', 'related_mentor', 'sent_at', 'read_at', 'created_at'
+            'is_read', 'is_sent', 'priority', 'priority_display', 'target_role', 'target_role_display',
+            'related_appointment', 'related_resume', 'related_mentor', 'sent_at', 'read_at', 'created_at'
         ]
         read_only_fields = [
-            'id', 'user', 'notification_type', 'title', 'message', 'priority',
+            'id', 'user', 'target_role', 'notification_type', 'title', 'message', 'priority',
             'related_appointment', 'related_resume', 'related_mentor', 'sent_at',
             'read_at', 'created_at'
         ]
@@ -27,12 +28,15 @@ class NotificationListSerializer(serializers.ModelSerializer):
     """Notification list serializer (simplified version)"""
     
     notification_type_display = serializers.CharField(source='get_notification_type_display', read_only=True)
+    priority_display = serializers.CharField(source='get_priority_display', read_only=True)
+    target_role_display = serializers.CharField(source='get_target_role_display', read_only=True)
     
     class Meta:
         model = Notification
         fields = [
-            'id', 'notification_type', 'notification_type_display', 'title',
-            'is_read', 'priority', 'created_at'
+            'id', 'notification_type', 'notification_type_display', 'title', 'message',
+            'is_read', 'priority', 'priority_display', 'target_role', 'target_role_display',
+            'created_at'
         ]
         read_only_fields = fields
 
@@ -46,9 +50,11 @@ class NotificationMarkReadSerializer(serializers.Serializer):
     
     def validate_notification_ids(self, value):
         """Validate notification ID list"""
+        from django.db.models import Q
         user = self.context['request'].user
+        user_role = getattr(user, 'role', None)
         valid_ids = Notification.objects.filter(
-            user=user,
+            Q(user=user) | Q(target_role=user_role),
             id__in=value
         ).values_list('id', flat=True)
         
@@ -143,9 +149,15 @@ class NotificationCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notification
         fields = [
-            'user', 'notification_type', 'title', 'message', 'priority',
+            'user', 'target_role', 'notification_type', 'title', 'message', 'priority',
             'related_appointment', 'related_resume', 'related_mentor'
         ]
+    
+    def validate(self, data):
+        """Validate that either user or target_role is set"""
+        if not data.get('user') and not data.get('target_role'):
+            raise serializers.ValidationError("Either 'user' or 'target_role' must be set")
+        return data
     
     def validate_user(self, value):
         """Validate user"""

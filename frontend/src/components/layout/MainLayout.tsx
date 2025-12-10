@@ -1,10 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useSelector, useDispatch } from 'react-redux';
+import { useSelector } from 'react-redux';
 import {
-  AppBar,
   Box,
-  CssBaseline,
   Drawer,
   IconButton,
   List,
@@ -14,9 +12,6 @@ import {
   ListItemText,
   Toolbar,
   Typography,
-  Badge,
-  Menu,
-  MenuItem,
   Divider,
 } from '@mui/material';
 import {
@@ -25,12 +20,10 @@ import {
   People,
   Event,
   Description,
-  Notifications,
-  AccountCircle,
   AdminPanelSettings,
 } from '@mui/icons-material';
 import { RootState } from '../../store';
-import { logout } from '../../store/slices/authSlice';
+import { hasAdminAccess } from '../../utils/adminPermissions';
 
 const drawerWidth = 240;
 
@@ -41,28 +34,12 @@ interface MainLayoutProps {
 const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const dispatch = useDispatch();
   const { user } = useSelector((state: RootState) => state.auth);
-  const { unreadCount } = useSelector((state: RootState) => state.notifications);
 
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
-  };
-
-  const handleProfileMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleProfileMenuClose = () => {
-    setAnchorEl(null);
-  };
-
-  const handleLogout = () => {
-    dispatch(logout());
-    navigate('/login');
   };
 
   const menuItems = [
@@ -72,7 +49,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     { text: 'Resumes', icon: <Description />, path: '/resumes' },
   ];
 
-  if (user?.role === 'admin') {
+  // Show Admin link for admin, staff, or superadmin
+  if (hasAdminAccess(user) || (user?.role === 'staff')) {
     menuItems.push({ text: 'Admin', icon: <AdminPanelSettings />, path: '/admin' });
   }
 
@@ -101,54 +79,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   );
 
   return (
-    <Box sx={{ display: 'flex' }}>
-      <CssBaseline />
-      <AppBar
-        position="fixed"
-        sx={{
-          width: { sm: `calc(100% - ${drawerWidth}px)` },
-          ml: { sm: `${drawerWidth}px` },
-        }}
-      >
-        <Toolbar>
-          <IconButton
-            color="inherit"
-            aria-label="open drawer"
-            edge="start"
-            onClick={handleDrawerToggle}
-            sx={{ mr: 2, display: { sm: 'none' } }}
-          >
-            <MenuIcon />
-          </IconButton>
-          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            {menuItems.find((item) => item.path === location.pathname)?.text || 'CareerBridge'}
-          </Typography>
-          <IconButton color="inherit">
-            <Badge badgeContent={unreadCount} color="error">
-              <Notifications />
-            </Badge>
-          </IconButton>
-          <IconButton
-            color="inherit"
-            onClick={handleProfileMenuOpen}
-            aria-controls="profile-menu"
-            aria-haspopup="true"
-          >
-            <AccountCircle />
-          </IconButton>
-          <Menu
-            id="profile-menu"
-            anchorEl={anchorEl}
-            open={Boolean(anchorEl)}
-            onClose={handleProfileMenuClose}
-          >
-            <MenuItem onClick={() => navigate('/profile')}>Profile</MenuItem>
-            <MenuItem onClick={() => navigate('/settings')}>Settings</MenuItem>
-            <Divider />
-            <MenuItem onClick={handleLogout}>Logout</MenuItem>
-          </Menu>
-        </Toolbar>
-      </AppBar>
+    <Box sx={{ display: 'flex', flexGrow: 1, width: '100%' }}>
       <Box
         component="nav"
         sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}
@@ -171,7 +102,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           variant="permanent"
           sx={{
             display: { xs: 'none', sm: 'block' },
-            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
+            '& .MuiDrawer-paper': { 
+              boxSizing: 'border-box', 
+              width: drawerWidth,
+              position: 'relative',
+              height: '100%',
+            },
           }}
           open
         >
@@ -184,7 +120,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           flexGrow: 1,
           p: 3,
           width: { sm: `calc(100% - ${drawerWidth}px)` },
-          mt: '64px', // AppBar height
+          minWidth: 0, // Prevents overflow
         }}
       >
         {children}

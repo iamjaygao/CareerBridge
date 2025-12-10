@@ -23,6 +23,7 @@ from .serializers import (
     MentorAnalyticsSerializer, MentorAvailabilitySlotSerializer, MentorRankingSerializer
 )
 from .services import MentorRecommendationService, MentorSearchService, MentorAnalyticsService
+from adminpanel.permissions import IsAdminUser
 
 class MentorListView(generics.ListAPIView):
     """List all approved mentors with filtering and search"""
@@ -469,8 +470,8 @@ class MentorAnalyticsView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class PlatformAnalyticsView(APIView):
-    """Get platform-wide analytics (admin only)"""
-    permission_classes = [permissions.IsAdminUser]
+    """Platform-wide analytics (admin only)"""
+    permission_classes = [IsAdminUser]
     
     @swagger_auto_schema(
         operation_description="Get platform-wide analytics (admin only)",
@@ -508,6 +509,9 @@ class MentorServiceUpdateView(generics.UpdateAPIView):
     
     def get_queryset(self):
         user = self.request.user
+        # Allow superadmin to access any mentor service
+        if user_has_role(user, 'superadmin'):
+            return MentorService.objects.all()
         if not hasattr(user, 'mentor_profile'):
             return MentorService.objects.none()
         return MentorService.objects.filter(mentor=user.mentor_profile)
@@ -519,6 +523,9 @@ class MentorAvailabilityUpdateView(generics.UpdateAPIView):
     
     def get_queryset(self):
         user = self.request.user
+        # Allow superadmin to access any mentor availability
+        if user_has_role(user, 'superadmin'):
+            return MentorAvailability.objects.all()
         if not hasattr(user, 'mentor_profile'):
             return MentorAvailability.objects.none()
         return MentorAvailability.objects.filter(mentor=user.mentor_profile)

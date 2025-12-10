@@ -6,21 +6,31 @@ interface SettingsState {
   notifications: {
     email: boolean;
     push: boolean;
+    sms: boolean;
+    appointmentReminders: boolean;
+    paymentNotifications: boolean;
     desktop: boolean;
   };
   accessibility: {
     fontSize: number;
-    contrast: 'normal' | 'high';
+    highContrast: boolean;
+    screenReader: boolean;
     reducedMotion: boolean;
+    contrast: string;
   };
   privacy: {
-    shareProfile: boolean;
+    profileVisibility: boolean;
+    dataSharing: boolean;
+    analytics: boolean;
     showOnlineStatus: boolean;
+    shareProfile: boolean;
   };
   display: {
-    sidebarCollapsed: boolean;
+    compactMode: boolean;
+    showAvatars: boolean;
     denseMode: boolean;
     listView: boolean;
+    sidebarCollapsed: boolean;
   };
 }
 
@@ -30,21 +40,31 @@ const initialState: SettingsState = {
   notifications: {
     email: true,
     push: true,
+    sms: false,
+    appointmentReminders: true,
+    paymentNotifications: true,
     desktop: true,
   },
   accessibility: {
-    fontSize: 16,
-    contrast: 'normal',
+    fontSize: 14,
+    highContrast: false,
+    screenReader: false,
     reducedMotion: false,
+    contrast: 'normal',
   },
   privacy: {
-    shareProfile: true,
+    profileVisibility: true,
+    dataSharing: false,
+    analytics: true,
     showOnlineStatus: true,
+    shareProfile: true,
   },
   display: {
-    sidebarCollapsed: false,
+    compactMode: false,
+    showAvatars: true,
     denseMode: false,
     listView: false,
+    sidebarCollapsed: false,
   },
 };
 
@@ -87,3 +107,4 @@ export const {
 } = settingsSlice.actions;
 
 export default settingsSlice.reducer;
+

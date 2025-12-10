@@ -154,11 +154,10 @@ const CreateAppointmentPage: React.FC = () => {
     try {
       setLoading(true);
       const appointmentData = {
-        mentor_id: form.mentor_id,
-        service_id: form.service_id,
-        scheduled_date: format(form.scheduled_date, 'yyyy-MM-dd'),
-        scheduled_time: form.scheduled_time,
-        user_notes: form.user_notes,
+        mentor: form.mentor_id,
+        date: format(form.scheduled_date, 'yyyy-MM-dd'),
+        time: form.scheduled_time,
+        notes: form.user_notes,
       };
 
       await appointmentService.createAppointment(appointmentData);
@@ -180,7 +179,7 @@ const CreateAppointmentPage: React.FC = () => {
     return <ErrorAlert message={error} />;
   }
 
-  const selectedService = selectedMentor?.services.find(s => s.id === form.service_id);
+  const selectedService = selectedMentor?.services?.find(s => s.id === form.service_id);
 
   return (
     <>
@@ -251,7 +250,7 @@ const CreateAppointmentPage: React.FC = () => {
                       Services Offered by {selectedMentor.user.first_name}
                     </Typography>
                     <Grid container spacing={2}>
-                      {selectedMentor.services.map((service) => (
+                      {selectedMentor.services?.map((service) => (
                         <Grid item xs={12} key={service.id}>
                           <Paper 
                             sx={{ 

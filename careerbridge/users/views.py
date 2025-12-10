@@ -39,14 +39,26 @@ class RegisterView(APIView):
         }
     )
     def post(self, request):
+        from django.conf import settings
+        
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
+            user = serializer.save()
             
             # after this line the python dictionary is converted back to JSON automatically
             # and sent back to the frontend.
+            is_development = getattr(settings, 'DEBUG', False)
+            
+            # Determine message based on user role and environment
+            if user.role == 'admin':
+                message = 'Admin user registered successfully. You can now log in immediately.'
+            elif is_development:
+                message = 'User registered successfully. In development mode, your account is automatically verified. You can log in immediately.'
+            else:
+                message = 'User registered successfully. Please check your email and click the verification link to activate your account. You must verify your email before you can log in.'
+            
             return Response({
-                'message': 'User registered successfully. Please check your email and click the verification link to activate your account. You must verify your email before you can log in.'
+                'message': message
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

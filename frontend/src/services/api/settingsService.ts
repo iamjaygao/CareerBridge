@@ -1,106 +1,94 @@
 import apiClient from './client';
 
+// Settings interface
 export interface UserSettings {
-  theme: 'light' | 'dark';
-  language: string;
-  notifications: {
-    email: boolean;
-    push: boolean;
-    desktop: boolean;
+  theme?: 'light' | 'dark';
+  language?: string;
+  notifications?: {
+    email?: boolean;
+    push?: boolean;
+    sms?: boolean;
+    appointmentReminders?: boolean;
+    paymentNotifications?: boolean;
   };
-  accessibility: {
-    fontSize: number;
-    contrast: 'normal' | 'high';
-    reducedMotion: boolean;
+  accessibility?: {
+    fontSize?: number;
+    highContrast?: boolean;
+    screenReader?: boolean;
   };
-  privacy: {
-    shareProfile: boolean;
-    showOnlineStatus: boolean;
+  privacy?: {
+    profileVisibility?: boolean;
+    dataSharing?: boolean;
+    analytics?: boolean;
   };
-  display: {
-    sidebarCollapsed: boolean;
-    denseMode: boolean;
-    listView: boolean;
+  display?: {
+    compactMode?: boolean;
+    showAvatars?: boolean;
   };
 }
 
 class SettingsService {
-  async getUserSettings(): Promise<UserSettings> {
+  /**
+   * Update user settings on the server
+   */
+  async updateUserSettings(settings: UserSettings): Promise<void> {
     try {
-      const response = await apiClient.get('/api/settings/');
-      return response.data;
-    } catch (error) {
-      console.error('Failed to fetch user settings:', error);
-      // Return default settings if API fails
-      return this.getDefaultSettings();
-    }
-  }
-
-  async updateUserSettings(settings: Partial<UserSettings>): Promise<UserSettings> {
-    try {
-      const response = await apiClient.patch('/api/settings/', settings);
-      return response.data;
+      await apiClient.put('/users/settings/', settings);
     } catch (error) {
       console.error('Failed to update user settings:', error);
-      throw new Error('Failed to save settings');
+      throw error;
     }
   }
 
-  async resetToDefaults(): Promise<UserSettings> {
+  /**
+   * Get user settings from the server
+   */
+  async getUserSettings(): Promise<UserSettings> {
     try {
-      const response = await apiClient.post('/api/settings/reset/');
+      const response = await apiClient.get('/users/settings/');
       return response.data;
     } catch (error) {
-      console.error('Failed to reset settings:', error);
-      throw new Error('Failed to reset settings');
+      console.error('Failed to get user settings:', error);
+      throw error;
     }
   }
 
-  getDefaultSettings(): UserSettings {
-    return {
-      theme: 'light',
-      language: 'en',
-      notifications: {
-        email: true,
-        push: true,
-        desktop: true,
-      },
-      accessibility: {
-        fontSize: 16,
-        contrast: 'normal',
-        reducedMotion: false,
-      },
-      privacy: {
-        shareProfile: true,
-        showOnlineStatus: true,
-      },
-      display: {
-        sidebarCollapsed: false,
-        denseMode: false,
-        listView: false,
-      },
-    };
-  }
-
-  // Local storage fallback for offline functionality
+  /**
+   * Save settings to local storage (offline mode)
+   */
   saveToLocalStorage(settings: UserSettings): void {
     try {
-      localStorage.setItem('userSettings', JSON.stringify(settings));
+      localStorage.setItem('user_settings', JSON.stringify(settings));
     } catch (error) {
-      console.error('Failed to save settings to localStorage:', error);
+      console.error('Failed to save settings to local storage:', error);
     }
   }
 
-  loadFromLocalStorage(): UserSettings | null {
+  /**
+   * Get settings from local storage
+   */
+  getFromLocalStorage(): UserSettings | null {
     try {
-      const stored = localStorage.getItem('userSettings');
-      return stored ? JSON.parse(stored) : null;
+      const settings = localStorage.getItem('user_settings');
+      return settings ? JSON.parse(settings) : null;
     } catch (error) {
-      console.error('Failed to load settings from localStorage:', error);
+      console.error('Failed to get settings from local storage:', error);
       return null;
+    }
+  }
+
+  /**
+   * Clear settings from local storage
+   */
+  clearLocalStorage(): void {
+    try {
+      localStorage.removeItem('user_settings');
+    } catch (error) {
+      console.error('Failed to clear settings from local storage:', error);
     }
   }
 }
 
 const settingsService = new SettingsService();
-export default settingsService; 
+export default settingsService;
+

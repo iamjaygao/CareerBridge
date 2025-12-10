@@ -1,7 +1,57 @@
+# Python
 myvenv/
 __pycache__/
 *.pyc
-.DS_Store
-.vscode/
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Environment
 .env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Database
 *.sqlite3
+*.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Test reports
+test_report_*.json
+admin_test_report_*.json
+
+# Build
+build/
+dist/
+*.egg-info/
+
+# Node modules (frontend)
+frontend/node_modules/
+frontend/build/
+
+# Coverage
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+venv/
+careerbridge/venv/

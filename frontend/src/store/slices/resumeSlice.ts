@@ -1,46 +1,67 @@
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import resumeService, { Resume } from '../../services/api/resumeService';
+import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
+import apiClient from '../../services/api/client';
+
+interface Resume {
+  id: number;
+  title: string;
+  file: string;
+  status: string;
+  created_at: string;
+  analyzed_at?: string;
+  uploaded_at?: string;
+  file_type?: string;
+  file_size?: number;
+  analysis_result?: any;
+  analysis?: any;
+}
 
 interface ResumeState {
   resumes: Resume[];
   loading: boolean;
   error: string | null;
-  uploadProgress: number | null;
+  selectedResume: Resume | null;
+  uploadProgress: number;
 }
 
 const initialState: ResumeState = {
   resumes: [],
   loading: false,
   error: null,
-  uploadProgress: null,
+  selectedResume: null,
+  uploadProgress: 0,
 };
 
-export const fetchResumes = createAsyncThunk(
-  'resumes/fetchResumes',
-  async () => {
-    return await resumeService.getResumes();
-  }
-);
+export const fetchResumes = createAsyncThunk('resumes/fetchAll', async () => {
+  const response = await apiClient.get('/resumes/');
+  return response.data.results || response.data;
+});
 
 export const uploadResume = createAsyncThunk(
-  'resumes/uploadResume',
-  async ({ file, title }: { file: File; title?: string }) => {
-    return await resumeService.uploadResume(file, title);
+  'resumes/upload',
+  async (data: { file: File; title: string }) => {
+    const formData = new FormData();
+    formData.append('file', data.file);
+    formData.append('title', data.title);
+    
+    const response = await apiClient.post('/resumes/', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
   }
 );
 
-export const deleteResume = createAsyncThunk(
-  'resumes/deleteResume',
-  async (id: number) => {
-    await resumeService.deleteResume(id);
-    return id;
-  }
-);
+export const deleteResume = createAsyncThunk('resumes/delete', async (id: number) => {
+  await apiClient.delete(`/resumes/${id}/`);
+  return id;
+});
 
 export const analyzeResume = createAsyncThunk(
-  'resumes/analyzeResume',
+  'resumes/analyze',
   async (id: number) => {
-    return await resumeService.analyzeResume(id);
+    const response = await apiClient.post(`/resumes/${id}/analyze/`, {});
+    return response.data;
   }
 );
 
@@ -48,15 +69,14 @@ const resumeSlice = createSlice({
   name: 'resumes',
   initialState,
   reducers: {
-    setUploadProgress: (state, action) => {
-      state.uploadProgress = action.payload;
+    setSelectedResume: (state, action: PayloadAction<Resume | null>) => {
+      state.selectedResume = action.payload;
     },
-    resetUploadProgress: (state) => {
-      state.uploadProgress = null;
+    clearError: (state) => {
+      state.error = null;
     },
   },
   extraReducers: (builder) => {
-    // Fetch resumes
     builder
       .addCase(fetchResumes.pending, (state) => {
         state.loading = true;
@@ -70,60 +90,15 @@ const resumeSlice = createSlice({
         state.loading = false;
         state.error = action.error.message || 'Failed to fetch resumes';
       })
-
-    // Upload resume
-      .addCase(uploadResume.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
       .addCase(uploadResume.fulfilled, (state, action) => {
-        state.loading = false;
         state.resumes.unshift(action.payload);
-        state.uploadProgress = null;
-      })
-      .addCase(uploadResume.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.error.message || 'Failed to upload resume';
-        state.uploadProgress = null;
-      })
-
-    // Delete resume
-      .addCase(deleteResume.pending, (state) => {
-        state.loading = true;
-        state.error = null;
       })
       .addCase(deleteResume.fulfilled, (state, action) => {
-        state.loading = false;
-        state.resumes = state.resumes.filter(resume => resume.id !== action.payload);
-      })
-      .addCase(deleteResume.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.error.message || 'Failed to delete resume';
-      })
-
-    // Analyze resume
-      .addCase(analyzeResume.pending, (state, action) => {
-        const resume = state.resumes.find(r => r.id === action.meta.arg);
-        if (resume) {
-          resume.status = 'analyzing';
-        }
-      })
-      .addCase(analyzeResume.fulfilled, (state, action) => {
-        const index = state.resumes.findIndex(r => r.id === action.payload.id);
-        if (index !== -1) {
-          state.resumes[index] = action.payload;
-        }
-      })
-      .addCase(analyzeResume.rejected, (state, action) => {
-        const resume = state.resumes.find(r => r.id === action.meta.arg);
-        if (resume) {
-          resume.status = 'failed';
-        }
-        state.error = action.error.message || 'Failed to analyze resume';
+        state.resumes = state.resumes.filter((r) => r.id !== action.payload);
       });
   },
 });
 
-export const { setUploadProgress, resetUploadProgress } = resumeSlice.actions;
-
+export const { setSelectedResume, clearError } = resumeSlice.actions;
 export default resumeSlice.reducer;
+
