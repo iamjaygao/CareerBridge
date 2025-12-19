@@ -17,7 +17,7 @@ import {
   ResponsiveContainer,
   RadarChart,
   PolarGrid,
-  PolarAngleAxis,
+  PolarAngleAxis as _PolarAngleAxis,
   PolarRadiusAxis,
   Radar,
   ComposedChart,
@@ -25,6 +25,8 @@ import {
   ScatterChart,
 } from 'recharts';
 import { Box, Typography, Paper } from '@mui/material';
+
+const PolarAngleAxis = _PolarAngleAxis as unknown as any;
 
 export interface ChartDataPoint {
   name: string;
@@ -305,4 +307,5 @@ export const ComposedChartComponent: React.FC<Omit<ChartConfig, 'type'>> = (prop
   <EnhancedCharts {...props} type="composed" />
 );
 
-export default EnhancedCharts; 
+export default EnhancedCharts;
+

@@ -3,9 +3,9 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
-from . serializers import ( RegisterSerializer,LoginSerializer, UserSerializer,
-    UserUpdateSerializer, PasswordChangeSerializer, EmailVerificationSerializer, ResendVerificationSerializer,
-    PasswordResetRequestSerializer, PasswordResetSerializer, UsernameRecoverySerializer)
+from .serializers import ( RegisterSerializer,LoginSerializer, UserSerializer,
+    UserUpdateSerializer, PasswordChangeSerializer,  ResendVerificationSerializer,
+    PasswordResetRequestSerializer, PasswordResetSerializer)
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from django.utils import timezone
@@ -18,6 +18,8 @@ from .models import User
 # Register View
 # Handles user registration with email and password
 #----------------------------------------------------------
+print("🔥 USERS.VIEWS LOADED FROM:", __file__)
+
 
 class RegisterView(APIView):
     # when a frontend sends a JSON request, DRF will automatically convert it to 
@@ -40,7 +42,7 @@ class RegisterView(APIView):
     )
     def post(self, request):
         from django.conf import settings
-        
+
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
@@ -60,6 +62,8 @@ class RegisterView(APIView):
             return Response({
                 'message': message
             }, status=status.HTTP_201_CREATED)
+        
+ 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 #----------------------------------------------------------
@@ -152,82 +156,6 @@ class PasswordResetView(APIView):
                 'message': 'Password reset successfully. You can now log in with your new password.'
             }, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-#----------------------------------------------------------
-# Username Recovery View
-# Handles username recovery via email
-#----------------------------------------------------------
-class UsernameRecoveryView(APIView):
-    @swagger_auto_schema(
-        operation_description="Recover username via email",
-        request_body=UsernameRecoverySerializer,
-        responses={
-            200: openapi.Response(
-                description="Username recovery email sent successfully",
-                schema=openapi.Schema(
-                    type=openapi.TYPE_OBJECT,
-                    properties={
-                        'message': openapi.Schema(type=openapi.TYPE_STRING)
-                    }
-                )
-            ),
-            400: openapi.Response(description="Username recovery failed")
-        }
-    )
-    def post(self, request):
-        serializer = UsernameRecoverySerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response({
-                'message': 'Username recovery email sent successfully. Please check your email for your username.'
-            }, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-#----------------------------------------------------------
-# Email Verification View
-# Handles email verification via token
-#----------------------------------------------------------
-class EmailVerificationView(APIView):
-    @swagger_auto_schema(
-        operation_description="Verify email using verification token",
-        responses={
-            200: openapi.Response(
-                description="Email verified successfully",
-                schema=openapi.Schema(
-                    type=openapi.TYPE_OBJECT,
-                    properties={
-                        'message': openapi.Schema(type=openapi.TYPE_STRING)
-                    }
-                )
-            ),
-            400: openapi.Response(description="Verification failed")
-        }
-    )
-    def get(self, request, token):
-        try:
-            user = User.objects.get(email_verification_token=token)
-            
-            # Check if token is expired (24 hours)
-            if user.email_verification_sent_at:
-                token_age = timezone.now() - user.email_verification_sent_at
-                if token_age > timedelta(hours=24):
-                    return Response({
-                        'error': 'Verification link has expired. Please request a new one.'
-                    }, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Verify email
-            user.email_verified = True
-            user.save()
-            
-            return Response({
-                'message': 'Email verified successfully! You can now log in.'
-            }, status=status.HTTP_200_OK)
-            
-        except User.DoesNotExist:
-            return Response({
-                'error': 'Invalid verification token.'
-            }, status=status.HTTP_400_BAD_REQUEST)
-
 #----------------------------------------------------------
 # Resend Verification Email View
 # Handles resending verification emails
@@ -456,85 +384,3 @@ class RefreshTokenView(TokenRefreshView):
     def post(self, request, *args, **kwargs):
         return super().post(request, *args, **kwargs)
 
-class DashboardView(APIView):
-    permission_classes = [IsAuthenticated]
-    
-    @swagger_auto_schema(
-        operation_description="Get user dashboard statistics",
-        responses={
-            200: openapi.Response(
-                description="Dashboard data retrieved successfully",
-                schema=openapi.Schema(
-                    type=openapi.TYPE_OBJECT,
-                    properties={
-                        'stats': openapi.Schema(
-                            type=openapi.TYPE_OBJECT,
-                            properties={
-                                'upcomingAppointments': openapi.Schema(type=openapi.TYPE_INTEGER),
-                                'resumesUploaded': openapi.Schema(type=openapi.TYPE_INTEGER),
-                                'mentorSessions': openapi.Schema(type=openapi.TYPE_INTEGER),
-                                'profileViews': openapi.Schema(type=openapi.TYPE_INTEGER),
-                            }
-                        ),
-                        'activities': openapi.Schema(
-                            type=openapi.TYPE_ARRAY,
-                            items=openapi.Schema(
-                                type=openapi.TYPE_OBJECT,
-                                properties={
-                                    'id': openapi.Schema(type=openapi.TYPE_STRING),
-                                    'type': openapi.Schema(type=openapi.TYPE_STRING),
-                                    'description': openapi.Schema(type=openapi.TYPE_STRING),
-                                    'timestamp': openapi.Schema(type=openapi.TYPE_STRING),
-                                }
-                            )
-                        )
-                    }
-                )
-            ),
-            401: openapi.Response(description="Authentication required")
-        }
-    )
-    def get(self, request):
-        """Get dashboard statistics for the current user"""
-        user = request.user
-        
-        # Get upcoming appointments count
-        from appointments.models import Appointment
-        upcoming_appointments = Appointment.objects.filter(
-            user=user,
-            status__in=['pending', 'confirmed']
-        ).count()
-        
-        # Get resumes count
-        from resumes.models import Resume
-        resumes_uploaded = Resume.objects.filter(user=user).count()
-        
-        # Get mentor sessions count (completed appointments)
-        mentor_sessions = Appointment.objects.filter(
-            user=user,
-            status='completed'
-        ).count()
-        
-        # Profile views (placeholder - could be implemented later)
-        profile_views = 0
-        
-        # Recent activities (placeholder)
-        activities = [
-            {
-                'id': '1',
-                'type': 'appointment',
-                'description': 'You have an upcoming appointment',
-                'timestamp': timezone.now().isoformat()
-            }
-        ]
-        
-        return Response({
-            'stats': {
-                'upcomingAppointments': upcoming_appointments,
-                'resumesUploaded': resumes_uploaded,
-                'mentorSessions': mentor_sessions,
-                'profileViews': profile_views,
-            },
-            'activities': activities
-        }, status=status.HTTP_200_OK)        
-        

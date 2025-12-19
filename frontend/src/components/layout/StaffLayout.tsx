@@ -1,13 +1,11 @@
 import React, { useState } from 'react';
 import { Box } from '@mui/material';
+import { Outlet } from 'react-router-dom';
+
 import StaffSidebar from './StaffSidebar';
 import StaffTopbar from './StaffTopbar';
 
-interface StaffLayoutProps {
-  children: React.ReactNode;
-}
-
-const StaffLayout: React.FC<StaffLayoutProps> = ({ children }) => {
+const StaffLayout: React.FC = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleDrawerToggle = () => {
@@ -17,7 +15,10 @@ const StaffLayout: React.FC<StaffLayoutProps> = ({ children }) => {
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'grey.50' }}>
       {/* Staff Sidebar */}
-      <StaffSidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
+      <StaffSidebar
+        mobileOpen={mobileOpen}
+        onMobileClose={() => setMobileOpen(false)}
+      />
 
       {/* Main content area */}
       <Box
@@ -41,7 +42,7 @@ const StaffLayout: React.FC<StaffLayoutProps> = ({ children }) => {
             bgcolor: 'grey.50',
           }}
         >
-          {children}
+          <Outlet />
         </Box>
       </Box>
     </Box>
@@ -49,4 +50,3 @@ const StaffLayout: React.FC<StaffLayoutProps> = ({ children }) => {
 };
 
 export default StaffLayout;
-

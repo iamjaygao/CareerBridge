@@ -208,59 +208,85 @@ class ExternalJobCrawlerView(generics.CreateAPIView):
     serializer_class = ExternalJobCrawlRequestSerializer
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [BurstRateThrottle]
-    manager = ExternalServiceManager()
 
-    @swagger_auto_schema(
-        operation_description="Trigger external job crawler and store jobs in DB",
-        request_body=ExternalJobCrawlRequestSerializer,
-        responses={200: JobDescriptionSerializer(many=True)}
-    )
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+
         job_title = serializer.validated_data['job_title']
         location = serializer.validated_data['location']
         sources = serializer.validated_data.get('sources')
         limit = serializer.validated_data.get('limit', 20)
 
         try:
-            stored = self.manager.crawl_and_store_jobs(
+            # ✅ request-time 创建（唯一正确方式）
+            manager = ExternalServiceManager()
+
+            stored = manager.crawl_and_store_jobs(
                 job_title=job_title,
                 location=location,
                 sources=sources,
                 limit=limit,
                 user=request.user
             )
-            return Response(JobDescriptionSerializer(stored, many=True).data, status=status.HTTP_200_OK)
-        except Exception as e:
-            return Response({'error': 'External service unavailable', 'fallback': True}, status=status.HTTP_502_BAD_GATEWAY)
+
+            return Response(
+                JobDescriptionSerializer(stored, many=True).data,
+                status=status.HTTP_200_OK
+            )
+
+        except Exception:
+            return Response(
+                {'error': 'External service unavailable', 'fallback': True},
+                status=status.HTTP_502_BAD_GATEWAY
+            )
 
 class ExternalResumeMatcherView(generics.CreateAPIView):
     """Match a resume to an existing job description via external ResumeMatcher service"""
     serializer_class = ExternalResumeMatchRequestSerializer
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [BurstRateThrottle]
-    manager = ExternalServiceManager()
 
-    @swagger_auto_schema(
-        operation_description="Match a resume to a job description using ResumeMatcher",
-        request_body=ExternalResumeMatchRequestSerializer,
-        responses={200: ResumeJobMatchSerializer}
-    )
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        resume = get_object_or_404(Resume, id=serializer.validated_data['resume_id'], user=request.user)
-        job = get_object_or_404(JobDescription, id=serializer.validated_data['job_description_id'])
+
+        resume = get_object_or_404(
+            Resume,
+            id=serializer.validated_data['resume_id'],
+            user=request.user
+        )
+        job = get_object_or_404(
+            JobDescription,
+            id=serializer.validated_data['job_description_id']
+        )
 
         try:
-            match = self.manager.match_resume_to_external_jd(resume=resume, job_description=job, user=request.user)
-            if not match:
-                return Response({'error': 'Matching failed'}, status=status.HTTP_400_BAD_REQUEST)
-            return Response(ResumeJobMatchSerializer(match).data, status=status.HTTP_200_OK)
-        except Exception:
-            return Response({'error': 'External service unavailable', 'fallback': True}, status=status.HTTP_502_BAD_GATEWAY)
+            # ✅ request-time 创建
+            manager = ExternalServiceManager()
 
+            match = manager.match_resume_to_external_jd(
+                resume=resume,
+                job_description=job,
+                user=request.user
+            )
+
+            if not match:
+                return Response(
+                    {'error': 'Matching failed'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            return Response(
+                ResumeJobMatchSerializer(match).data,
+                status=status.HTTP_200_OK
+            )
+
+        except Exception:
+            return Response(
+                {'error': 'External service unavailable', 'fallback': True},
+                status=status.HTTP_502_BAD_GATEWAY
+            )
 class ExternalServicesHealthView(generics.GenericAPIView):
     """Health check for external service integrations (ResumeMatcher, JobCrawler)"""
     permission_classes = [permissions.AllowAny]  # Allow public access for health checks

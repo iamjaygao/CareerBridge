@@ -1,13 +1,11 @@
 import React, { useState } from 'react';
 import { Box } from '@mui/material';
+import { Outlet } from 'react-router-dom';
+
 import SuperAdminSidebar from './SuperAdminSidebar';
 import SuperAdminTopbar from './SuperAdminTopbar';
 
-interface SuperAdminLayoutProps {
-  children: React.ReactNode;
-}
-
-const SuperAdminLayout: React.FC<SuperAdminLayoutProps> = ({ children }) => {
+const SuperAdminLayout: React.FC = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleDrawerToggle = () => {
@@ -17,7 +15,10 @@ const SuperAdminLayout: React.FC<SuperAdminLayoutProps> = ({ children }) => {
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: '#F8FAFC' }}>
       {/* SuperAdmin Sidebar */}
-      <SuperAdminSidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
+      <SuperAdminSidebar
+        mobileOpen={mobileOpen}
+        onMobileClose={() => setMobileOpen(false)}
+      />
 
       {/* Main content area */}
       <Box
@@ -41,7 +42,7 @@ const SuperAdminLayout: React.FC<SuperAdminLayoutProps> = ({ children }) => {
             bgcolor: '#F8FAFC',
           }}
         >
-          {children}
+          <Outlet />
         </Box>
       </Box>
     </Box>
@@ -49,4 +50,3 @@ const SuperAdminLayout: React.FC<SuperAdminLayoutProps> = ({ children }) => {
 };
 
 export default SuperAdminLayout;
-

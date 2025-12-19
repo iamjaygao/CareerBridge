@@ -1,0 +1,16 @@
+def get_student_dashboard_stats(user):
+    from appointments.models import Appointment
+    from resumes.models import Resume
+
+    return {
+        "upcomingAppointments": Appointment.objects.filter(
+            user=user,
+            status__in=["pending", "confirmed"],
+        ).count(),
+        "mentorSessions": Appointment.objects.filter(
+            user=user,
+            status="completed",
+        ).count(),
+        "resumesUploaded": Resume.objects.filter(user=user).count(),
+        "profileViews": 0,
+    }

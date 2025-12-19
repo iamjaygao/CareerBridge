@@ -1,13 +1,11 @@
 import React, { useState } from 'react';
 import { Box } from '@mui/material';
+import { Outlet } from 'react-router-dom';
+
 import MentorSidebar from './MentorSidebar';
 import MentorTopbar from './MentorTopbar';
 
-interface MentorLayoutProps {
-  children: React.ReactNode;
-}
-
-const MentorLayout: React.FC<MentorLayoutProps> = ({ children }) => {
+const MentorLayout: React.FC = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleDrawerToggle = () => {
@@ -17,7 +15,10 @@ const MentorLayout: React.FC<MentorLayoutProps> = ({ children }) => {
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'grey.50' }}>
       {/* Mentor Sidebar */}
-      <MentorSidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
+      <MentorSidebar
+        mobileOpen={mobileOpen}
+        onMobileClose={() => setMobileOpen(false)}
+      />
 
       {/* Main content area */}
       <Box
@@ -41,7 +42,7 @@ const MentorLayout: React.FC<MentorLayoutProps> = ({ children }) => {
             bgcolor: 'grey.50',
           }}
         >
-          {children}
+          <Outlet />
         </Box>
       </Box>
     </Box>
@@ -49,4 +50,3 @@ const MentorLayout: React.FC<MentorLayoutProps> = ({ children }) => {
 };
 
 export default MentorLayout;
-

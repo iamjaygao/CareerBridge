@@ -1,6 +1,10 @@
 import React, { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useNavigate, Link as RouterLink, useLocation } from 'react-router-dom';
+import {
+  useNavigate,
+  Link as RouterLink,
+  useLocation,
+} from 'react-router-dom';
 import {
   Container,
   Paper,
@@ -16,14 +20,19 @@ import { LockOutlined } from '@mui/icons-material';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
+
 import { loginUser, clearError } from '../../store/slices/authSlice';
 import { RootState, AppDispatch } from '../../store';
+import { getLandingPathByRole } from '../../utils/roleLanding';
 
+// ========================
 // Validation schema
+// ========================
+
 const schema = yup.object({
   login: yup.string().required('Username or email is required'),
   password: yup.string().required('Password is required'),
-}).required();
+});
 
 interface LoginFormData {
   login: string;
@@ -34,10 +43,8 @@ const LoginPage: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
   const location = useLocation();
-  const { loading, error, isAuthenticated } = useSelector((state: RootState) => state.auth);
-  
-  // Get redirect path from location state
-  const redirectTo = (location.state as any)?.redirectTo || '/dashboard';
+
+  const { loading, error } = useSelector((state: RootState) => state.auth);
 
   const {
     register,
@@ -47,54 +54,56 @@ const LoginPage: React.FC = () => {
     resolver: yupResolver(schema),
   });
 
-  // Redirect if already authenticated
-  useEffect(() => {
-    if (isAuthenticated) {
-      navigate(redirectTo, { replace: true });
-    }
-  }, [isAuthenticated, navigate, redirectTo]);
-
-  // Clear error when component unmounts
+  // Clear authentication errors on component unmount
   useEffect(() => {
     return () => {
       dispatch(clearError());
     };
   }, [dispatch]);
 
+  // ========================
+  // Login submit
+  // ========================
+
   const onSubmit = async (data: LoginFormData) => {
     try {
-      const loginData = { login: data.login, password: data.password };
-      const result = await dispatch(loginUser(loginData)).unwrap();
+      // 1. Dispatch login action and unwrap the result
+      const result = await dispatch(
+        loginUser({
+          identifier: data.login,
+          password: data.password,
+        })
+      ).unwrap();
+
+      // 2. Extract role from the unified user object
+      const role = result.user?.role;
       
-      // Redirect based on real role
-      const realRole = result.user?.role;
-      let targetPath = '/dashboard'; // default
-      
-      switch (realRole) {
-        case 'superadmin':
-          targetPath = '/superadmin';
-          break;
-        case 'admin':
-          targetPath = '/admin';
-          break;
-        case 'staff':
-          targetPath = '/staff';
-          break;
-        case 'mentor':
-          targetPath = '/mentor';
-          break;
-        case 'student':
-          targetPath = '/dashboard';
-          break;
-        default:
-          targetPath = '/dashboard';
+      // 3. Determine the landing path using the robust helper
+      const landingPath = getLandingPathByRole(role);
+
+      // 4. Defensive check: If the role maps back to /login, 
+      // it means the role is undefined or not configured in frontend
+      if (landingPath === '/login') {
+        console.error('[LOGIN] Access Denied: Unrecognized role configuration');
+        // We let the authSlice error state handle the UI feedback if needed, 
+        // or redirect to a general error/unauthorized page.
+        return;
       }
+
+      // 5. Final navigation logic (priority: intercepted route > role dashboard)
+      const redirectTo = (location.state as any)?.redirectTo || landingPath;
+
+      console.log(`[LOGIN] Success! Navigating to: ${redirectTo}`);
+      navigate(redirectTo, { replace: true });
       
-      navigate(targetPath, { replace: true });
-    } catch (error) {
-      // Error is handled by the slice
+    } catch (e) {
+      console.error('[LOGIN] Process failed:', e);
     }
   };
+
+  // ========================
+  // UI
+  // ========================
 
   return (
     <Container component="main" maxWidth="xs">
@@ -110,10 +119,10 @@ const LoginPage: React.FC = () => {
           elevation={3}
           sx={{
             padding: 4,
+            width: '100%',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            width: '100%',
           }}
         >
           <Box
@@ -125,7 +134,7 @@ const LoginPage: React.FC = () => {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              marginBottom: 2,
+              mb: 2,
             }}
           >
             <LockOutlined sx={{ color: 'white' }} />
@@ -135,7 +144,12 @@ const LoginPage: React.FC = () => {
             Sign In
           </Typography>
 
-          <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 3 }}>
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            align="center"
+            sx={{ mb: 3 }}
+          >
             Welcome to CareerBridge
           </Typography>
 
@@ -145,17 +159,20 @@ const LoginPage: React.FC = () => {
             </Alert>
           )}
 
-          <Box component="form" onSubmit={handleSubmit(onSubmit)} sx={{ width: '100%' }}>
+          <Box
+            component="form"
+            onSubmit={handleSubmit(onSubmit)}
+            sx={{ width: '100%' }}
+          >
             <TextField
               margin="normal"
               fullWidth
               label="Username or Email"
-              placeholder="Enter your username or email"
               autoComplete="username"
               autoFocus
               {...register('login')}
               error={!!errors.login}
-              helperText={errors.login?.message || "You can use your username or email address"}
+              helperText={errors.login?.message}
               disabled={loading}
             />
 
@@ -183,7 +200,7 @@ const LoginPage: React.FC = () => {
 
             <Box sx={{ textAlign: 'center' }}>
               <Link component={RouterLink} to="/register" variant="body2">
-                Don't have an account? Sign Up
+                Don&apos;t have an account? Sign Up
               </Link>
             </Box>
           </Box>
@@ -193,4 +210,4 @@ const LoginPage: React.FC = () => {
   );
 };
 
-export default LoginPage; 
+export default LoginPage;

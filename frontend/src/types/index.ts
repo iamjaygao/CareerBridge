@@ -1,9 +1,12 @@
 // User Types
+
+export type UserRole ='admin' | 'mentor' | 'student' | 'staff'| 'superadmin';
+
 export interface User {
   id: number;
   username: string;
   email: string;
-  role: 'admin' | 'mentor' | 'student' | 'staff';
+  role: UserRole;
   avatar?: string;
   first_name?: string;
   last_name?: string;

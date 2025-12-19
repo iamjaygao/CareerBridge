@@ -46,7 +46,7 @@ const SuperAdminDashboard: React.FC = () => {
   // Redirect if not superadmin
   useEffect(() => {
     if (user && user.role !== 'superadmin') {
-      navigate('/dashboard');
+      navigate('/superadmin', { replace: true });
     }
   }, [user, navigate]);
 

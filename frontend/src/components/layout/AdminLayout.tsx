@@ -1,13 +1,11 @@
 import React, { useState } from 'react';
 import { Box } from '@mui/material';
+import { Outlet } from 'react-router-dom';
+
 import AdminSidebar from './AdminSidebar';
 import AdminTopbar from './AdminTopbar';
 
-interface AdminLayoutProps {
-  children: React.ReactNode;
-}
-
-const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
+const AdminLayout: React.FC = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleDrawerToggle = () => {
@@ -17,7 +15,10 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'grey.50' }}>
       {/* Admin Sidebar */}
-      <AdminSidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
+      <AdminSidebar
+        mobileOpen={mobileOpen}
+        onMobileClose={() => setMobileOpen(false)}
+      />
 
       {/* Main content area */}
       <Box
@@ -41,7 +42,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             bgcolor: 'grey.50',
           }}
         >
-          {children}
+          <Outlet />
         </Box>
       </Box>
     </Box>
@@ -49,4 +50,3 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 };
 
 export default AdminLayout;
-

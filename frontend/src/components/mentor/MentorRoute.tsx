@@ -1,37 +1,42 @@
 import React from 'react';
 import { useSelector } from 'react-redux';
+import { Outlet } from 'react-router-dom';
+
 import { RootState } from '../../store';
 import { canAccessMentor } from '../../utils/adminPermissions';
 import { useRole } from '../../contexts/RoleContext';
+
 import LoadingSpinner from '../common/LoadingSpinner';
 import ForbiddenPage from '../../pages/error/ForbiddenPage';
 
-interface MentorRouteProps {
-  children: React.ReactNode;
-}
-
 /**
  * Protected route component for mentor pages
- * Shows 403 Forbidden page if user is not a mentor
- * Supports role impersonation for superadmin
- * Uses activeRole (impersonate_role from localStorage || user.role)
+ * - Uses activeRole for impersonation support
+ * - Acts as a route guard (NOT a layout)
  */
-const MentorRoute: React.FC<MentorRouteProps> = ({ children }) => {
-  const { user, isAuthenticated } = useSelector((state: RootState) => state.auth);
+const MentorRoute: React.FC = () => {
+  const { user, isAuthenticated, authLoaded } = useSelector(
+    (state: RootState) => state.auth
+  );
   const { activeRole } = useRole();
 
-  // Show loading while checking auth
-  if (!isAuthenticated) {
+  // Still loading auth state
+  if (!authLoaded) {
     return <LoadingSpinner message="Checking authentication..." />;
   }
 
-  // Check if user has mentor access (using activeRole for impersonation support)
+  // Not logged in
+  if (!isAuthenticated) {
+    return <ForbiddenPage />;
+  }
+
+  // No mentor access
   if (!canAccessMentor(user, activeRole)) {
     return <ForbiddenPage />;
   }
 
-  return <>{children}</>;
+  // Authorized → render nested routes
+  return <Outlet />;
 };
 
 export default MentorRoute;
-

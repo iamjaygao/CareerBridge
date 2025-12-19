@@ -1,37 +1,43 @@
 import React from 'react';
 import { useSelector } from 'react-redux';
+import { Outlet } from 'react-router-dom';
+
 import { RootState } from '../../store';
 import { canAccessStaff } from '../../utils/adminPermissions';
 import { useRole } from '../../contexts/RoleContext';
+
 import LoadingSpinner from '../common/LoadingSpinner';
 import ForbiddenPage from '../../pages/error/ForbiddenPage';
 
-interface StaffRouteProps {
-  children: React.ReactNode;
-}
-
 /**
  * Protected route component for staff pages
- * Shows 403 Forbidden page if user is not staff or admin
- * Supports role impersonation for superadmin
- * Uses activeRole (impersonate_role from localStorage || user.role)
+ * - Allows staff / admin / superadmin
+ * - Supports impersonation via activeRole
+ * - Acts as a route guard (NOT a layout)
  */
-const StaffRoute: React.FC<StaffRouteProps> = ({ children }) => {
-  const { user, isAuthenticated } = useSelector((state: RootState) => state.auth);
+const StaffRoute: React.FC = () => {
+  const { user, isAuthenticated, authLoaded } = useSelector(
+    (state: RootState) => state.auth
+  );
   const { activeRole } = useRole();
 
-  // Show loading while checking auth
-  if (!isAuthenticated) {
+  // Still loading auth state
+  if (!authLoaded) {
     return <LoadingSpinner message="Checking authentication..." />;
   }
 
-  // Check if user has staff access (using activeRole for impersonation support)
+  // Not logged in
+  if (!isAuthenticated) {
+    return <ForbiddenPage />;
+  }
+
+  // No staff access
   if (!canAccessStaff(user, activeRole)) {
     return <ForbiddenPage />;
   }
 
-  return <>{children}</>;
+  // Authorized → render nested routes
+  return <Outlet />;
 };
 
 export default StaffRoute;
-

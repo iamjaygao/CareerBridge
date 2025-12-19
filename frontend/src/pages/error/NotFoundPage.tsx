@@ -12,21 +12,25 @@ import {
   Search as SearchIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
+import { useSelector } from 'react-redux';
+import { RootState } from '../../store';
+import { getLandingPathByRole } from '../../utils/roleLanding';
 
 const NotFoundPage: React.FC = () => {
   const navigate = useNavigate();
+  const role = useSelector((state: RootState) => state.auth.user?.role);
 
   const handleGoHome = () => {
-    navigate('/dashboard');
+    if (role) {
+      navigate(getLandingPathByRole(role), { replace: true });
+    } else {
+      navigate('/login', { replace: true });
+    }
   };
 
-  const handleGoBack = () => {
-    navigate(-1);
-  };
+  const handleGoBack = () => navigate(-1);
+  const handleSearch = () => navigate('/');
 
-  const handleSearch = () => {
-    navigate('/');
-  };
 
   return (
     <Box sx={{ width: '100%', maxWidth: '1200px', mx: 'auto', px: { xs: 2, sm: 3, md: 6 }, py: { xs: 4, md: 6 } }}>

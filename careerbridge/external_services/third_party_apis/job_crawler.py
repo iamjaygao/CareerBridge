@@ -393,5 +393,5 @@ class JobCrawlerService:
             }
 
 
-# Global service instance
-job_crawler_service = JobCrawlerService() 
+# Global service instance 先注释掉，等下一步
+# job_crawler_service = JobCrawlerService() 

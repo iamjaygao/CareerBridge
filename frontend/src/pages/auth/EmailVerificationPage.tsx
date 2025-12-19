@@ -123,9 +123,6 @@ const EmailVerificationPage: React.FC = () => {
     }
   };
 
-  const handleGoToDashboard = () => {
-    navigate('/dashboard');
-  };
 
   const handleGoToLogin = () => {
     navigate('/login');
@@ -264,14 +261,6 @@ const EmailVerificationPage: React.FC = () => {
                 <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
                   Your email has been verified. You can now access all features of your account.
                 </Typography>
-                <Button
-                  variant="contained"
-                  size="large"
-                  onClick={handleGoToDashboard}
-                  fullWidth
-                >
-                  Go to Dashboard
-                </Button>
               </Box>
             )}
 

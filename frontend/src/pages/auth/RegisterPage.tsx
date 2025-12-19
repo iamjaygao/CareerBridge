@@ -1,5 +1,4 @@
-import React, { useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import React, { useState } from 'react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
   Container,
@@ -21,39 +20,40 @@ import { PersonAddOutlined } from '@mui/icons-material';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
-import { registerUser, clearError } from '../../store/slices/authSlice';
-import { RootState, AppDispatch } from '../../store';
+import axios from 'axios';
 
+// =======================
+// Config
+// =======================
+const API_BASE_URL =
+  process.env.REACT_APP_API_URL || 'http://localhost:8001/api/v1';
+
+// =======================
 // Validation schema
+// =======================
 const schema = yup.object({
-  username: yup.string()
-    .required('Username is required')
-    .min(3, 'Username must be at least 3 characters')
-    .max(30, 'Username must be less than 30 characters'),
-  email: yup.string()
-    .required('Email is required')
-    .email('Please enter a valid email'),
-  password: yup.string()
-    .required('Password is required')
-    .min(8, 'Password must be at least 8 characters')
+  username: yup.string().required().min(3).max(30),
+  email: yup.string().required().email(),
+  password: yup
+    .string()
+    .required()
+    .min(8)
     .matches(
       /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
-      'Password must contain at least one uppercase letter, one lowercase letter, and one number'
+      'Password must contain uppercase, lowercase, and number'
     ),
-  confirmPassword: yup.string()
-    .required('Please confirm your password')
+  confirmPassword: yup
+    .string()
+    .required()
     .oneOf([yup.ref('password')], 'Passwords must match'),
-  firstName: yup.string()
-    .required('First name is required')
-    .min(2, 'First name must be at least 2 characters'),
-  lastName: yup.string()
-    .required('Last name is required')
-    .min(2, 'Last name must be at least 2 characters'),
-  role: yup.string()
-    .required('Please select a role')
-    .oneOf(['student', 'mentor'], 'Please select a valid role'),
-}).required();
+  firstName: yup.string().required().min(2),
+  lastName: yup.string().required().min(2),
+  role: yup.string().oneOf(['student', 'mentor']).required(),
+});
 
+// =======================
+// Types
+// =======================
 interface RegisterFormData {
   username: string;
   email: string;
@@ -64,161 +64,113 @@ interface RegisterFormData {
   role: 'student' | 'mentor';
 }
 
+// =======================
+// Component
+// =======================
 const RegisterPage: React.FC = () => {
-  const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
-  const { loading, error, isAuthenticated } = useSelector((state: RootState) => state.auth);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm({
+  } = useForm<RegisterFormData>({
     resolver: yupResolver(schema),
   });
 
-  // Redirect if already authenticated
-  useEffect(() => {
-    if (isAuthenticated) {
-      navigate('/dashboard');
-    }
-  }, [isAuthenticated, navigate]);
+  const onSubmit = async (data: RegisterFormData) => {
+    setLoading(true);
+    setError(null);
 
-  // Clear error when component unmounts
-  useEffect(() => {
-    return () => {
-      dispatch(clearError());
-    };
-  }, [dispatch]);
-
-  const onSubmit = async (data: any) => {
     try {
-      const registerData = {
+      await axios.post(`${API_BASE_URL}/users/register/`, {
         username: data.username,
         email: data.email,
         password: data.password,
-        password_confirm: data.confirmPassword,
+        password2: data.confirmPassword,
         first_name: data.firstName,
         last_name: data.lastName,
         role: data.role,
-      };
-      await dispatch(registerUser(registerData)).unwrap();
-      navigate('/login', { 
-        state: { message: 'Registration successful! Please log in with your credentials.' }
       });
-    } catch (error) {
-      // Error is handled by the slice
+
+      navigate('/login', {
+        state: {
+          message: 'Registration successful! Please log in.',
+        },
+      });
+    } catch (err: any) {
+      setError(
+        err.response?.data?.detail ||
+          err.response?.data?.email ||
+          'Registration failed'
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <Container component="main" maxWidth="sm">
-      <Box
-        sx={{
-          marginTop: 4,
-          marginBottom: 4,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-        }}
-      >
-        <Paper
-          elevation={3}
-          sx={{
-            padding: 4,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            width: '100%',
-          }}
-        >
-          <Box
-            sx={{
-              backgroundColor: 'primary.main',
-              borderRadius: '50%',
-              width: 56,
-              height: 56,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: 2,
-            }}
-          >
-            <PersonAddOutlined sx={{ color: 'white' }} />
+      <Box sx={{ mt: 4, mb: 4, display: 'flex', justifyContent: 'center' }}>
+        <Paper sx={{ p: 4, width: '100%' }}>
+          <Box sx={{ textAlign: 'center', mb: 2 }}>
+            <PersonAddOutlined color="primary" sx={{ fontSize: 40 }} />
+            <Typography variant="h5">Create Account</Typography>
           </Box>
 
-          <Typography component="h1" variant="h5" gutterBottom>
-            Create Account
-          </Typography>
-
-          <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 3 }}>
-            Join CareerBridge to advance your career
-          </Typography>
-
           {error && (
-            <Alert severity="error" sx={{ width: '100%', mb: 2 }}>
+            <Alert severity="error" sx={{ mb: 2 }}>
               {error}
             </Alert>
           )}
 
-          <Box component="form" onSubmit={handleSubmit(onSubmit)} sx={{ width: '100%' }}>
+          <Box component="form" onSubmit={handleSubmit(onSubmit)}>
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
                   label="First Name"
-                  autoComplete="given-name"
                   {...register('firstName')}
                   error={!!errors.firstName}
                   helperText={errors.firstName?.message}
-                  disabled={loading}
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
                   label="Last Name"
-                  autoComplete="family-name"
                   {...register('lastName')}
                   error={!!errors.lastName}
                   helperText={errors.lastName?.message}
-                  disabled={loading}
                 />
               </Grid>
               <Grid item xs={12}>
                 <TextField
                   fullWidth
                   label="Username"
-                  autoComplete="username"
                   {...register('username')}
                   error={!!errors.username}
                   helperText={errors.username?.message}
-                  disabled={loading}
                 />
               </Grid>
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="Email Address"
+                  label="Email"
                   type="email"
-                  autoComplete="email"
                   {...register('email')}
                   error={!!errors.email}
                   helperText={errors.email?.message}
-                  disabled={loading}
                 />
               </Grid>
               <Grid item xs={12}>
                 <FormControl fullWidth>
                   <InputLabel>Role</InputLabel>
-                  <Select
-                    label="Role"
-                    {...register('role')}
-                    error={!!errors.role}
-                    disabled={loading}
-                  >
-                    <MenuItem value="student">Student / Job Seeker</MenuItem>
-                    <MenuItem value="mentor">Mentor / Professional</MenuItem>
+                  <Select label="Role" defaultValue="" {...register('role')}>
+                    <MenuItem value="student">Student</MenuItem>
+                    <MenuItem value="mentor">Mentor</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
@@ -227,11 +179,9 @@ const RegisterPage: React.FC = () => {
                   fullWidth
                   label="Password"
                   type="password"
-                  autoComplete="new-password"
                   {...register('password')}
                   error={!!errors.password}
                   helperText={errors.password?.message}
-                  disabled={loading}
                 />
               </Grid>
               <Grid item xs={12}>
@@ -239,11 +189,9 @@ const RegisterPage: React.FC = () => {
                   fullWidth
                   label="Confirm Password"
                   type="password"
-                  autoComplete="new-password"
                   {...register('confirmPassword')}
                   error={!!errors.confirmPassword}
                   helperText={errors.confirmPassword?.message}
-                  disabled={loading}
                 />
               </Grid>
             </Grid>
@@ -252,15 +200,15 @@ const RegisterPage: React.FC = () => {
               type="submit"
               fullWidth
               variant="contained"
-              sx={{ mt: 3, mb: 2 }}
+              sx={{ mt: 3 }}
               disabled={loading}
             >
               {loading ? <CircularProgress size={24} /> : 'Create Account'}
             </Button>
 
-            <Box sx={{ textAlign: 'center' }}>
-              <Link component={RouterLink} to="/login" variant="body2">
-                Already have an account? Sign In
+            <Box sx={{ mt: 2, textAlign: 'center' }}>
+              <Link component={RouterLink} to="/login">
+                Already have an account? Sign in
               </Link>
             </Box>
           </Box>
@@ -270,4 +218,4 @@ const RegisterPage: React.FC = () => {
   );
 };
 
-export default RegisterPage; 
+export default RegisterPage;

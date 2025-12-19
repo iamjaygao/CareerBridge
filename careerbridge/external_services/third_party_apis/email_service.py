@@ -319,5 +319,5 @@ class EmailService:
             }
 
 
-# Global service instance
-email_service = EmailService() 
+# Global service instance， 先不启动，等待下一步完善后再启用 
+# email_service = EmailService() 

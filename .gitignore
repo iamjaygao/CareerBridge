@@ -57,3 +57,12 @@ venv/
 careerbridge/venv/
 # Ignore user uploaded media files
 careerbridge/media/
+
+node_modules/
+careerbridge/node_modules/
+frontend/node_modules/
+venv/
+.venv/
+*/venv/
+*/node_modules/
+careerbridge/media/resumes/*

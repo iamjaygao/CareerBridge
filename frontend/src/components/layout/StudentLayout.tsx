@@ -1,13 +1,11 @@
 import React, { useState } from 'react';
 import { Box } from '@mui/material';
+import { Outlet } from 'react-router-dom';
+
 import StudentSidebar from './StudentSidebar';
 import StudentTopbar from './StudentTopbar';
 
-interface StudentLayoutProps {
-  children: React.ReactNode;
-}
-
-const StudentLayout: React.FC<StudentLayoutProps> = ({ children }) => {
+const StudentLayout: React.FC = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleDrawerToggle = () => {
@@ -17,7 +15,10 @@ const StudentLayout: React.FC<StudentLayoutProps> = ({ children }) => {
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'grey.50' }}>
       {/* Student Sidebar */}
-      <StudentSidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
+      <StudentSidebar
+        mobileOpen={mobileOpen}
+        onMobileClose={() => setMobileOpen(false)}
+      />
 
       {/* Main content area */}
       <Box
@@ -41,7 +42,7 @@ const StudentLayout: React.FC<StudentLayoutProps> = ({ children }) => {
             bgcolor: 'grey.50',
           }}
         >
-          {children}
+          <Outlet />
         </Box>
       </Box>
     </Box>
@@ -49,4 +50,3 @@ const StudentLayout: React.FC<StudentLayoutProps> = ({ children }) => {
 };
 
 export default StudentLayout;
-
