@@ -45,14 +45,16 @@ import LoadingSpinner from '../../components/common/LoadingSpinner';
 import ErrorAlert from '../../components/common/ErrorAlert';
 import { useNotification } from '../../components/common/NotificationProvider';
 import mentorService from '../../services/api/mentorService';
-import appointmentService from '../../services/api/appointmentService';
+import { sessionService } from '../../services/api/sessionService';
+
+
+/* =====================
+   Types
+===================== */
 
 interface MentorDetail {
   id: number;
   user: {
-    id: number;
-    username: string;
-    email: string;
     first_name: string;
     last_name: string;
     avatar?: string;
@@ -61,36 +63,35 @@ interface MentorDetail {
   years_of_experience: number;
   current_position: string;
   industry: string;
-  status: string;
   average_rating: number;
   total_reviews: number;
   total_sessions: number;
   total_earnings: number;
   is_verified: boolean;
-  verification_badge: string;
   specializations: string[];
-  ranking_score: number;
-  is_approved: boolean;
-  created_at: string;
-  updated_at: string;
   services: MentorService[];
   reviews: MentorReview[];
   availability: MentorAvailability[];
+  mentor_card?: {
+    line1: string;
+    line2?: string;
+  };
+  rating?: number | null;
+  review_count?: number;
+  trust_label?: string | null;
+  cta_label?: string;
+  ranking_reason?: string;
+  primary_service_id?: number;
 }
 
 interface MentorService {
   id: number;
-  service_type: string;
   title: string;
   description: string;
-  pricing_model: string;
-  price_per_hour?: number;
-  fixed_price?: number;
-  package_price?: number;
-  package_sessions?: number;
+  service_type: string;
   duration_minutes: number;
   display_price: string;
-  is_active: boolean;
+  is_active?: boolean;
 }
 
 interface MentorReview {
@@ -100,7 +101,6 @@ interface MentorReview {
   created_at: string;
   user: {
     username: string;
-    avatar?: string;
   };
 }
 
@@ -109,7 +109,6 @@ interface MentorAvailability {
   day_of_week: number;
   start_time: string;
   end_time: string;
-  is_active: boolean;
 }
 
 interface BookingForm {
@@ -120,27 +119,28 @@ interface BookingForm {
   duration_minutes?: number;
 }
 
-interface MentorDetailPageProps {
-  initialTab?: 'booking';
-}
+/* =====================
+   Component
+===================== */
 
-const MentorDetailPage: React.FC<MentorDetailPageProps> = ({ initialTab }) => {
+const MentorDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { showSuccess, showError } = useNotification();
-  
+
   const [mentor, setMentor] = useState<MentorDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
   const [tabValue, setTabValue] = useState(0);
   const [bookingDialogOpen, setBookingDialogOpen] = useState(false);
-  const [availableSlots, setAvailableSlots] = useState<Array<{
-    start_time: string;
-    end_time: string;
-    duration_minutes: number;
-  }>>([]);
+  const [selectedServiceId, setSelectedServiceId] = useState<number | null>(null);
+
+  const [availableSlots, setAvailableSlots] = useState<
+    { start_time: string; end_time: string; duration_minutes: number }[]
+  >([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
-  
+
   const [bookingForm, setBookingForm] = useState<BookingForm>({
     service_id: 0,
     scheduled_date: null,
@@ -148,362 +148,389 @@ const MentorDetailPage: React.FC<MentorDetailPageProps> = ({ initialTab }) => {
     user_notes: '',
   });
 
+  /* =====================
+     Data Fetch
+  ===================== */
+
   const fetchMentorDetails = useCallback(async () => {
     try {
       setLoading(true);
-      const mentorData = await mentorService.getMentorById(parseInt(id!));
-      setMentor(mentorData);
-      console.log('Mentor data loaded:', mentorData);
-      console.log('Services count:', mentorData.services?.length || 0);
-      console.log('Availability count:', mentorData.availability?.length || 0);
-    } catch (err) {
+      const data = await mentorService.getMentorById(Number(id));
+      setMentor(data);
+    } catch {
       setError('Failed to load mentor details');
-      console.error('Mentor details error:', err);
     } finally {
       setLoading(false);
     }
   }, [id]);
 
   useEffect(() => {
-    if (id) {
-      fetchMentorDetails();
-    }
+    if (id) fetchMentorDetails();
   }, [id, fetchMentorDetails]);
 
-  // Auto-open booking dialog if initialTab is 'booking'
+  // Determine primary service on mentor data load
   useEffect(() => {
-    if (initialTab === 'booking' && mentor && !loading) {
-      setBookingDialogOpen(true);
+    if (mentor) {
+      const mentorServices = mentor.services ?? [];
+      const activeServices = mentorServices.filter(s => s.is_active !== false);
+      if (activeServices.length > 0 && selectedServiceId === null) {
+        // Strict defaulting: prefer primary_service_id if present AND exists in activeServices
+        const primaryServiceId = mentor.primary_service_id;
+        const primaryServiceInActive = primaryServiceId
+          ? activeServices.find(s => s.id === primaryServiceId)
+          : null;
+        
+        // Use primary_service_id if valid, otherwise fallback to first active service
+        const defaultService = primaryServiceInActive || activeServices[0];
+        if (defaultService) {
+          setSelectedServiceId(defaultService.id);
+        }
+      }
     }
-  }, [initialTab, mentor, loading]);
+  }, [mentor, selectedServiceId]);
 
-  const fetchAvailableSlots = async (date: Date, serviceId?: number) => {
+  /* =====================
+     Booking Helpers
+  ===================== */
+
+  const fetchAvailableSlots = async (date: Date, serviceId: number) => {
     if (!mentor) return;
-    
     try {
       setLoadingSlots(true);
-      const formattedDate = format(date, 'yyyy-MM-dd');
-      console.log('Fetching slots for date:', formattedDate, 'mentor ID:', mentor.id, 'service ID:', serviceId);
-      
-      const params: any = { date: formattedDate };
-      if (serviceId) {
-        params.service_id = serviceId;
-      }
-      
-      const slots = await mentorService.getMentorAvailability(mentor.id, formattedDate, serviceId);
-      console.log('Received slots:', slots);
-      setAvailableSlots(slots.map((slot: any) => ({
-        start_time: slot.start_time,
-        end_time: slot.end_time,
-        duration_minutes: slot.duration_minutes
-      })));
-      console.log('Processed slots:', slots.map((slot: any) => slot.start_time));
-    } catch (err) {
-      console.error('Failed to fetch available slots:', err);
+      const slots = await mentorService.getMentorAvailability(
+        mentor.id,
+        format(date, 'yyyy-MM-dd'),
+        serviceId
+      );
+      setAvailableSlots(slots);
+    } catch {
       setAvailableSlots([]);
     } finally {
       setLoadingSlots(false);
     }
   };
 
-  const handleDateChange = (date: Date | null) => {
-    setBookingForm(prev => ({ ...prev, scheduled_date: date, scheduled_time: '' }));
-    if (date) {
-      fetchAvailableSlots(date, bookingForm.service_id);
-    }
+  const handleServiceContinue = (service: MentorService) => {
+    // Directly open booking dialog instead of showing availability tab
+    handleServiceSelect(service);
   };
 
-  const handleServiceChange = (serviceId: number) => {
-    setBookingForm(prev => ({ ...prev, service_id: serviceId, scheduled_time: '' }));
-    if (bookingForm.scheduled_date) {
-      fetchAvailableSlots(bookingForm.scheduled_date, serviceId);
-    }
+  const handleServiceSelect = (service: MentorService) => {
+    setBookingForm({
+      service_id: service.id,
+      duration_minutes: service.duration_minutes,
+      scheduled_date: null,
+      scheduled_time: '',
+      user_notes: '',
+    });
+    setBookingDialogOpen(true);
   };
 
   const handleBookingSubmit = async () => {
     if (!mentor || !bookingForm.scheduled_date) return;
 
     try {
-      const appointmentData = {
-        mentor: mentor.id,
-        date: format(bookingForm.scheduled_date, 'yyyy-MM-dd'),
-        time: bookingForm.scheduled_time,
-        notes: bookingForm.user_notes,
-      };
-
-      await appointmentService.createAppointment(appointmentData);
-      showSuccess('Appointment booked successfully!');
+      await sessionService.createSession({
+        mentor_id: mentor.id,
+        service_id: bookingForm.service_id,
+        scheduled_date: format(bookingForm.scheduled_date, 'yyyy-MM-dd'),
+        scheduled_time: bookingForm.scheduled_time,
+        user_notes: bookingForm.user_notes,
+        duration_minutes: bookingForm.duration_minutes,
+      });
+      showSuccess('Session booked successfully!');
       setBookingDialogOpen(false);
-      // Navigate to appointments list after successful booking
-      navigate('/appointments');
-    } catch (err) {
-      showError('Failed to book appointment');
-      console.error('Booking error:', err);
+      navigate('/student/appointments');
+    } catch {
+      showError('Failed to book session');
     }
   };
 
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
-    setTabValue(newValue);
-  };
-
-  if (loading) {
-    return <LoadingSpinner />;
+  if (loading) return <LoadingSpinner />;
+  if (error || !mentor) return <ErrorAlert message={error || 'Mentor not found'} />;
+  if (mentor) {
+    (window as any).__MENTOR__ = mentor;
   }
-
-  if (error || !mentor) {
-    return <ErrorAlert message={error || 'Mentor not found'} />;
+  // Safe local defaults to prevent crashes
+  const services = mentor.services ?? [];
+  const reviews = mentor.reviews ?? [];
+  const specializations = mentor.specializations ?? [];
+  
+  // Filter active services only
+  const activeServices = services.filter(s => s.is_active !== false);
+  
+  if (activeServices.length === 0) {
+    return <ErrorAlert message="This mentor has no active services available." />;
   }
-
-  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  
+  // Get primary service: use primary_service_id if present AND exists in activeServices
+  const primaryServiceId = mentor.primary_service_id;
+  const primaryService = primaryServiceId
+    ? activeServices.find(s => s.id === primaryServiceId) || null
+    : null;
+  
+  // Get selected service (defaults to primary if valid, otherwise first active)
+  const selectedService = selectedServiceId
+    ? activeServices.find(s => s.id === selectedServiceId) || (primaryService || activeServices[0])
+    : (primaryService || activeServices[0]);
+  
+  // Reorder services: primary first (if it exists and is active)
+  const orderedServices = primaryService
+    ? [primaryService, ...activeServices.filter(s => s.id !== primaryService.id)]
+    : activeServices;
 
   return (
     <>
       <PageHeader
         title={`${mentor.user.first_name} ${mentor.user.last_name}`}
         breadcrumbs={[
-          { label: 'Mentors', path: '/mentors' },
-          { label: mentor.user.first_name, path: `/mentors/${mentor.id}` }
+          { label: 'Mentors', path: '/student/mentors' },
+          { label: mentor.user.first_name, path: `/student/mentors/${mentor.id}` },
         ]}
       />
 
       <Container maxWidth="lg">
+        {/* ===== Hero Section ===== */}
+        <Box sx={{ mb: 4, textAlign: 'center' }}>
+          {/* 1) Hero Title */}
+          {primaryService?.service_type && (
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ mb: 1, textTransform: 'uppercase', letterSpacing: '0.5px' }}
+            >
+              {primaryService.service_type.replace('_', ' ')}
+            </Typography>
+          )}
+          
+          {/* 2) Hero Headline */}
+          {((mentor as any).hero_headline || mentor.mentor_card?.line1) && (
+            <Typography 
+              variant="h4" 
+              component="h1" 
+              sx={{ 
+                fontWeight: 700, 
+                mb: 2,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {(mentor as any).hero_headline}
+            </Typography>
+          )}
+          
+          {/* 3) Hero Subline */}
+          {((mentor as any).hero_subline || mentor.mentor_card?.line2) && (
+            <Typography 
+              variant="body1" 
+              color="text.secondary" 
+              sx={{ 
+                mb: 3,
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+              }}
+            >
+              {(mentor as any).hero_subline}
+            </Typography>
+          )}
+          
+          {/* 4) Trust Layer */}
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 2, mb: 2 }}>
+            {(mentor as any).rating !== null && (mentor as any).rating !== undefined ? (
+              <>
+                <Rating value={(mentor as any).rating} readOnly />
+                <Typography variant="body1">
+                  ({(mentor as any).review_count || mentor.total_reviews})
+                </Typography>
+              </>
+            ) : (
+              (mentor as any).trust_label && (
+                <Typography variant="body1" color="text.secondary">
+                  {(mentor as any).trust_label}
+                </Typography>
+              )
+            )}
+          </Box>
+          
+          {/* 5) Price Anchor */}
+          {(mentor as any).price_label && (
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              {(mentor as any).price_label}
+            </Typography>
+          )}
+          
+          {/* 6) Primary CTA */}
+          {(mentor as any).cta_label && (
+            <Button
+              variant="contained"
+              size="large"
+              onClick={() => {
+                setTabValue(1);
+              }}
+              sx={{ 
+                textTransform: 'none', 
+                fontWeight: 600,
+                '& .MuiButton-label': {
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                  lineHeight: 1.1,
+                  textAlign: 'center',
+                },
+              }}
+            >
+              {(mentor as any).cta_label}
+            </Button>
+          )}
+        </Box>
+
         <Grid container spacing={3}>
-          {/* Mentor Profile Card */}
+          {/* ===== Profile Card ===== */}
           <Grid item xs={12} md={4}>
             <Card>
               <CardContent sx={{ textAlign: 'center' }}>
                 <Avatar
                   src={mentor.user.avatar}
                   sx={{ width: 120, height: 120, mx: 'auto', mb: 2 }}
-                >
-                  {mentor.user.first_name[0]}{mentor.user.last_name[0]}
-                </Avatar>
-                
-                <Typography variant="h5" gutterBottom>
+                />
+                <Typography variant="h5">
                   {mentor.user.first_name} {mentor.user.last_name}
                 </Typography>
-                
+
                 {mentor.is_verified && (
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1 }}>
                     <VerifiedIcon color="primary" fontSize="small" />
                     <Typography variant="body2" color="primary" sx={{ ml: 0.5 }}>
                       Verified Mentor
                     </Typography>
                   </Box>
                 )}
-                
-                <Typography variant="body1" color="text.secondary" gutterBottom>
+
+                <Typography color="text.secondary" sx={{ mt: 1 }}>
                   {mentor.current_position}
                 </Typography>
-                
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 2 }}>
-                  <Rating value={mentor.average_rating} readOnly precision={0.5} />
+
+                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+                  <Rating value={mentor.average_rating} readOnly />
                   <Typography variant="body2" sx={{ ml: 1 }}>
-                    ({mentor.total_reviews} reviews)
+                    ({mentor.total_reviews})
                   </Typography>
                 </Box>
-                
-                <Button
-                  variant="contained"
-                  fullWidth
-                  onClick={() => navigate(`/mentors/${mentor.id}/book`)}
-                  disabled={mentor.services.length === 0}
-                >
-                  Book Session
-                </Button>
-              </CardContent>
-            </Card>
 
-            {/* Quick Stats */}
-            <Card sx={{ mt: 2 }}>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Quick Stats
-                </Typography>
-                <List dense>
-                  <ListItem>
-                    <ListItemIcon>
-                      <WorkIcon />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary={`${mentor.years_of_experience} years experience`}
-                    />
-                  </ListItem>
-                  <ListItem>
-                    <ListItemIcon>
-                      <EventIcon />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary={`${mentor.total_sessions} sessions completed`}
-                    />
-                  </ListItem>
-                  <ListItem>
-                    <ListItemIcon>
-                      <MoneyIcon />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary={`$${mentor.total_earnings} total earnings`}
-                    />
-                  </ListItem>
-                  <ListItem>
-                    <ListItemIcon>
-                      <BusinessIcon />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary={mentor.industry}
-                    />
-                  </ListItem>
-                </List>
+                <Button
+                  sx={{ mt: 2 }}
+                  fullWidth
+                  variant="outlined"
+                  onClick={() => setTabValue(1)}
+                >
+                  View Services
+                </Button>
               </CardContent>
             </Card>
           </Grid>
 
-          {/* Main Content */}
+          {/* ===== Main ===== */}
           <Grid item xs={12} md={8}>
             <Card>
               <CardContent>
-                <Tabs value={tabValue} onChange={handleTabChange}>
+                <Tabs value={tabValue} onChange={(_, v) => setTabValue(v)}>
                   <Tab label="About" />
                   <Tab label="Services" />
-                  <Tab label="Availability" />
                   <Tab label="Reviews" />
                 </Tabs>
 
                 <Box sx={{ mt: 3 }}>
-                  {/* About Tab */}
                   {tabValue === 0 && (
                     <Box>
-                      <Typography variant="h6" gutterBottom>
-                        About {mentor.user.first_name}
-                      </Typography>
-                      <Typography variant="body1" paragraph>
+                      <Typography variant="body1" sx={{ mb: 2 }}>
                         {mentor.bio}
                       </Typography>
-                      
-                      <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>
-                        Specializations
+                      <Typography variant="h6" sx={{ mt: 3, mb: 1 }}>
+                        Experience
                       </Typography>
-                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                        {mentor.specializations.map((spec, index) => (
-                          <Chip key={index} label={spec} variant="outlined" />
-                        ))}
-                      </Box>
-                    </Box>
-                  )}
-
-                  {/* Services Tab */}
-                  {tabValue === 1 && (
-                    <Box>
-                      <Typography variant="h6" gutterBottom>
-                        Services Offered
+                      <Typography variant="body2" color="text.secondary">
+                        {mentor.years_of_experience} years of experience
                       </Typography>
-                      {mentor.services.length === 0 ? (
-                        <Alert severity="info">No services available at the moment.</Alert>
-                      ) : (
-                        <Grid container spacing={2}>
-                          {mentor.services.map((service) => (
-                            <Grid item xs={12} key={service.id}>
-                              <Paper sx={{ p: 2 }}>
-                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                  <Box>
-                                    <Typography variant="h6">{service.title}</Typography>
-                                    <Typography variant="body2" color="text.secondary" paragraph>
-                                      {service.description}
-                                    </Typography>
-                                    <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                                      <Chip 
-                                        label={service.service_type.replace('_', ' ')} 
-                                        size="small" 
-                                        color="primary" 
-                                      />
-                                      <Typography variant="body2">
-                                        Duration: {service.duration_minutes} minutes
-                                      </Typography>
-                                    </Box>
-                                  </Box>
-                                  <Box sx={{ textAlign: 'right' }}>
-                                    <Typography variant="h6" color="primary">
-                                      {service.display_price}
-                                    </Typography>
-                                    <Button
-                                      variant="outlined"
-                                      size="small"
-                                      onClick={() => {
-                                        setBookingForm(prev => ({ ...prev, service_id: service.id }));
-                                        setBookingDialogOpen(true);
-                                      }}
-                                    >
-                                      Book Now
-                                    </Button>
-                                  </Box>
-                                </Box>
-                              </Paper>
-                            </Grid>
-                          ))}
-                        </Grid>
+                      {specializations.length > 0 && (
+                        <>
+                          <Typography variant="h6" sx={{ mt: 3, mb: 1 }}>
+                            Specializations
+                          </Typography>
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                            {specializations.map((spec, idx) => (
+                              <Chip key={idx} label={spec} size="small" />
+                            ))}
+                          </Box>
+                        </>
                       )}
                     </Box>
                   )}
+                  {tabValue === 1 && (
+                    <Box id="services-section">
+                      <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>
+                        How I can help you
+                      </Typography>
+                      {selectedServiceId && (
+                        <Alert severity="info" sx={{ mb: 3 }}>
+                          You are continuing with: <strong>{selectedService?.title}</strong>
+                        </Alert>
+                      )}
+                      <Grid container spacing={2}>
+                        {orderedServices.map(service => {
+                          const isSelected = selectedServiceId === service.id;
+                          return (
+                            <Grid item xs={12} key={service.id}>
+                              <Paper 
+                                sx={{ 
+                                  p: 2,
+                                  border: isSelected ? 2 : 1,
+                                  borderColor: isSelected ? 'primary.main' : 'divider',
+                                  bgcolor: isSelected ? 'action.selected' : 'background.paper'
+                                }}
+                              >
+                                <Typography variant="h6">{service.title}</Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                  {service.description}
+                                </Typography>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
+                                  <Typography color="primary">{service.display_price}</Typography>
+                                  <Button
+                                    variant="contained"
+                                    size="small"
+                                    onClick={() => handleServiceContinue(service)}
+                                  >
+                                    Continue
+                                  </Button>
+                                </Box>
+                              </Paper>
+                            </Grid>
+                          );
+                        })}
+                      </Grid>
+                    </Box>
+                  )}
 
-                  {/* Availability Tab */}
                   {tabValue === 2 && (
                     <Box>
-                      <Typography variant="h6" gutterBottom>
-                        Weekly Availability
-                      </Typography>
-                      {mentor.availability.length === 0 ? (
-                        <Alert severity="info">No availability information available.</Alert>
+                      {((mentor as any).review_count || mentor.total_reviews) < 3 ? (
+                        <Typography color="text.secondary">
+                          {(mentor as any).trust_label || 'This mentor is newly reviewed and carefully verified by our platform.'}
+                        </Typography>
                       ) : (
-                        <Grid container spacing={2}>
-                          {mentor.availability.map((slot) => (
-                            <Grid item xs={12} sm={6} key={slot.id}>
-                              <Paper sx={{ p: 2 }}>
-                                <Typography variant="subtitle1" fontWeight="bold">
-                                  {dayNames[slot.day_of_week]}
-                                </Typography>
-                                <Typography variant="body2" color="text.secondary">
-                                  {slot.start_time} - {slot.end_time}
-                                </Typography>
-                              </Paper>
-                            </Grid>
-                          ))}
-                        </Grid>
-                      )}
-                    </Box>
-                  )}
-
-                  {/* Reviews Tab */}
-                  {tabValue === 3 && (
-                    <Box>
-                      <Typography variant="h6" gutterBottom>
-                        Reviews ({mentor.total_reviews})
-                      </Typography>
-                      {mentor.reviews.length === 0 ? (
-                        <Alert severity="info">No reviews yet.</Alert>
-                      ) : (
-                        <Box>
-                          {mentor.reviews.map((review) => (
-                            <Paper key={review.id} sx={{ p: 2, mb: 2 }}>
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                  <Avatar sx={{ width: 32, height: 32, mr: 1 }}>
-                                    {review.user.username[0]}
-                                  </Avatar>
-                                  <Typography variant="subtitle2">
-                                    {review.user.username}
-                                  </Typography>
-                                </Box>
-                                <Rating value={review.rating} readOnly size="small" />
-                              </Box>
-                              <Typography variant="body2" color="text.secondary">
-                                {review.comment}
-                              </Typography>
-                              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                                {format(parseISO(review.created_at), 'MMM dd, yyyy')}
-                              </Typography>
-                            </Paper>
-                          ))}
-                        </Box>
+                        reviews.slice(0, 5).map(review => (
+                          <Paper key={review.id} sx={{ p: 2, mb: 2 }}>
+                            <Rating value={review.rating} readOnly size="small" />
+                            <Typography>{review.comment}</Typography>
+                            <Typography variant="caption">
+                              {format(parseISO(review.created_at), 'MMM dd, yyyy')}
+                            </Typography>
+                          </Paper>
+                        ))
                       )}
                     </Box>
                   )}
@@ -514,100 +541,60 @@ const MentorDetailPage: React.FC<MentorDetailPageProps> = ({ initialTab }) => {
         </Grid>
       </Container>
 
-      {/* Booking Dialog */}
-      <Dialog 
-        open={bookingDialogOpen} 
-        onClose={() => setBookingDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>
-          Book Session with {mentor.user.first_name}
-        </DialogTitle>
+      {/* ===== Booking Dialog ===== */}
+      <Dialog open={bookingDialogOpen} onClose={() => setBookingDialogOpen(false)} fullWidth>
+        <DialogTitle>Book Session</DialogTitle>
         <DialogContent>
-          <Box sx={{ mt: 2 }}>
-            <FormControl fullWidth sx={{ mb: 2 }}>
-              <InputLabel>Select Service</InputLabel>
+          <TextField
+            type="date"
+            fullWidth
+            sx={{ mt: 2 }}
+            inputProps={{ min: format(addDays(new Date(), 1), 'yyyy-MM-dd') }}
+            value={bookingForm.scheduled_date ? format(bookingForm.scheduled_date, 'yyyy-MM-dd') : ''}
+            onChange={e => {
+              const d = e.target.value ? new Date(e.target.value) : null;
+              setBookingForm(prev => ({ ...prev, scheduled_date: d, scheduled_time: '' }));
+              if (d) fetchAvailableSlots(d, bookingForm.service_id);
+            }}
+          />
+
+          {bookingForm.scheduled_date && (
+            <FormControl fullWidth sx={{ mt: 2 }}>
+              <InputLabel>Time</InputLabel>
               <Select
-                value={bookingForm.service_id}
-                onChange={(e) => handleServiceChange(e.target.value as number)}
-                label="Select Service"
+                value={bookingForm.scheduled_time}
+                onChange={e => setBookingForm(prev => ({ ...prev, scheduled_time: e.target.value }))}
+                disabled={loadingSlots}
               >
-                {mentor.services.map((service) => (
-                  <MenuItem key={service.id} value={service.id}>
-                    {service.title} - {service.display_price}
+                {availableSlots.map(slot => (
+                  <MenuItem key={slot.start_time} value={slot.start_time}>
+                    {slot.start_time} – {slot.end_time}
                   </MenuItem>
                 ))}
               </Select>
+              {loadingSlots && <FormHelperText>Loading slots…</FormHelperText>}
             </FormControl>
+          )}
 
-            <TextField
-              type="date"
-              label="Select Date"
-              value={bookingForm.scheduled_date ? format(bookingForm.scheduled_date, 'yyyy-MM-dd') : ''}
-              onChange={(e) => {
-                const date = e.target.value ? new Date(e.target.value) : null;
-                handleDateChange(date);
-              }}
-              inputProps={{
-                min: format(addDays(new Date(), 1), 'yyyy-MM-dd')
-              }}
-              fullWidth
-              sx={{ mb: 2 }}
-            />
-
-            {bookingForm.scheduled_date && (
-              <FormControl fullWidth sx={{ mb: 2 }}>
-                <InputLabel>Select Time</InputLabel>
-                <Select
-                  value={bookingForm.scheduled_time}
-                  onChange={(e) => setBookingForm(prev => ({ ...prev, scheduled_time: e.target.value }))}
-                  label="Select Time"
-                  disabled={loadingSlots}
-                >
-                  {loadingSlots ? (
-                    <MenuItem disabled>
-                      <CircularProgress size={20} sx={{ mr: 1 }} />
-                      Loading available slots...
-                    </MenuItem>
-                  ) : availableSlots.length === 0 ? (
-                                            <MenuItem disabled>No available slots for this date</MenuItem>
-                  ) : (
-                    availableSlots.map((slot) => (
-                      <MenuItem key={slot.start_time} value={slot.start_time}>
-                        {slot.start_time} - {slot.end_time} ({slot.duration_minutes} min)
-                      </MenuItem>
-                    ))
-                  )}
-                </Select>
-                {loadingSlots && <FormHelperText>Loading available time slots...</FormHelperText>}
-                                    {!loadingSlots && availableSlots.length > 0 && (
-                      <FormHelperText>{availableSlots.length} slots available</FormHelperText>
-                    )}
-              </FormControl>
-            )}
-
-            <TextField
-              fullWidth
-              multiline
-              rows={3}
-              label="Notes (Optional)"
-              value={bookingForm.user_notes}
-              onChange={(e) => setBookingForm(prev => ({ ...prev, user_notes: e.target.value }))}
-              placeholder="Any specific topics or questions you'd like to discuss..."
-            />
-          </Box>
+          <TextField
+            fullWidth
+            multiline
+            rows={3}
+            sx={{ mt: 2 }}
+            label="Notes (optional)"
+            value={bookingForm.user_notes}
+            onChange={e => setBookingForm(prev => ({ ...prev, user_notes: e.target.value }))}
+          />
         </DialogContent>
+
         <DialogActions>
-          <Button onClick={() => setBookingDialogOpen(false)}>
-            Cancel
-          </Button>
-          <Button 
-            onClick={handleBookingSubmit}
+          <Button onClick={() => setBookingDialogOpen(false)}>Cancel</Button>
+          <Button
             variant="contained"
-            disabled={!bookingForm.service_id || !bookingForm.scheduled_date || !bookingForm.scheduled_time}
+            onClick={handleBookingSubmit}
+            disabled={!bookingForm.scheduled_time}
           >
-            Book Session
+            Confirm Booking
           </Button>
         </DialogActions>
       </Dialog>
@@ -615,4 +602,4 @@ const MentorDetailPage: React.FC<MentorDetailPageProps> = ({ initialTab }) => {
   );
 };
 
-export default MentorDetailPage; 
+export default MentorDetailPage;

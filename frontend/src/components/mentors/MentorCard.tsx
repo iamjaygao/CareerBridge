@@ -1,571 +1,396 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Card,
   CardContent,
-  CardActions,
+  Avatar,
   Typography,
   Box,
   Chip,
-  Button,
-  Avatar,
   Rating,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Grid,
+  Button,
   Divider,
-  IconButton,
 } from '@mui/material';
-import {
-  Favorite,
-  FavoriteBorder,
-  Schedule,
-  LocationOn,
-  Work,
-  School,
-  Star,
-  Message,
-  Lock,
-  LockOpen,
-} from '@mui/icons-material';
+import { alpha } from '@mui/material/styles';
 import { Mentor } from '../../types';
 
 interface MentorCardProps {
   mentor: Mentor;
-  onFavorite?: (mentorId: number) => void;
-  isFavorite?: boolean;
-  onBookAppointment?: (mentorId: number) => void;
-  isVisitor?: boolean; // If true, show limited information for visitors
+  isVisitor?: boolean;
+  activeTrack?: string;
 }
 
 const MentorCard: React.FC<MentorCardProps> = ({
   mentor,
-  onFavorite,
-  isFavorite,
-  onBookAppointment,
   isVisitor = false,
+  activeTrack,
 }) => {
-  const [detailsOpen, setDetailsOpen] = useState(false);
-
-  const handleBookAppointment = () => {
-    if (onBookAppointment) {
-      onBookAppointment(mentor.id);
-    }
+  const navigate = useNavigate();
+  /* =========================
+     Track prefix labels (P1)
+  ========================= */
+  const TRACK_PREFIX_LABELS: Record<string, string> = {
+    resume_review: 'Resume-focused guidance',
+    mock_interview: 'Interview preparation',
+    career_switch: 'Career transition support',
+    advanced_interview: 'Senior / system design coaching',
   };
 
-  // Generate placeholder data for visitors
-  const getPreviousCompany = () => {
-    if (mentor.company) {
-      return `Ex-${mentor.company}`;
-    }
-    const companies = ['Amazon', 'Google', 'Meta', 'Microsoft', 'Apple', 'Netflix'];
-    return `Ex-${companies[mentor.id % companies.length]}`;
-  };
+  /* =========================
+     Contract v1 derived values
+  ========================= */
+  const {
+    display_name,
+    badges = [],
+    trust_label,
+    job_title,
+    industry,
+    primary_focus,
+    session_focus,
+    expertise = [],
+    rating,
+    review_count,
+    price_label,
+    price_unit,
+    cta_label,
+  } = mentor;
 
-  const getExperienceYears = () => {
-    const years = mentor.experience_years || mentor.years_of_experience || 0;
-    return years > 0 ? `${years}+ yrs experience` : '8+ yrs experience';
-  };
+  const displayExpertise = expertise.slice(0, 2);
+  const remainingExpertise = expertise.length - displayExpertise.length;
 
-  const getHighlights = () => {
-    const studentsHelped = 20 + (mentor.id % 30); // 20-50 range
-    const specializations = mentor.skills || mentor.expertise || ['Backend', 'System Design', 'Resume Review'];
-    const primarySpec = specializations[0] || 'SWE';
-    
-    return [
-      `Helped ${studentsHelped}+ students land internships`,
-      `${primarySpec} / ${specializations[1] || 'Backend'} / ${specializations[2] || 'System Design'} Specialist`,
-      'FAANG mock interview experience',
-    ];
-  };
-
-  const getExpertiseTags = () => {
-    const skills = mentor.skills || mentor.expertise || [];
-    if (skills.length > 0) {
-      return skills.slice(0, 4);
-    }
-    return ['Backend', 'System Design', 'Resume Review', 'Interview Prep'];
-  };
-
-  const getSpecializationTag = () => {
-    const skills = mentor.skills || mentor.expertise || [];
-    if (skills.length > 0) {
-      const primary = skills[0];
-      const secondary = skills[1] || 'Interview Prep';
-      return `${primary} & ${secondary}`;
-    }
-    return 'Product Strategy & Interview Prep';
-  };
+  /* =========================
+     Badge selection (max ONE, priority: top_pick > verified > new)
+     Every mentor MUST have at most ONE badge
+     New mentors MUST show "New mentor" badge (default if no badges)
+  ========================= */
+  const displayBadge = (() => {
+    if (badges.includes('top_pick')) return { label: 'Top rated', type: 'top_pick' };
+    if (badges.includes('verified')) return { label: 'Verified', type: 'verified' };
+    if (badges.includes('new')) return { label: 'New mentor', type: 'new' };
+    // Default to "New mentor" if no badges (ensures no empty state)
+    return { label: 'New mentor', type: 'new' };
+  })();
 
   return (
-    <>
-      <Card
-        sx={{
-          height: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          transition: 'transform 0.2s, box-shadow 0.2s',
-          borderRadius: isVisitor ? '20px' : '16px',
-          boxShadow: isVisitor ? 4 : 2,
-          '&:hover': {
-            transform: 'translateY(-4px)',
-            boxShadow: isVisitor ? 8 : 4,
-          },
-        }}
-      >
-        <CardContent sx={{ flexGrow: 1, p: isVisitor ? 5 : 3 }}>
-          {/* Header Area */}
-          <Box sx={{ display: 'flex', alignItems: 'flex-start', mb: isVisitor ? 3 : 2.5 }}>
-            <Avatar
-              src={isVisitor ? undefined : (mentor.avatar || (typeof mentor.user === 'object' ? mentor.user.avatar : undefined))}
-              sx={{ 
-                width: isVisitor ? 72 : 64, 
-                height: isVisitor ? 72 : 64, 
-                mr: 2,
-                fontSize: isVisitor ? '1.75rem' : '1.5rem',
+    <Card
+      sx={{
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        borderRadius: 3,
+        transition: 'all 0.2s ease',
+        '&:hover': {
+          transform: 'translateY(-4px)',
+          boxShadow: '0 12px 24px rgba(0,0,0,0.12)',
+        },
+      }}
+    >
+      <CardContent sx={{ pt: 4, px: 3, pb: 3, flexGrow: 1, display: 'flex', flexDirection: 'column', position: 'relative' }}>
+        {/* 1. Badge (identity mark, absolute positioned, not in layout flow) */}
+        <Chip
+          label={displayBadge.label}
+          size="small"
+          sx={{
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            fontSize: '0.7rem',
+            height: 20,
+            px:'2px',
+            zIndex: 1,
+            ...(displayBadge.type === 'top_pick' && {
+              bgcolor: (theme) => alpha(theme.palette.primary.light, 0.15),
+              '& .MuiChip-label': {
+                color: 'primary.main',
                 fontWeight: 600,
-                ...(isVisitor && {
-                  filter: 'blur(4px)',
-                  bgcolor: 'grey.300',
-                })
+              },
+            }),
+            ...(displayBadge.type === 'verified' && {
+              bgcolor: (theme) => alpha(theme.palette.success.light, 0.2),
+              '& .MuiChip-label': {
+                color: 'success.main',
+                fontWeight: 500,
+              },
+            }),
+            ...(displayBadge.type === 'new' && {
+              bgcolor: (theme) => alpha(theme.palette.info.light, 0.2),
+              '& .MuiChip-label': {
+                color: 'info.main',
+                fontWeight: 500,
+              },
+            }),
+          }}
+        />
+
+        {/* =========================
+            2. Name (single line, highest priority)
+        ========================= */}
+        <Box display="flex" gap={2} alignItems="flex-start">
+          <Avatar
+            src={mentor.user?.avatar}
+            sx={{
+              width: 64,
+              height: 64,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+              flexShrink: 0,
+            }}
+          >
+            {display_name?.[0]}
+          </Avatar>
+
+          <Box minWidth={0} flex={1}>
+            <Typography
+              sx={{
+                fontSize: '0.9375rem',
+                fontWeight: 600,
+                lineHeight: 1.4,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
               }}
             >
-              {typeof mentor.user === 'object' 
-                ? `${mentor.user.first_name?.[0] || ''}${mentor.user.last_name?.[0] || ''}`.trim() || mentor.user.username?.[0] || 'M'
-                : 'M'}
-            </Avatar>
-            <Box sx={{ flexGrow: 1 }}>
-              <Typography 
-                variant={isVisitor ? 'h5' : 'h6'}
-                component="div" 
-                gutterBottom
-                sx={{ 
-                  fontWeight: 600,
-                  fontSize: isVisitor ? '1.5rem' : '1.25rem',
-                  mb: 0.5,
-                  lineHeight: 1.2,
+              {display_name}
+            </Typography>
+
+            {/* 3. Job Title (one full line, directly under name) */}
+            {job_title && (
+              <Typography
+                sx={{
+                  fontSize: '0.8125rem',
+                  color: 'text.secondary',
+                  mt: 0.75,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
                 }}
               >
-                {isVisitor 
-                  ? (typeof mentor.user === 'object' 
-                      ? `${mentor.user.first_name?.[0] || ''}${mentor.user.last_name?.[0] || ''}`.trim() || mentor.user.username?.[0] || 'M'
-                      : 'M')
-                  : (typeof mentor.user === 'object' 
-                      ? `${mentor.user.first_name || ''} ${mentor.user.last_name || ''}`.trim() || mentor.user.username
-                      : 'Mentor')}
+                {job_title}
               </Typography>
-              {isVisitor ? (
-                <>
-                  <Typography 
-                    variant="body2" 
-                    color="text.secondary" 
-                    sx={{ 
-                      mb: 0.75, 
-                      fontWeight: 500,
-                      fontSize: '0.875rem',
-                    }}
-                  >
-                    {getPreviousCompany()} • {getExperienceYears()}
-                  </Typography>
-                  <Typography 
-                    variant="body2" 
-                    sx={{ 
-                      color: 'text.secondary',
-                      fontSize: '0.813rem',
-                      fontStyle: 'italic',
-                    }}
-                  >
-                    🏆 Specializes in {getSpecializationTag()}
-                  </Typography>
-                </>
-              ) : (
-                <>
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
-                    {mentor.company || mentor.current_position || 'Professional'}
-                  </Typography>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                    <Rating value={mentor.rating || 0} readOnly size="small" />
-                    <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
-                      ({(mentor.review_count || mentor.reviews_count || 0)} reviews)
-                    </Typography>
-                  </Box>
-                </>
-              )}
-            </Box>
-            {onFavorite && !isVisitor && (
-              <IconButton
-                onClick={() => onFavorite(mentor.id)}
-                color="primary"
-                size="small"
+            )}
+
+            {/* 4. Company (one full line, directly under job title) */}
+            {industry && (
+              <Typography
+                sx={{
+                  fontSize: '0.8125rem',
+                  color: 'text.secondary',
+                  mt: 0.5,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
               >
-                {isFavorite ? <Favorite /> : <FavoriteBorder />}
-              </IconButton>
+                {industry}
+              </Typography>
             )}
           </Box>
+        </Box>
 
-          {/* For visitors: show highlights section; for students: show bio */}
-          {isVisitor ? (
-            <>
-              {/* Highlights Section */}
-              <Box sx={{ mb: 3 }}>
-                <Typography 
-                  variant="subtitle2" 
-                  sx={{ 
-                    fontWeight: 600, 
-                    mb: 1.5, 
-                    fontSize: '0.875rem',
-                    color: 'text.primary',
+        {/* =========================
+            5. Value Proposition (max 2 lines total)
+        ========================= */}
+        {(mentor.mentor_card || primary_focus) && (
+          <Box mt={1.5}>
+            {mentor.mentor_card ? (
+              <Box>
+                {/* P1: Prefix label when activeTrack is set */}
+                {activeTrack && TRACK_PREFIX_LABELS[activeTrack] && (
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{
+                      fontSize: '0.7rem',
+                      mb: 0.5,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px',
+                    }}
+                  >
+                    {TRACK_PREFIX_LABELS[activeTrack]}
+                  </Typography>
+                )}
+                <Typography
+                  variant="body2"
+                  fontWeight={600}
+                  sx={{
+                    display: '-webkit-box',
+                    WebkitLineClamp: 1,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
                   }}
                 >
-                  Highlights:
+                  {mentor.mentor_card.line1}
                 </Typography>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
-                  {getHighlights().map((highlight, index) => (
-                    <Box
-                      key={index}
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        position: 'relative',
-                        px: 1.5,
-                        py: 1.25,
-                        borderRadius: '8px',
-                        bgcolor: 'grey.100',
-                      }}
-                    >
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          flex: 1,
-                          filter: 'blur(2px)',
-                          color: 'text.secondary',
-                          fontSize: '0.813rem',
-                          opacity: 0.7,
-                        }}
-                      >
-                        {highlight}
-                      </Typography>
-                      <Lock sx={{ fontSize: '1rem', color: 'text.secondary', ml: 1.5, flexShrink: 0, opacity: 0.6 }} />
-                    </Box>
-                  ))}
-                </Box>
+                {mentor.mentor_card.line2 && (
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{
+                      display: '-webkit-box',
+                      WebkitLineClamp: 1,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
+                      mt: 0.5,
+                    }}
+                  >
+                    {mentor.mentor_card.line2}
+                  </Typography>
+                )}
               </Box>
-
-              {/* Expertise Tags - Blurred */}
-              <Box sx={{ mb: 2.5 }}>
-                <Typography 
-                  variant="subtitle2" 
-                  sx={{ 
-                    fontWeight: 600, 
-                    mb: 1.25, 
-                    fontSize: '0.875rem',
-                    color: 'text.primary',
+            ) : (
+              <Box>
+                <Typography
+                  variant="body2"
+                  fontWeight={600}
+                  sx={{
+                    display: '-webkit-box',
+                    WebkitLineClamp: 1,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
                   }}
                 >
-                  Expertise:
+                  {primary_focus}
                 </Typography>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, position: 'relative' }}>
-                  {getExpertiseTags().map((tag: string, index: number) => (
-                    <Chip
-                      key={index}
-                      label={tag}
-                      size="small"
-                      sx={{
-                        filter: 'blur(2px)',
-                        borderRadius: '16px',
-                        fontSize: '0.75rem',
-                        height: '28px',
-                        bgcolor: 'grey.100',
-                        color: 'text.secondary',
-                        border: 'none',
-                        opacity: 0.7,
-                      }}
-                    />
-                  ))}
-                </Box>
+                {session_focus && (
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{
+                      display: '-webkit-box',
+                      WebkitLineClamp: 1,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
+                      mt: 0.5,
+                    }}
+                  >
+                    {session_focus}
+                  </Typography>
+                )}
               </Box>
-            </>
-          ) : (
-            <>
-              {/* For authenticated users: show bio */}
-              <Typography variant="body2" color="text.secondary" gutterBottom>
-                {mentor.bio?.substring(0, 100) + (mentor.bio && mentor.bio.length > 100 ? '...' : '')}
-              </Typography>
-
-              {/* Skills/Expertise */}
-              <Box sx={{ mt: 2, mb: 2 }}>
-                <Typography variant="subtitle2" gutterBottom>
-                  Expertise:
-                </Typography>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                  {(mentor.skills || mentor.expertise || []).slice(0, 3).map((skill: string, index: number) => (
-                    <Chip
-                      key={index}
-                      label={skill}
-                      size="small"
-                      variant="outlined"
-                      color="primary"
-                    />
-                  ))}
-                  {(mentor.skills || mentor.expertise || []).length > 3 && (
-                    <Chip
-                      label={`+${(mentor.skills || mentor.expertise || []).length - 3} more`}
-                      size="small"
-                      variant="outlined"
-                    />
-                  )}
-                </Box>
-              </Box>
-
-              {/* Location and Experience */}
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <LocationOn fontSize="small" color="action" sx={{ mr: 1 }} />
-                <Typography variant="body2" color="text.secondary">
-                  {mentor.location || 'Remote'}
-                </Typography>
-              </Box>
-
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <Work fontSize="small" color="action" sx={{ mr: 1 }} />
-                <Typography variant="body2" color="text.secondary">
-                  {(mentor.experience_years || mentor.years_of_experience || 0)} years experience
-                </Typography>
-              </Box>
-
-              {/* Pricing */}
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 2 }}>
-                <Typography variant="h6" color="primary">
-                  ${mentor.hourly_rate || mentor.price_per_hour || 0}/hr
-                </Typography>
-                <Chip
-                  label={mentor.availability_status || 'Available'}
-                  color={mentor.availability_status === 'Available' ? 'success' : 'default'}
-                  size="small"
-                />
-              </Box>
-            </>
-          )}
-        </CardContent>
-
-        <CardActions sx={{ p: isVisitor ? 3 : 2, pt: isVisitor ? 2 : 0 }}>
-          {isVisitor ? (
-            <Box sx={{ width: '100%' }}>
-              <Button
-                variant="contained"
-                fullWidth
-                onClick={() => window.location.href = '/register'}
-                startIcon={<LockOpen sx={{ fontSize: '1.125rem' }} />}
-                sx={{
-                  bgcolor: '#1976d2',
-                  color: 'white',
-                  fontWeight: 500,
-                  py: 1.75,
-                  borderRadius: '12px',
-                  boxShadow: '0 2px 8px rgba(25, 118, 210, 0.3)',
-                  '&:hover': {
-                    bgcolor: '#1565c0',
-                    boxShadow: '0 4px 12px rgba(25, 118, 210, 0.4)',
-                  },
-                  textTransform: 'none',
-                  fontSize: '0.938rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 1,
-                }}
-              >
-                Unlock Full Mentor Profile
-              </Button>
-              <Typography
-                variant="caption"
-                sx={{
-                  display: 'block',
-                  textAlign: 'center',
-                  mt: 1.25,
-                  color: 'text.secondary',
-                  fontSize: '0.75rem',
-                  lineHeight: 1.5,
-                }}
-              >
-                Free — view availability, pricing, and success stories
-              </Typography>
-              <Typography
-                variant="caption"
-                sx={{
-                  display: 'block',
-                  textAlign: 'center',
-                  mt: 0.5,
-                  color: 'text.secondary',
-                  fontSize: '0.688rem',
-                  opacity: 0.8,
-                }}
-              >
-                No spam. Cancel anytime.
-              </Typography>
-            </Box>
-          ) : (
-            <>
-              <Button
-                size="small"
-                onClick={() => setDetailsOpen(true)}
-                startIcon={<Message />}
-              >
-                View Details
-              </Button>
-              <Button
-                variant="contained"
-                size="small"
-                onClick={handleBookAppointment}
-                startIcon={<Schedule />}
-                disabled={mentor.availability_status !== 'Available'}
-              >
-                Book Session
-              </Button>
-            </>
-          )}
-        </CardActions>
-      </Card>
-
-      {/* Mentor Details Dialog - Only for authenticated users */}
-      {!isVisitor && (
-        <Dialog
-          open={detailsOpen}
-          onClose={() => setDetailsOpen(false)}
-          maxWidth="md"
-          fullWidth
-        >
-          <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <Avatar
-              src={mentor.avatar || (typeof mentor.user === 'object' ? mentor.user.avatar : undefined)}
-              sx={{ width: 60, height: 60, mr: 2 }}
-            >
-              {typeof mentor.user === 'object' 
-                ? `${mentor.user.first_name?.[0] || ''}${mentor.user.last_name?.[0] || ''}`.trim() || mentor.user.username?.[0] || 'M'
-                : 'M'}
-            </Avatar>
-            <Box>
-              <Typography variant="h5">
-                {typeof mentor.user === 'object' 
-                  ? `${mentor.user.first_name || ''} ${mentor.user.last_name || ''}`.trim() || mentor.user.username
-                  : 'Mentor'}
-              </Typography>
-              <Typography variant="body1" color="text.secondary">
-                {mentor.title} at {mentor.company}
-              </Typography>
-            </Box>
+            )}
           </Box>
-        </DialogTitle>
-        <DialogContent>
-          <Grid container spacing={3}>
-            <Grid item xs={12} md={8}>
-              <Typography variant="h6" gutterBottom>
-                About
+        )}
+
+        {/* =========================
+            6. Tags (max 2 tags + "+N", single row only)
+        ========================= */}
+        {expertise.length > 0 && (
+          <Box mt={1.5} display="flex" gap={1} flexWrap="nowrap" overflow="hidden">
+            {displayExpertise.map((exp) => (
+              <Chip
+                key={exp}
+                label={exp}
+                size="small"
+                variant="outlined"
+                sx={{
+                  fontSize: '0.7rem',
+                  height: 24,
+                  flexShrink: 0,
+                  '& .MuiChip-label': {
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    maxWidth: '100px',
+                  },
+                }}
+              />
+            ))}
+            {remainingExpertise > 0 && (
+              <Chip
+                label={`+${remainingExpertise}`}
+                size="small"
+                sx={{
+                  fontSize: '0.7rem',
+                  height: 24,
+                  bgcolor: 'action.hover',
+                  flexShrink: 0,
+                }}
+              />
+            )}
+          </Box>
+        )}
+
+        {/* =========================
+            7. Rating (fixed vertical position, one row)
+        ========================= */}
+        <Box 
+          mt={1.5} 
+          sx={{ minHeight: '24px' }}
+          display="flex" 
+          alignItems="center" 
+          gap={1}
+        >
+          {rating !== null && review_count > 0 && (
+            <>
+              <Rating value={rating} precision={0.5} readOnly size="small" />
+              <Typography variant="caption" color="text.secondary">
+                {rating.toFixed(1)} ({review_count})
               </Typography>
-              <Typography variant="body1" paragraph>
-                {mentor.bio}
-              </Typography>
+            </>
+          )}
+        </Box>
 
-              <Typography variant="h6" gutterBottom>
-                Experience
-              </Typography>
-              <Typography variant="body1" paragraph>
-                {(mentor.experience_years || mentor.years_of_experience || 0)} years of experience{mentor.industry ? ` in ${mentor.industry}` : ''}
-              </Typography>
+        {/* Spacer to push footer down */}
+        <Box flex={1} />
+      </CardContent>
 
-              {mentor.education && (
-                <>
-                  <Typography variant="h6" gutterBottom>
-                    Education
-                  </Typography>
-                  <Typography variant="body1" paragraph>
-                    {mentor.education}
-                  </Typography>
-                </>
-              )}
+      <Divider />
 
-              <Typography variant="h6" gutterBottom>
-                Skills & Expertise
-              </Typography>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
-                {mentor.skills?.map((skill, index) => (
-                  <Chip
-                    key={index}
-                    label={skill}
-                    color="primary"
-                    variant="outlined"
-                  />
-                ))}
-              </Box>
-            </Grid>
+      {/* =========================
+          6. Footer (Price + CTA)
+      ========================= */}
+      <Box
+        px={3}
+        py={2}
+        display="flex"
+        justifyContent="space-between"
+        alignItems="center"
+        sx={{ minHeight: '64px' }}
+      >
+        {/* Price */}
+        <Typography fontWeight={800}>
+          {price_label}
+          <Typography
+            component="span"
+            variant="caption"
+            color="text.secondary"
+            sx={{ ml: 0.5 }}
+          >
+            / {price_unit}
+          </Typography>
+        </Typography>
 
-            <Grid item xs={12} md={4}>
-              <Box sx={{ bgcolor: 'grey.50', p: 2, borderRadius: 1 }}>
-                <Typography variant="h6" gutterBottom>
-                  Session Details
-                </Typography>
-                
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Hourly Rate
-                  </Typography>
-                  <Typography variant="h5" color="primary">
-                    ${mentor.hourly_rate || mentor.price_per_hour || 0}/hr
-                  </Typography>
-                </Box>
-
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Rating
-                  </Typography>
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <Rating value={mentor.rating || 0} readOnly />
-                    <Typography variant="body2" sx={{ ml: 1 }}>
-                      ({(mentor.review_count || mentor.reviews_count || 0)} reviews)
-                    </Typography>
-                  </Box>
-                </Box>
-
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Location
-                  </Typography>
-                  <Typography variant="body2">
-                    {mentor.location || 'Remote'}
-                  </Typography>
-                </Box>
-
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Availability
-                  </Typography>
-                  <Chip
-                    label={mentor.availability_status || 'Available'}
-                    color={mentor.availability_status === 'Available' ? 'success' : 'default'}
-                  />
-                </Box>
-
-                <Button
-                  variant="contained"
-                  fullWidth
-                  onClick={handleBookAppointment}
-                  disabled={mentor.availability_status !== 'Available'}
-                  startIcon={<Schedule />}
-                >
-                  Book Session
-                </Button>
-              </Box>
-            </Grid>
-          </Grid>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDetailsOpen(false)}>Close</Button>
-        </DialogActions>
-        </Dialog>
-      )}
-    </>
+        {/* 8. CTA Button (fixed size, max 2 lines, compact typography) */}
+        <Button
+          variant={isVisitor ? 'outlined' : 'contained'}
+          size="small"
+          onClick={() => {
+            if (mentor.id) {
+              navigate(`/student/mentors/${mentor.id}`);
+            }
+          }}
+          sx={{
+            borderRadius: 2,
+            textTransform: 'none',
+            fontWeight: 600,
+            fontSize: '0.65rem',
+            px: 2.5,
+            width: '150px',
+            height: '40px',
+            '& .MuiButton-label': {
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              lineHeight: 1.15,
+              textAlign: 'center',
+            },
+          }}
+        >
+          {cta_label}
+        </Button>
+      </Box>
+    </Card>
   );
 };
 

@@ -89,6 +89,47 @@ class MentorService {
       throw error;
     }
   }
+
+  /**
+   * Get mentor's own profile (for authenticated mentors)
+   */
+  async getMyProfile(): Promise<any> {
+    try {
+      // Try to get via profile update endpoint (if it supports GET)
+      // Otherwise, this might need a dedicated endpoint
+      const response = await apiClient.get('/mentors/profile/update/');
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get mentor profile:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update mentor's own profile (for authenticated mentors)
+   */
+  async updateMyProfile(data: any): Promise<any> {
+    try {
+      const response = await apiClient.patch('/mentors/profile/update/', data);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to update mentor profile:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get mentor's own services
+   */
+  async getMyServices(mentorId: number): Promise<any> {
+    try {
+      const response = await apiClient.get(`/mentors/${mentorId}/services/`);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get mentor services:', error);
+      throw error;
+    }
+  }
 }
 
 // Use MentorFilters from types/index.ts instead

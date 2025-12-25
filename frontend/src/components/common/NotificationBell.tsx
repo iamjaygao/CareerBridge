@@ -1,8 +1,11 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import { IconButton, Badge } from '@mui/material';
 import { Notifications as NotificationsIcon } from '@mui/icons-material';
 import { useUnreadNotificationCount } from '../../hooks/useUnreadNotificationCount';
+import { RootState } from '../../store';
+import { getLandingPathByRole } from '../../utils/roleLanding';
 
 interface NotificationBellProps {
   /**
@@ -28,13 +31,16 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
   showOnlyWhenAuthenticated = true,
 }) => {
   const navigate = useNavigate();
+  const { user } = useSelector((state: RootState) => state.auth);
   const { unreadCount } = useUnreadNotificationCount({
     autoRefresh: true,
     refreshInterval: 30000,
   });
 
   const handleClick = () => {
-    navigate('/notifications');
+    const role = user?.role;
+    const basePath = getLandingPathByRole(role);
+    navigate(`${basePath}/notifications`);
   };
 
   return (

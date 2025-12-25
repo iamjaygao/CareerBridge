@@ -55,9 +55,12 @@ const EmailVerificationPage = lazy(() => import('./pages/auth/EmailVerificationP
 // Student
 const StudentDashboardPage = lazy(() => import('./pages/student/DashboardPage'));
 const StudentAssessmentPage = lazy(() => import('./pages/student/AssessmentPage'));
-const StudentMentorsPage = lazy(() => import('./pages/student/MentorsPage'));
 const StudentAppointmentsPage = lazy(() => import('./pages/student/AppointmentsPage'));
 const StudentProfilePage = lazy(() => import('./pages/student/ProfilePage'));
+
+// Mentors (shared)
+const MentorListPage = lazy(() => import('./pages/mentors/MentorListPage'));
+const MentorDetailPage = lazy(() => import('./pages/mentors/MentorDetailPage'));
 
 // Mentor
 const MentorDashboardPage = lazy(() => import('./pages/mentor/DashboardPage'));
@@ -74,6 +77,9 @@ const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage')
 
 // SuperAdmin
 const CommandCenter = lazy(() => import('./pages/superadmin/CommandCenter'));
+
+// Notifications (shared)
+const NotificationsPage = lazy(() => import('./pages/notifications/NotificationsPage'));
 
 // Fallback
 const NotFoundPage = lazy(() => import('./pages/error/NotFoundPage'));
@@ -145,8 +151,10 @@ const AppInner: React.FC = () => {
               <Route element={<StudentLayout />}>
                 <Route path="/student" element={<StudentDashboardPage />} />
                 <Route path="/student/assessment" element={<StudentAssessmentPage />} />
-                <Route path="/student/mentors" element={<StudentMentorsPage />} />
+                <Route path="/student/mentors" element={<MentorListPage />} />
+                <Route path="/student/mentors/:id" element={<MentorDetailPage />} />
                 <Route path="/student/appointments" element={<StudentAppointmentsPage />} />
+                <Route path="/student/notifications" element={<NotificationsPage />} />
                 <Route path="/student/profile" element={<StudentProfilePage />} />
               </Route>
             </Route>
@@ -161,6 +169,7 @@ const AppInner: React.FC = () => {
                 <Route path="/mentor/availability" element={<MentorAvailabilityPage />} />
                 <Route path="/mentor/appointments" element={<MentorAppointmentsPage />} />
                 <Route path="/mentor/earnings" element={<MentorEarningsPage />} />
+                <Route path="/mentor/notifications" element={<NotificationsPage />} />
               </Route>
             </Route>
           </Route>
@@ -170,6 +179,7 @@ const AppInner: React.FC = () => {
             <Route element={<StaffRoute />}>
               <Route element={<StaffLayout />}>
                 <Route path="/staff" element={<StaffDashboardPage />} />
+                <Route path="/staff/notifications" element={<NotificationsPage />} />
               </Route>
             </Route>
           </Route>
@@ -179,6 +189,7 @@ const AppInner: React.FC = () => {
             <Route element={<AdminRoute />}>
               <Route element={<AdminLayout />}>
                 <Route path="/admin" element={<AdminDashboardPage />} />
+                <Route path="/admin/notifications" element={<NotificationsPage />} />
               </Route>
             </Route>
           </Route>
@@ -187,6 +198,7 @@ const AppInner: React.FC = () => {
           <Route element={<ProtectedGate />}>
             <Route element={<SuperAdminLayout />}>
               <Route path="/superadmin" element={<CommandCenter />} />
+              <Route path="/superadmin/notifications" element={<NotificationsPage />} />
             </Route>
           </Route>
 

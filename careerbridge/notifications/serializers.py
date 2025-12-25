@@ -16,7 +16,7 @@ class NotificationSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'notification_type', 'notification_type_display', 'title', 'message',
             'is_read', 'is_sent', 'priority', 'priority_display', 'target_role', 'target_role_display',
-            'related_appointment', 'related_resume', 'related_mentor', 'sent_at', 'read_at', 'created_at'
+            'related_appointment', 'related_resume', 'related_mentor', 'sent_at', 'read_at', 'created_at', 'payload'
         ]
         read_only_fields = [
             'id', 'user', 'target_role', 'notification_type', 'title', 'message', 'priority',
@@ -36,7 +36,7 @@ class NotificationListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'notification_type', 'notification_type_display', 'title', 'message',
             'is_read', 'priority', 'priority_display', 'target_role', 'target_role_display',
-            'created_at'
+            'created_at', 'payload'
         ]
         read_only_fields = fields
 

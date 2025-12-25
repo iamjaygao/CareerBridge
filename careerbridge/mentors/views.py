@@ -2,13 +2,15 @@ from rest_framework import status, generics, permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404
-from django.db.models import Q
+from django.db.models import Q, Avg, Count  
 from django.utils import timezone
 from datetime import date, timedelta, datetime
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from django.conf import settings
+from mentors.services.legacy import apply_track_ranking
 import stripe
 
 from .models import (
@@ -16,42 +18,92 @@ from .models import (
     MentorReview, MentorApplication, MentorPayment, MentorNotification
 )
 from .serializers import (
-    MentorProfileSerializer, MentorProfileDetailSerializer, MentorDetailSerializer, MentorServiceSerializer,
+    MentorProfileSerializer, MentorProfileDetailSerializer, MentorServiceSerializer,
     MentorAvailabilitySerializer, MentorSessionSerializer, MentorSessionCreateSerializer,
     MentorReviewSerializer, MentorApplicationSerializer, MentorPaymentSerializer,
     MentorNotificationSerializer, MentorSearchSerializer, MentorRecommendationSerializer,
     MentorAnalyticsSerializer, MentorAvailabilitySlotSerializer, MentorRankingSerializer
 )
-from .services import MentorRecommendationService, MentorSearchService, MentorAnalyticsService
-from adminpanel.permissions import IsAdminUser
+from .services.legacy import MentorRecommendationService, MentorSearchService, MentorAnalyticsService
+from adminpanel.permissions import IsAdminUser, user_has_role   
 
 class MentorListView(generics.ListAPIView):
     """List all approved mentors with filtering and search"""
     serializer_class = MentorProfileSerializer
     permission_classes = []  # Allow public access to view mentors
+
+    def mentor_score(self, m):
+        score = 0
+        if m.is_verified:
+            score += 50
+        if m.specializations:
+            score += 20
+        if m.session_focus:
+            score += 10
+        score += (m.review_count_calc or 0) * 5
+        score += float(m.avg_rating_calc or 0) * 10
+        if m.user.username == "test_mentor":
+            score -= 30
+        return score
     
     def get_queryset(self):
-        queryset = MentorProfile.objects.filter(status='approved')
-        
-        # Apply filters
-        service_type = self.request.query_params.get('service_type')
-        industry = self.request.query_params.get('industry')
-        min_rating = self.request.query_params.get('min_rating')
-        is_verified = self.request.query_params.get('is_verified')
-        
+        queryset = MentorProfile.objects.filter(
+            status="approved"
+        ).annotate(
+            avg_rating_calc=Avg("reviews__rating"),
+            review_count_calc=Count("reviews"),
+        )
+
+        # ======================
+        # Filters (保留你原来的)
+        # ======================
+        service_type = self.request.query_params.get("service_type")
+        industry = self.request.query_params.get("industry")
+        min_rating = self.request.query_params.get("min_rating")
+        is_verified = self.request.query_params.get("is_verified")
+        track = self.request.query_params.get("track")
+
         if service_type:
             queryset = queryset.filter(services__service_type=service_type)
-        
+
         if industry:
             queryset = queryset.filter(industry__icontains=industry)
-        
+
         if min_rating:
-            queryset = queryset.filter(average_rating__gte=float(min_rating))
-        
+            queryset = queryset.filter(avg_rating_calc__gte=float(min_rating))
+
         if is_verified is not None:
-            queryset = queryset.filter(is_verified=is_verified.lower() == 'true')
-        
-        return queryset.distinct().order_by('-average_rating', '-total_sessions')
+            queryset = queryset.filter(is_verified=is_verified.lower() == "true")
+
+        queryset = queryset.distinct()
+
+        # ======================
+        # ✅ 6.2 核心：Track-aware ranking
+        # ======================
+        if track:
+            queryset = queryset.filter(primary_track=track)
+            queryset = apply_track_ranking(queryset, track)
+        else:
+            # fallback ranking（无 track）
+            queryset = queryset.order_by(
+                "-is_verified",
+                "-avg_rating_calc",
+                "-total_sessions",
+            )
+
+        return queryset
+
+    def list(self, request, *args, **kwargs):
+        track = request.query_params.get("track")
+        is_visitor = not request.user.is_authenticated
+
+        if is_visitor and track:
+            queryset = self.get_queryset()
+            queryset = queryset[:6]
+            serializer = self.get_serializer(queryset, many=True)
+            return Response(serializer.data)
+
+        return super().list(request, *args, **kwargs)
 
     @swagger_auto_schema(
         operation_description="List all approved mentors with filtering options",
@@ -68,13 +120,13 @@ class MentorListView(generics.ListAPIView):
 
 class MentorDetailView(generics.RetrieveAPIView):
     """Get detailed mentor profile"""
-    serializer_class = MentorDetailSerializer
+    serializer_class = MentorProfileDetailSerializer
     permission_classes = []  # Allow public access to view mentor details
     queryset = MentorProfile.objects.filter(status='approved')
 
     @swagger_auto_schema(
         operation_description="Get detailed mentor profile information",
-        responses={200: MentorDetailSerializer}
+        responses={200: MentorProfileDetailSerializer}
     )
     def get(self, request, *args, **kwargs):
         return super().get(request, *args, **kwargs)
@@ -488,19 +540,28 @@ class PlatformAnalyticsView(APIView):
             return Response(analytics)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-class MentorProfileUpdateView(generics.UpdateAPIView):
-    """Update mentor profile (for mentors only)"""
+class MentorProfileUpdateView(generics.RetrieveUpdateAPIView):
+    """Get and update mentor profile (for mentors only)"""
     serializer_class = MentorProfileDetailSerializer
     permission_classes = [permissions.IsAuthenticated]
     
     def get_object(self):
         user = self.request.user
         if not hasattr(user, 'mentor_profile'):
-            raise PermissionError("You must be a mentor to update profile")
+            raise PermissionDenied("You must be a mentor to update profile")
         return user.mentor_profile
     
     def get_queryset(self):
         return MentorProfile.objects.filter(user=self.request.user)
+    
+    def update(self, request, *args, **kwargs):
+        """Handle PATCH requests with validation for primary_service_id"""
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response(serializer.data)
 
 class MentorServiceUpdateView(generics.UpdateAPIView):
     """Update mentor service (for mentors only)"""

@@ -11,6 +11,7 @@ from .serializers import (
     TimeSlotSerializer, AppointmentSerializer, AppointmentRequestSerializer,
     AppointmentUpdateSerializer, TimeSlotCreateSerializer
 )
+from notifications.models import Notification
 
 class TimeSlotListView(generics.ListAPIView):
     """Get available time slot list"""
@@ -112,6 +113,25 @@ class AppointmentDetailView(generics.RetrieveUpdateDestroyAPIView):
         reason = request.data.get('reason', '')
         appointment.cancel_appointment(reason=reason, cancelled_by='user')
         
+        mentor_name = appointment.mentor.user.get_full_name() or appointment.mentor.user.username
+        appointment_datetime = appointment.scheduled_start.strftime('%Y-%m-%d %H:%M')
+        Notification.objects.create(
+            user=appointment.user,
+            notification_type='appointment_cancelled',
+            title='Appointment status updated',
+            message=f'Appointment with {mentor_name} on {appointment_datetime} has been cancelled',
+            priority='high',
+            related_appointment=appointment
+        )
+        Notification.objects.create(
+            user=appointment.mentor.user,
+            notification_type='appointment_cancelled',
+            title='Appointment status updated',
+            message=f'Appointment with {appointment.user.get_full_name() or appointment.user.username} on {appointment_datetime} has been cancelled',
+            priority='high',
+            related_appointment=appointment
+        )
+        
         return Response({"message": "Appointment cancelled successfully"})
     
     @action(detail=True, methods=['post'])
@@ -138,6 +158,15 @@ class AppointmentDetailView(generics.RetrieveUpdateDestroyAPIView):
         appointment.user_feedback = feedback
         appointment.save()
         
+        Notification.objects.create(
+            user=appointment.mentor.user,
+            notification_type='system_announcement',
+            title='You received a new review',
+            message=f'You received a {rating}-star review for your appointment on {appointment.scheduled_start.strftime("%Y-%m-%d %H:%M")}',
+            priority='low',
+            related_appointment=appointment
+        )
+        
         return Response({"message": "Rating submitted successfully"})
 
 class MentorAppointmentListView(generics.ListAPIView):
@@ -156,10 +185,61 @@ class MentorAppointmentListView(generics.ListAPIView):
     def update_status(self, request, pk=None):
         """Mentor updates appointment status"""
         appointment = get_object_or_404(Appointment, pk=pk, mentor=request.user.mentor_profile)
+        old_status = appointment.status
         serializer = AppointmentUpdateSerializer(appointment, data=request.data, partial=True)
         
         if serializer.is_valid():
             serializer.save()
+            appointment.refresh_from_db()
+            
+            if appointment.status in ['confirmed', 'cancelled', 'completed'] and appointment.status != old_status:
+                mentor_name = appointment.mentor.user.get_full_name() or appointment.mentor.user.username
+                student_name = appointment.user.get_full_name() or appointment.user.username
+                appointment_datetime = appointment.scheduled_start.strftime('%Y-%m-%d %H:%M')
+                notification_type = 'appointment_cancelled' if appointment.status == 'cancelled' else 'appointment_confirmed'
+                priority = 'high' if appointment.status == 'cancelled' else 'normal'
+                status_text = appointment.get_status_display()
+                
+                Notification.objects.create(
+                    user=appointment.user,
+                    notification_type=notification_type,
+                    title='Appointment status updated',
+                    message=f'{mentor_name} updated your appointment on {appointment_datetime} to {status_text}',
+                    priority=priority,
+                    related_appointment=appointment
+                )
+                Notification.objects.create(
+                    user=appointment.mentor.user,
+                    notification_type=notification_type,
+                    title='Appointment status updated',
+                    message=f'Your appointment with {student_name} on {appointment_datetime} is now {status_text}',
+                    priority=priority,
+                    related_appointment=appointment
+                )
+            
+            if appointment.status == 'completed' and old_status != 'completed':
+                mentor_name = appointment.mentor.user.get_full_name() or appointment.mentor.user.username
+                appointment_datetime = appointment.scheduled_start.strftime('%Y-%m-%d %H:%M')
+                
+                # Idempotency check: ensure only one review reminder per appointment
+                if not Notification.objects.filter(
+                    user=appointment.user,
+                    notification_type='system_announcement',
+                    related_appointment=appointment,
+                    title='Please review your session'
+                ).exists():
+                    # TODO: This notification is intended to be sent 24h after completion
+                    Notification.objects.create(
+                        user=appointment.user,
+                        notification_type='system_announcement',
+                        title='Please review your session',
+                        message=f'Please share your feedback about your session with {mentor_name} on {appointment_datetime}',
+                        priority='normal',
+                        related_appointment=appointment,
+                        sent_at=None,
+                        payload={'action': 'review_appointment', 'appointment_id': appointment.id}
+                    )
+            
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -179,7 +259,15 @@ class AppointmentRequestListView(generics.ListCreateAPIView):
         return AppointmentRequest.objects.filter(user=user)
     
     def perform_create(self, serializer):
-        serializer.save()
+        appointment_request = serializer.save()
+        student_name = appointment_request.user.get_full_name() or appointment_request.user.username
+        Notification.objects.create(
+            user=appointment_request.mentor.user,
+            notification_type='mentor_response',
+            title='New appointment request',
+            message=f'You received a new appointment request from {student_name}',
+            priority='normal'
+        )
 
 class AppointmentRequestDetailView(generics.RetrieveUpdateAPIView):
     """Appointment request details and update"""
@@ -224,6 +312,17 @@ class AppointmentRequestDetailView(generics.RetrieveUpdateAPIView):
         appointment_request.mentor_response = response
         appointment_request.suggested_time_slots = suggested_slots
         appointment_request.save()
+        
+        mentor_name = appointment_request.mentor.user.get_full_name() or appointment_request.mentor.user.username
+        status_text = 'accepted' if status_action == 'accepted' else 'rejected'
+        Notification.objects.create(
+            user=appointment_request.user,
+            notification_type='mentor_response',
+            title='Mentor responded to your request',
+            message=f'{mentor_name} {status_text} your appointment request',
+            priority='normal',
+            related_mentor=appointment_request.mentor
+        )
         
         return Response({"message": "Response submitted successfully"})
 

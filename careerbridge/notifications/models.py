@@ -74,6 +74,9 @@ class Notification(models.Model):
     sent_at = models.DateTimeField(null=True, blank=True, help_text="Sent time")
     read_at = models.DateTimeField(null=True, blank=True, help_text="Read time")
     
+    # Action payload for deep-linking
+    payload = models.JSONField(default=dict, blank=True, help_text="Action payload for navigation")
+    
     # Metadata
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

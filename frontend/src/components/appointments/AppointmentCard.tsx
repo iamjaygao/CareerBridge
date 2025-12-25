@@ -122,7 +122,7 @@ const AppointmentCard: React.FC<AppointmentCardProps> = ({
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 {typeof appointment.mentor === 'object' 
-                  ? (appointment.mentor.current_position || appointment.mentor.expertise?.[0] || 'Mentor')
+                  ? appointment.mentor.job_title || appointment.mentor.expertise?.[0] || 'Mentor'
                   : 'Mentor'}
               </Typography>
             </Box>

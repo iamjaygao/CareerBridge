@@ -2,7 +2,7 @@ from django.db.models import Q, Avg, Count, Sum
 from django.core.cache import cache
 from django.utils import timezone
 from datetime import timedelta
-from .models import MentorProfile, MentorService, MentorReview, MentorSession
+from ..models import MentorProfile, MentorService, MentorReview, MentorSession
 
 class MentorRecommendationService:
     """Service for mentor recommendations and rankings"""
@@ -354,3 +354,40 @@ class MentorAnalyticsService:
             'platform_fees': platform_fees,
             'period_days': days
         } 
+    # mentors/services.py
+
+def apply_track_ranking(queryset, track: str):
+    """
+    Apply different ranking strategies based on primary_track
+    """
+    if track == "resume_review":
+        return queryset.order_by(
+            "-average_rating",
+            "-total_sessions",
+            "-is_verified",
+        )
+
+    if track == "mock_interview":
+        return queryset.order_by(
+            "-total_sessions",
+            "-average_rating",
+        )
+
+    if track == "career_switch":
+        return queryset.order_by(
+            "-is_verified",
+            "-total_sessions",
+        )
+
+    if track == "advanced_interview":
+        return queryset.order_by(
+            "-average_rating",
+            "-is_verified",
+            "-total_sessions",
+        )
+
+    return queryset.order_by(
+        "-is_verified",
+        "-average_rating",
+        "-total_sessions",
+    )

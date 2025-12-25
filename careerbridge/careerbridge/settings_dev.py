@@ -23,8 +23,12 @@ ALLOWED_HOSTS = [
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.environ.get('POSTGRES_DB', 'careerbridge'),
+        'USER': os.environ.get('POSTGRES_USER', 'careerbridge_user'),
+        'PASSWORD': os.environ.get('POSTGRES_PASSWORD', 'careerbridge_dev_pwd'),
+        'HOST': os.environ.get('POSTGRES_HOST', 'localhost'),
+        'PORT': os.environ.get('POSTGRES_PORT', '5432'),
     }
 }
 

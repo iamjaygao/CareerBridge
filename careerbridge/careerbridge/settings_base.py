@@ -29,7 +29,6 @@ INSTALLED_APPS = [
     'users',
     'chat',
     'search',
-
     'rest_framework',
     'rest_framework_simplejwt',
     'drf_yasg',

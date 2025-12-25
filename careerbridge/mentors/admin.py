@@ -6,14 +6,37 @@ from .models import (
 
 @admin.register(MentorProfile)
 class MentorProfileAdmin(admin.ModelAdmin):
-    list_display = ('user', 'current_position', 'industry', 'status', 'is_verified', 'payouts_enabled', 'charges_enabled', 'average_rating', 'total_reviews', 'total_sessions', 'total_earnings', 'created_at')
-    list_filter = ('status', 'industry', 'years_of_experience', 'is_verified', 'payouts_enabled', 'charges_enabled', 'created_at')
-    search_fields = ('user__username', 'user__email', 'current_position', 'industry')
-    readonly_fields = ('average_rating', 'total_reviews', 'total_sessions', 'total_earnings', 'ranking_score', 'created_at', 'updated_at')
-    
+    list_display = (
+        'user', 'current_position', 'primary_track','system_role','industry', 'status',
+        'is_verified', 'payouts_enabled', 'charges_enabled',
+        'average_rating', 'total_reviews', 'total_sessions',
+        'total_earnings', 'created_at',
+    )
+    list_filter = (
+        'status', 'industry', 'years_of_experience',
+        'is_verified', 'payouts_enabled', 'charges_enabled', 'created_at','primary_track',
+    )
+    search_fields = (
+        'user__username', 'user__email',
+        'current_position', 'industry','system_role',
+    )
+    readonly_fields = (
+        'average_rating', 'total_reviews', 'total_sessions',
+        'total_earnings', 'ranking_score', 'created_at', 'updated_at'
+    )
+
     fieldsets = (
+        ('SaaS Positioning (Core)', {
+            'fields': (
+                'primary_track',
+                'system_role',
+                'primary_focus',
+                'session_focus',
+            ),
+            'description': 'Controls how this mentor appears in SaaS mentor cards',
+        }),
         ('Basic Information', {
-            'fields': ('user', 'bio', 'years_of_experience', 'current_position', 'industry')
+            'fields': ('user', 'bio', 'years_of_experience', 'current_position', 'industry', )
         }),
         ('Verification & Badges', {
             'fields': ('is_verified', 'verification_badge', 'specializations')

@@ -17,6 +17,7 @@ interface BackendNotification {
   target_role_display?: string;
   created_at: string;
   user_id?: number;
+  payload?: { action?: string; appointment_id?: number; [key: string]: any };
 }
 
 // Async thunks
@@ -54,6 +55,18 @@ export const getUnreadCount = createAsyncThunk(
       return response.data.unread_count;
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.error || 'Failed to get unread count');
+    }
+  }
+);
+
+export const deleteNotification = createAsyncThunk(
+  'notifications/deleteNotification',
+  async (notificationId: number, { rejectWithValue }) => {
+    try {
+      await apiClient.delete(`/notifications/${notificationId}/delete/`);
+      return notificationId;
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.error || 'Failed to delete notification');
     }
   }
 );
@@ -107,25 +120,46 @@ const notificationSlice = createSlice({
         state.loading = false;
         // Handle both paginated and non-paginated responses
         const responseData = action.payload.data;
+        let newNotifications: BackendNotification[] = [];
+        
         if (responseData.results && Array.isArray(responseData.results)) {
           // Paginated response
-          state.notifications = responseData.results;
-          state.totalCount = responseData.count || responseData.results.length;
+          newNotifications = responseData.results;
           state.nextPage = responseData.next || null;
           state.previousPage = responseData.previous || null;
         } else if (Array.isArray(responseData)) {
           // Non-paginated response (plain array)
-          state.notifications = responseData;
-          state.totalCount = responseData.length;
+          newNotifications = responseData;
           state.nextPage = null;
           state.previousPage = null;
         } else {
           // Fallback: empty array
-          state.notifications = [];
-          state.totalCount = 0;
+          newNotifications = [];
           state.nextPage = null;
           state.previousPage = null;
         }
+        
+        // Merge with existing notifications instead of replacing (partial sync)
+        // Preserve existing notifications that aren't in the new response
+        const existingMap = new Map(state.notifications.map(n => [n.id, n]));
+        const newMap = new Map(newNotifications.map(n => [n.id, n]));
+        
+        // Update existing notifications with new data, add new ones
+        newMap.forEach((newNotif, id) => {
+          existingMap.set(id, newNotif);
+        });
+        
+        // Convert back to array and sort by created_at descending
+        const mergedNotifications = Array.from(existingMap.values()).sort((a, b) => {
+          const dateA = new Date(a.created_at).getTime();
+          const dateB = new Date(b.created_at).getTime();
+          return dateB - dateA;
+        });
+        
+        // Update state with merged notifications
+        state.notifications = mergedNotifications;
+        // Update totalCount based on merged array length (client-side count)
+        state.totalCount = mergedNotifications.length;
       })
       .addCase(fetchNotifications.rejected, (state, action) => {
         state.loading = false;
@@ -148,6 +182,20 @@ const notificationSlice = createSlice({
     builder
       .addCase(getUnreadCount.fulfilled, (state, action) => {
         state.unreadCount = action.payload;
+      });
+
+    // Delete notification
+    builder
+      .addCase(deleteNotification.fulfilled, (state, action) => {
+        const notificationId = action.payload;
+        const notification = state.notifications.find(n => n.id === notificationId);
+        if (notification) {
+          state.notifications = state.notifications.filter(n => n.id !== notificationId);
+          state.totalCount = Math.max(0, state.totalCount - 1);
+          if (!notification.is_read) {
+            state.unreadCount = Math.max(0, state.unreadCount - 1);
+          }
+        }
       });
   },
 });

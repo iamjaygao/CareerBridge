@@ -24,39 +24,96 @@ export interface User {
 // Mentor Types
 export interface Mentor {
   id: number;
+
+  // ======================
+  // User
+  // ======================
   user: User;
-  expertise: string[];
-  expertise_areas?: string[]; // Alias for expertise
-  skills?: string[]; // Alias for expertise
+
+  // ======================
+  // Core profile (MentorProfileSerializer)
+  // ======================
   bio: string;
-  rating: number;
-  price_per_hour: number;
-  hourly_rate?: number; // Alias for price_per_hour
-  availability?: any;
-  availability_status?: string;
-  reviews_count?: number;
-  review_count?: number; // Alias for reviews_count
-  completed_sessions?: number;
-  current_position?: string;
-  services?: any[];
-  avatar?: string; // Alias for user.avatar
-  title?: string; // Job title
-  company?: string; // Company name
-  location?: string;
-  experience_years?: number;
-  years_of_experience?: number; // Alias for experience_years
+  headline: string;              // SerializerMethodField
+  job_title: string;             // source=current_position
   industry?: string;
-  education?: string | string[];
-  specializations?: string[];
+
+  // ======================
+  // Expertise & focus
+  // ======================
+  expertise: string[];            // source=specializations
+  primary_focus?: string;
+  session_focus?: string;
+  mentor_card?: {
+    line1: string;
+    line2: string;
+  };
+
+  // ======================
+  // Pricing
+  // ======================
+  starting_price: number;         // computed
+  hourly_rate?: number;           // optional fallback
+
+  // ======================
+  // Ratings & stats
+  // ======================
+  rating: number | null;                 // average_rating
+  review_count: number;           // total_reviews
+  total_sessions?: number;
+
+  // ======================
+  // Verification & status
+  // ======================
+  is_verified: boolean;
+  status?: 'pending' | 'approved' | 'rejected';
+  badges?: string[];
+  price_label: string;          // e.g. "From $120"
+  price_unit: 'session';        // future-proof
+  trust_label?: string | null;  // shown when rating === null
+  cta_action?: 'view' | 'unlock' | 'book';
+  display_name?: string;
+
+  // ======================
+  // 🔥 SaaS Positioning Core（新增）
+  // ======================
+  primary_track?: 
+    | 'resume_review'
+    | 'mock_interview'
+    | 'career_switch'
+    | 'advanced_interview';
+
+  system_role?: string;           // e.g. "Senior System Design Reviewer"
+  system_insight?: string;        // e.g. "Frequently booked mentor"
+  cta_label?: string;             // e.g. "Prepare for interviews"
+  ranking_reason?: string;
+  primary_service_id?: number;    // ID of the mentor's primary service
+
+  // ======================
+  // Optional / UI-safe
+  // ======================
+  location?: string;
+  services?: MentorService[];     // Available for MentorDetail, optional for Mentor list items
+}
+
+export interface MentorService {
+  id: number;
+  service_type: 'resume_review' | 'mock_interview' | 'career_consultation';
+  title: string;
+  description: string;
+  pricing_model: 'hourly' | 'fixed' | 'package';
+  price_per_hour?: number;
+  fixed_price?: number;
+  package_price?: number;
+  duration_minutes: number;
+  display_price?: string;
+  is_active?: boolean;
 }
 
 export interface MentorDetail extends Mentor {
-  education?: string[];
-  experience?: string[];
-  certifications?: string[];
-  languages?: string[];
-  timezone?: string;
-  available_hours?: any;
+  services: MentorService[];
+  availability?: any[];
+  reviews?: any[];
 }
 
 // Appointment Types
@@ -198,13 +255,60 @@ export interface ChatParticipant {
 
 // Filter Types
 export interface MentorFilters {
-  search?: string;
-  expertise?: string | string[];
+  /* =====================
+     Core (P0)
+  ===================== */
+  /**
+   * What problem the user wants help with.
+   * Drives both filtering and ranking.
+   */
+  primary_track?: 
+    | 'resume_review'
+    | 'mock_interview'
+    | 'career_switch'
+    | 'advanced_interview';
+
+  /**
+   * Ranking hint ONLY.
+   * Must NOT be treated as a hard filter.
+   */
+  track?: 
+    | 'resume_review'
+    | 'mock_interview'
+    | 'career_switch'
+    | 'advanced_interview';
+
+  /* =====================
+     Secondary (P1)
+  ===================== */
+  /**
+   * User's field / industry.
+   */
   industry?: string;
+
+  /* =====================
+     Optional preferences
+  ===================== */
+  /**
+   * Show only verified mentors.
+   */
+  is_verified?: boolean;
+
+  /* =====================
+     Search (low priority)
+  ===================== */
+  /**
+   * Keyword search by background or expertise.
+   */
+  search?: string;
+
+  /* =====================
+     Pagination / misc
+  ===================== */
+  page?: number;
+  limit?: number;
   experience_level?: string;
   specialization?: string;
-  minRating?: number;
-  maxPrice?: number;
 }
 
 export interface AppointmentFilters {

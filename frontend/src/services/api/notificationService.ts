@@ -18,6 +18,7 @@ export interface Notification {
   sent_at?: string | null;
   read_at?: string | null;
   created_at: string;
+  payload?: { action?: string; appointment_id?: number; [key: string]: any };
 }
 
 export interface PaginatedNotifications {

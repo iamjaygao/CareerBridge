@@ -1,53 +1,68 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   TextField,
-  MenuItem,
   Button,
   Box,
-  Autocomplete,
   Chip,
+  Typography,
   InputAdornment,
+  Paper,
+  Stack,
 } from '@mui/material';
-import { FilterList as FilterIcon, Clear as ClearIcon, Search as SearchIcon } from '@mui/icons-material';
+import {
+  Clear as ClearIcon,
+  Search as SearchIcon,
+  FilterList as FilterIcon,
+} from '@mui/icons-material';
 import { MentorFilters } from '../../types';
 
 interface MentorFilterBarProps {
   filters: MentorFilters;
-  onFilterChange: (filters: MentorFilters) => void;
+  onFilterChange: (patch: Partial<MentorFilters>) => void;
   onFilterClear: () => void;
   searchTerm?: string;
   onSearchChange?: (value: string) => void;
 }
 
-const industries = [
+/**
+ * 1. Primary Track Options (P0)
+ * Aligned with "What do you want help with right now?" section in Final Draft.
+ */
+const PRIMARY_TRACK_OPTIONS = [
+  {
+    value: 'resume_review',
+    label: 'Resume review',
+    description: 'Improve clarity, structure, and impact',
+  },
+  {
+    value: 'mock_interview',
+    label: 'Mock interview',
+    description: 'Practice real interview scenarios',
+  },
+  {
+    value: 'career_switch',
+    label: 'Career switch',
+    description: 'Plan and execute a career transition',
+  },
+  {
+    value: 'advanced_interview',
+    label: 'Advanced interview',
+    description: 'System design, case studies, or senior roles',
+  },
+] as const;
+
+/**
+ * 2. Industry Options (Secondary Filters)
+ * Cross-industry support as per positioning document.
+ */
+const INDUSTRY_OPTIONS = [
   'Technology',
-  'Finance',
-  'Healthcare',
-  'Education',
-  'Marketing',
-  'Design',
-  'Consulting',
+  'Product & Design',
+  'Business & Consulting',
+  'Data & Analytics',
+  'Startup & Entrepreneurship',
   'Other',
 ];
-
-const experienceLevels = [
-  { value: 'junior', label: '1-3 years' },
-  { value: 'mid', label: '4-7 years' },
-  { value: 'senior', label: '8+ years' },
-];
-
-const specializations = [
-  'Software Development',
-  'Data Science',
-  'Product Management',
-  'UX/UI Design',
-  'Digital Marketing',
-  'Business Strategy',
-  'Leadership',
-  'Career Development',
-];
-
-
 
 const MentorFilterBar: React.FC<MentorFilterBarProps> = ({
   filters,
@@ -56,192 +71,103 @@ const MentorFilterBar: React.FC<MentorFilterBarProps> = ({
   searchTerm = '',
   onSearchChange,
 }) => {
-  const [localFilters, setLocalFilters] = useState<MentorFilters>(filters);
-  useEffect(() => {
-    setLocalFilters(filters);
-  }, [filters]);
-
-  const handleFilterChange = (field: keyof MentorFilters, value: any) => {
-    const newFilters = { ...localFilters, [field]: value };
-    setLocalFilters(newFilters);
-    onFilterChange(newFilters);
-  };
-
-  const handleApply = () => {
-    onFilterChange(localFilters);
-  };
-
-  // Standard height for all elements: 44px (h-11)
-  const standardHeight = '44px';
 
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 1.5,
-        flexWrap: 'wrap',
-        width: '100%',
-        mb: 3,
-      }}
-    >
-      {/* Search Input - takes remaining space */}
-      <TextField
-        placeholder="Search mentors by name, skills, or industry…"
-        value={searchTerm}
-        onChange={(e) => onSearchChange?.(e.target.value)}
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start">
-              <SearchIcon />
-            </InputAdornment>
-          ),
-        }}
-        sx={{
-          flexGrow: 1,
-          minWidth: { xs: '100%', sm: '200px' },
-          '& .MuiOutlinedInput-root': {
-            borderRadius: '8px',
-            height: standardHeight,
-            '& input': {
-              py: '12px',
-            },
-          },
-        }}
-      />
-
-      {/* Industry Dropdown */}
-      <TextField
-        select
-        label="Industry"
-        value={localFilters.industry || ''}
-        onChange={(e) => handleFilterChange('industry', e.target.value)}
-        sx={{
-          minWidth: '150px',
-          '& .MuiOutlinedInput-root': {
-            borderRadius: '8px',
-            height: standardHeight,
-            '& .MuiSelect-select': {
-              py: '12px',
-            },
-          },
-          '& .MuiInputLabel-root': {
-            transform: localFilters.industry 
-              ? 'translate(14px, -9px) scale(0.75)' 
-              : 'translate(14px, 14px) scale(1)',
-          },
+    <Box sx={{ width: '100%', mb: 4 }}>
+      {/* --- Section 1: Problem-Oriented Guidance (Primary) --- */}
+      <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>
+        What do you want help with right now?
+      </Typography>
+      
+      <Box 
+        sx={{ 
+          display: 'grid', 
+          gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, 
+          gap: 2, 
+          mb: 4 
         }}
       >
-        <MenuItem value="">All Industries</MenuItem>
-        {industries.map((industry) => (
-          <MenuItem key={industry} value={industry.toLowerCase()}>
-            {industry}
-          </MenuItem>
+        {PRIMARY_TRACK_OPTIONS.map((opt) => {
+          const isSelected = filters.primary_track === opt.value;
+          return (
+            <Paper
+              key={opt.value}
+              elevation={isSelected ? 0 : 1}
+              onClick={() => onFilterChange({ primary_track: opt.value })}
+              sx={{
+                p: 2,
+                cursor: 'pointer',
+                borderRadius: 2,
+                border: '2px solid',
+                borderColor: isSelected ? 'primary.main' : 'transparent',
+                bgcolor: isSelected ? 'primary.50' : 'background.paper',
+                transition: 'all 0.2s ease',
+                '&:hover': { borderColor: isSelected ? 'primary.main' : 'grey.300' },
+              }}
+            >
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, color: isSelected ? 'primary.main' : 'text.primary' }}>
+                {opt.label}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {opt.description}
+              </Typography>
+            </Paper>
+          );
+        })}
+      </Box>
+
+      {/* --- Section 2: Industry Filters --- */}
+      <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 600 }}>
+        Industry
+      </Typography>
+      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 4 }}>
+        {INDUSTRY_OPTIONS.map((industry) => (
+          <Chip
+            key={industry}
+            label={industry}
+            onClick={() => onFilterChange({ industry: filters.industry === industry ? undefined : industry })}
+            color={filters.industry === industry ? 'primary' : 'default'}
+            // Fixed L141: Changed 'contained' to 'filled'
+            variant={filters.industry === industry ? 'filled' : 'outlined'}
+            sx={{ fontWeight: 500 }}
+          />
         ))}
-      </TextField>
+      </Stack>
 
-      {/* Experience Level Dropdown */}
-      <TextField
-        select
-        label="Experience"
-        value={localFilters.experience_level || ''}
-        onChange={(e) => handleFilterChange('experience_level', e.target.value)}
-        sx={{
-          minWidth: '150px',
-          '& .MuiOutlinedInput-root': {
-            borderRadius: '8px',
-            height: standardHeight,
-            '& .MuiSelect-select': {
-              py: '12px',
-            },
-          },
-          '& .MuiInputLabel-root': {
-            transform: localFilters.experience_level 
-              ? 'translate(14px, -9px) scale(0.75)' 
-              : 'translate(14px, 14px) scale(1)',
-          },
-        }}
-      >
-        <MenuItem value="">All Levels</MenuItem>
-        {experienceLevels.map((level) => (
-          <MenuItem key={level.value} value={level.value}>
-            {level.label}
-          </MenuItem>
-        ))}
-      </TextField>
+      {/* --- Section 3: Refinement & Search --- */}
+      <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+        <TextField
+          size="small"
+          placeholder="Search by background or expertise..."
+          value={searchTerm}
+          onChange={(e) => onSearchChange?.(e.target.value)}
+          sx={{ flexGrow: 1, maxWidth: { md: '400px' } }}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon fontSize="small" />
+              </InputAdornment>
+            ),
+          }}
+        />
+        
+        <Chip
+          icon={<FilterIcon />}
+          label="Verified Professionals Only"
+          onClick={() => onFilterChange({ is_verified: !filters.is_verified })}
+          color={filters.is_verified ? 'success' : 'default'}
+          // Fixed L168: Changed 'contained' to 'filled'
+          variant={filters.is_verified ? 'filled' : 'outlined'}
+        />
 
-      {/* Specialization Dropdown */}
-      <Autocomplete
-        options={specializations}
-        value={localFilters.specialization || null}
-        onChange={(_, newValue) =>
-          handleFilterChange('specialization', newValue || '')
-        }
-        renderInput={(params) => (
-          <TextField {...params} label="Specialization" />
-        )}
-        sx={{
-          minWidth: '150px',
-          '& .MuiOutlinedInput-root': {
-            borderRadius: '8px',
-            height: standardHeight,
-            '& input': {
-              py: '12px',
-            },
-          },
-          '& .MuiInputLabel-root': {
-            transform: localFilters.specialization 
-              ? 'translate(14px, -9px) scale(0.75)' 
-              : 'translate(14px, 14px) scale(1)',
-          },
-        }}
-      />
-
-      {/* Apply Button */}
-      <Button
-        variant="contained"
-        onClick={handleApply}
-        startIcon={<FilterIcon />}
-        sx={{
-          bgcolor: '#1976d2',
-          color: 'white',
-          px: 2,
-          height: standardHeight,
-          borderRadius: '8px',
-          '&:hover': {
-            bgcolor: '#1565c0',
-          },
-          minWidth: '120px',
-          textTransform: 'none',
-          fontWeight: 500,
-        }}
-      >
-        Apply
-      </Button>
-
-      {/* Clear Button */}
-      <Button
-        variant="outlined"
-        onClick={onFilterClear}
-        startIcon={<ClearIcon />}
-        sx={{
-          borderColor: '#e0e0e0',
-          color: '#616161',
-          px: 2,
-          height: standardHeight,
-          borderRadius: '8px',
-          '&:hover': {
-            borderColor: '#bdbdbd',
-            bgcolor: '#f5f5f5',
-          },
-          minWidth: '120px',
-          textTransform: 'none',
-          fontWeight: 500,
-        }}
-      >
-        Clear
-      </Button>
+        <Button
+          startIcon={<ClearIcon />}
+          onClick={onFilterClear}
+          sx={{ ml: 'auto', textTransform: 'none', color: 'text.secondary' }}
+        >
+          Clear all
+        </Button>
+      </Box>
     </Box>
   );
 };

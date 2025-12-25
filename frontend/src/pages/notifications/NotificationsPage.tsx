@@ -29,14 +29,16 @@ import {
   FilterList as FilterIcon,
 } from '@mui/icons-material';
 import { useSelector, useDispatch } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import { RootState } from '../../store';
-import { fetchNotifications, markNotificationAsRead, getUnreadCount } from '../../store/slices/notificationSlice';
+import { fetchNotifications, markNotificationAsRead, getUnreadCount, deleteNotification } from '../../store/slices/notificationSlice';
 import { useNotification } from '../../components/common/NotificationProvider';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import { formatDistanceToNow } from 'date-fns';
 
 const NotificationsPage: React.FC = () => {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { showNotification } = useNotification();
   const { notifications, loading, error, totalCount, unreadCount } = useSelector(
     (state: RootState) => state.notifications
@@ -90,6 +92,18 @@ const NotificationsPage: React.FC = () => {
   };
 
   const handleMenuClose = () => {
+    setAnchorEl(null);
+    setSelectedNotification(null);
+  };
+
+  const handleDelete = async (notificationId: number) => {
+    try {
+      await dispatch(deleteNotification(notificationId) as any).unwrap();
+      dispatch(getUnreadCount() as any); // Refresh unread count
+      showNotification('Notification deleted', 'success');
+    } catch (error: any) {
+      showNotification(error || 'Failed to delete notification', 'error');
+    }
     setAnchorEl(null);
     setSelectedNotification(null);
   };
@@ -275,7 +289,14 @@ const NotificationsPage: React.FC = () => {
                   }
                 >
                   <ListItemButton
-                    onClick={() => !notification.is_read && handleMarkAsRead(notification.id)}
+                    onClick={() => {
+                      if (notification.payload?.action === 'review_appointment' && notification.payload?.appointment_id) {
+                        navigate(`/appointments/${notification.payload.appointment_id}?review=true`);
+                      }
+                      if (!notification.is_read) {
+                        handleMarkAsRead(notification.id);
+                      }
+                    }}
                     sx={{ py: 2 }}
                   >
                     <Box sx={{ mr: 2, fontSize: 24 }}>
@@ -359,9 +380,9 @@ const NotificationsPage: React.FC = () => {
               Mark as Read
             </MenuItem>
           )}
-        <MenuItem onClick={handleMenuClose} disabled>
+        <MenuItem onClick={() => selectedNotification && handleDelete(selectedNotification)}>
           <DeleteIcon sx={{ mr: 1, fontSize: 20 }} />
-          Delete (Coming Soon)
+          Delete
         </MenuItem>
       </Menu>
     </Box>

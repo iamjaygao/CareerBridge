@@ -4,7 +4,7 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 from datetime import timedelta
 from .models import MentorProfile, MentorSession, MentorNotification, MentorPayment
-from .services import MentorRecommendationService
+from .services.legacy import MentorRecommendationService
 
 @shared_task
 def send_session_reminder_emails():
@@ -194,7 +194,7 @@ def send_mentor_weekly_report(mentor_id):
         mentor = MentorProfile.objects.get(id=mentor_id)
         
         # Get analytics for the past week
-        from .services import MentorAnalyticsService
+        from .services.legacy import MentorAnalyticsService
         analytics = MentorAnalyticsService.get_mentor_analytics(mentor, days=7)
         
         context = {

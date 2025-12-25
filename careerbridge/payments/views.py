@@ -18,6 +18,7 @@ from .serializers import (
     PaymentIntentSerializer, PaymentConfirmationSerializer, PaymentStatisticsSerializer
 )
 from adminpanel.permissions import IsAdminUser, is_admin_level
+from notifications.models import Notification
 
 # Payment Views
 @api_view(['POST'])
@@ -140,6 +141,27 @@ def confirm_payment(request):
                 payment.status = 'completed'
                 payment.paid_at = timezone.now()
                 payment.save()
+                
+                if payment.appointment:
+                    appointment_datetime = payment.appointment.scheduled_start.strftime('%Y-%m-%d %H:%M')
+                    mentor_name = payment.appointment.mentor.user.get_full_name() or payment.appointment.mentor.user.username
+                    Notification.objects.create(
+                        user=payment.user,
+                        notification_type='payment_success',
+                        title='Payment successful',
+                        message=f'Payment of ${payment.amount} for appointment with {mentor_name} on {appointment_datetime} was successful',
+                        priority='normal',
+                        related_appointment=payment.appointment
+                    )
+                    Notification.objects.create(
+                        user=payment.appointment.mentor.user,
+                        notification_type='payment_success',
+                        title='Payment successful',
+                        message=f'Payment of ${payment.amount} received for appointment with {payment.user.get_full_name() or payment.user.username} on {appointment_datetime}',
+                        priority='normal',
+                        related_appointment=payment.appointment
+                    )
+                
                 return Response({'payment_id': payment.id, 'status': 'completed'})
             else:
                 return Response({'payment_id': payment.id, 'status': intent['status']}, status=status.HTTP_202_ACCEPTED)
@@ -526,12 +548,43 @@ def stripe_webhook(request):
             payment.status = 'completed'
             payment.paid_at = timezone.now()
             payment.save()
+            
+            if payment.appointment:
+                appointment_datetime = payment.appointment.scheduled_start.strftime('%Y-%m-%d %H:%M')
+                mentor_name = payment.appointment.mentor.user.get_full_name() or payment.appointment.mentor.user.username
+                Notification.objects.create(
+                    user=payment.user,
+                    notification_type='payment_success',
+                    title='Payment successful',
+                    message=f'Payment of ${payment.amount} for appointment with {mentor_name} on {appointment_datetime} was successful',
+                    priority='normal',
+                    related_appointment=payment.appointment
+                )
+                Notification.objects.create(
+                    user=payment.appointment.mentor.user,
+                    notification_type='payment_success',
+                    title='Payment successful',
+                    message=f'Payment of ${payment.amount} received for appointment with {payment.user.get_full_name() or payment.user.username} on {appointment_datetime}',
+                    priority='normal',
+                    related_appointment=payment.appointment
+                )
     elif event['type'] == 'payment_intent.payment_failed':
         intent = event['data']['object']
         payment = Payment.objects.filter(provider='stripe', provider_payment_id=intent['id']).first()
         if payment:
             payment.status = 'failed'
             payment.save()
+            
+            if payment.appointment:
+                appointment_datetime = payment.appointment.scheduled_start.strftime('%Y-%m-%d %H:%M')
+                Notification.objects.create(
+                    user=payment.user,
+                    notification_type='payment_failed',
+                    title='Payment failed',
+                    message=f'Payment of ${payment.amount} for appointment on {appointment_datetime} failed. Please try again.',
+                    priority='high',
+                    related_appointment=payment.appointment
+                )
     elif event['type'] in ['charge.refunded', 'refund.updated']:
         data_obj = event['data']['object']
         # Try to find by payment_intent on charge

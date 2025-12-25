@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -23,9 +23,11 @@ import {
 import { DatePicker, TimePicker } from '@mui/x-date-pickers';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { format, addDays, isAfter, startOfDay } from 'date-fns';
-import { Mentor } from '../../types';
+import { format, addDays, startOfDay } from 'date-fns';
+
+import apiClient from '../../services/api/client';
 import appointmentService from '../../services/api/appointmentService';
+import { Mentor } from '../../types';
 
 interface BookingDialogProps {
   open: boolean;
@@ -59,6 +61,63 @@ const durations = [
 
 const steps = ['Select Date & Time', 'Session Details', 'Confirm Booking'];
 
+type NormalizedSlot = {
+  key: string;
+  label: string;
+  date: string; // yyyy-MM-dd
+  time: string; // HH:mm
+};
+
+function normalizeSlots(raw: any, fallbackDateStr: string): NormalizedSlot[] {
+  const arr: any[] = Array.isArray(raw)
+    ? raw
+    : Array.isArray(raw?.results)
+      ? raw.results
+      : [];
+
+  const slots: NormalizedSlot[] = [];
+
+  for (let i = 0; i < arr.length; i += 1) {
+    const s = arr[i] ?? {};
+
+    let dateStr: string | null = null;
+    let timeStr: string | null = null;
+
+    // 1) { datetime: "2025-12-22T03:00:00Z" }
+    if (typeof s.datetime === 'string') {
+      const parts = s.datetime.split('T');
+      if (parts.length >= 2) {
+        dateStr = parts[0] || null;
+        const hhmm = parts[1]?.slice(0, 5);
+        timeStr = hhmm || null;
+      }
+    }
+
+    // 2) { date: "yyyy-MM-dd" }
+    if (!dateStr && typeof s.date === 'string') dateStr = s.date;
+
+    // 3) { time: "HH:mm" }
+    if (!timeStr && typeof s.time === 'string') timeStr = s.time.slice(0, 5);
+
+    // 4) { start_time: "HH:mm:ss" | "HH:mm" }
+    if (!timeStr && typeof s.start_time === 'string') {
+      timeStr = s.start_time.slice(0, 5);
+    }
+
+    if (!dateStr) dateStr = fallbackDateStr;
+    if (!dateStr || !timeStr) continue;
+
+    slots.push({
+      key: `${dateStr}-${timeStr}-${i}`,
+      label: timeStr,
+      date: dateStr,
+      time: timeStr,
+    });
+  }
+
+  return slots;
+}
+
 const BookingDialog: React.FC<BookingDialogProps> = ({
   open,
   onClose,
@@ -66,9 +125,13 @@ const BookingDialog: React.FC<BookingDialogProps> = ({
   onBookingComplete,
 }) => {
   const [activeStep, setActiveStep] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [availableSlots, setAvailableSlots] = useState<any[]>([]);
+
+  // Raw slots from backend (unknown schema)
+  const [rawSlots, setRawSlots] = useState<any>([]);
+
   const [formData, setFormData] = useState<BookingFormData>({
     date: null,
     time: null,
@@ -77,75 +140,127 @@ const BookingDialog: React.FC<BookingDialogProps> = ({
     notes: '',
   });
 
+  const selectedDateStr = useMemo(() => {
+    const d = formData.date ?? new Date();
+    return format(d, 'yyyy-MM-dd');
+  }, [formData.date]);
+
+  const normalizedSlots: NormalizedSlot[] = useMemo(() => {
+    return normalizeSlots(rawSlots, selectedDateStr);
+  }, [rawSlots, selectedDateStr]);
+
+  // Load slots when dialog opens or mentor/date changes
   useEffect(() => {
-    if (open && mentor) {
-      loadAvailableSlots();
-    }
-  }, [open, mentor]);
+    if (!open || !mentor) return;
 
-  const loadAvailableSlots = async (date?: Date) => {
-    if (!mentor) return;
-    
-    try {
-      setLoading(true);
-      // Fetch available time slots for the selected date or today
-      const targetDate = date || formData.date || new Date();
-      const dateStr = format(targetDate, 'yyyy-MM-dd');
-      const slots = await appointmentService.getAvailableTimeSlots(mentor.id, dateStr);
-      setAvailableSlots(slots);
-    } catch (error) {
-      console.error('Failed to load available slots:', error);
-    } finally {
-      setLoading(false);
+    // If date not set yet, set to today and let effect re-run
+    if (!formData.date) {
+      setFormData((prev) => ({ ...prev, date: startOfDay(new Date()), time: null }));
+      return;
     }
+
+    const load = async () => {
+      try {
+        setLoadingSlots(true);
+        setError(null);
+
+        const dateStr = format(formData.date!, 'yyyy-MM-dd');
+
+        // ✅ backend urls.py has: path('time-slots/', ...)
+        const resp = await apiClient.get('/appointments/time-slots/', {
+          params: { mentor: mentor.id, date: dateStr },
+        });
+
+        setRawSlots(resp.data);
+      } catch (e: any) {
+        console.error('Failed to load time slots:', e);
+        setRawSlots([]);
+        setError('Failed to load available time slots.');
+      } finally {
+        setLoadingSlots(false);
+      }
+    };
+
+    load();
+  }, [open, mentor?.id, formData.date, mentor]);
+
+  const handleNext = () => setActiveStep((p) => p + 1);
+  const handleBack = () => setActiveStep((p) => p - 1);
+
+  const resetState = () => {
+    setActiveStep(0);
+    setError(null);
+    setRawSlots([]);
+    setSubmitting(false);
+    setLoadingSlots(false);
+    setFormData({
+      date: null,
+      time: null,
+      duration: 60,
+      sessionType: 'resume_review',
+      notes: '',
+    });
   };
 
-  const handleNext = () => {
-    setActiveStep((prevStep) => prevStep + 1);
-  };
-
-  const handleBack = () => {
-    setActiveStep((prevStep) => prevStep - 1);
+  const handleClose = () => {
+    onClose();
+    resetState();
   };
 
   const handleSubmit = async () => {
     if (!mentor || !formData.date || !formData.time) return;
 
     try {
-      setLoading(true);
+      setSubmitting(true);
       setError(null);
 
-      const appointmentData = {
+      // ✅ match appointmentService.createAppointment signature:
+      // { mentor, date, time, notes? }
+      await appointmentService.createAppointment({
         mentor: mentor.id,
         date: format(formData.date, 'yyyy-MM-dd'),
         time: format(formData.time, 'HH:mm'),
         notes: formData.notes,
-      };
-
-      await appointmentService.createAppointment(appointmentData);
-      
-      onBookingComplete?.();
-      onClose();
-      setActiveStep(0);
-      setFormData({
-        date: null,
-        time: null,
-        duration: 60,
-        sessionType: 'resume_review',
-        notes: '',
       });
-    } catch (error: any) {
-      setError(error?.message || 'Failed to book appointment');
+
+      onBookingComplete?.();
+      handleClose();
+    } catch (e: any) {
+      console.error('Failed to book appointment:', e);
+      setError(e?.message || 'Failed to book appointment');
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
   const getTotalPrice = () => {
-    if (!mentor) return 0;
-    const rate = mentor.hourly_rate || mentor.price_per_hour || 0;
+    if (!mentor) return null;
+
+    const rate =
+      mentor.starting_price && mentor.starting_price > 0
+        ? mentor.starting_price
+        : mentor.hourly_rate && mentor.hourly_rate > 0
+          ? mentor.hourly_rate
+          : null;
+
+    if (rate === null) return null;
     return rate * (formData.duration / 60);
   };
+
+  const totalPrice = getTotalPrice();
+
+  const isNextDisabled =
+    submitting ||
+    loadingSlots ||
+    !formData.date ||
+    !formData.time;
+
+  if (!mentor) return null;
+
+  const displayMentorName =
+    typeof mentor.user === 'object'
+      ? `${mentor.user.first_name || ''} ${mentor.user.last_name || ''}`.trim() || mentor.user.username
+      : 'Mentor';
 
   const renderStepContent = (step: number) => {
     switch (step) {
@@ -158,49 +273,76 @@ const BookingDialog: React.FC<BookingDialogProps> = ({
                   Select Date & Time
                 </Typography>
               </Grid>
+
               <Grid item xs={12} md={6}>
                 <DatePicker
                   label="Date"
                   value={formData.date}
-                  onChange={(newDate) => setFormData({ ...formData, date: newDate })}
+                  onChange={(newDate) => {
+                    setFormData((prev) => ({
+                      ...prev,
+                      date: newDate,
+                      time: null,
+                    }));
+                  }}
                   minDate={startOfDay(new Date())}
-                  maxDate={addDays(new Date(), 30)}
+                  maxDate={addDays(new Date(), 14)}
                   slotProps={{ textField: { fullWidth: true } }}
                 />
               </Grid>
+
               <Grid item xs={12} md={6}>
                 <TimePicker
                   label="Time"
                   value={formData.time}
-                  onChange={(newTime) => setFormData({ ...formData, time: newTime })}
+                  onChange={(newTime) => setFormData((prev) => ({ ...prev, time: newTime }))}
                   slotProps={{ textField: { fullWidth: true } }}
                 />
               </Grid>
+
               <Grid item xs={12}>
                 <Typography variant="subtitle2" gutterBottom>
                   Available Time Slots
                 </Typography>
-                {loading ? (
-                  <CircularProgress size={20} />
+
+                {loadingSlots ? (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <CircularProgress size={18} />
+                    <Typography variant="body2" color="text.secondary">
+                      Loading slots...
+                    </Typography>
+                  </Box>
+                ) : normalizedSlots.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary">
+                    No available slots for selected date.
+                  </Typography>
                 ) : (
                   <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                    {availableSlots.slice(0, 8).map((slot, index) => (
-                      <Chip
-                        key={index}
-                        label={slot.time}
-                        variant="outlined"
-                        onClick={() => {
-                          const [date, time] = slot.datetime.split('T');
-                          setFormData({
-                            ...formData,
-                            date: new Date(date),
-                            time: new Date(slot.datetime),
-                          });
-                        }}
-                        color={formData.date === new Date(slot.date) && 
-                               formData.time === new Date(slot.datetime) ? 'primary' : 'default'}
-                      />
-                    ))}
+                    {normalizedSlots.slice(0, 12).map((slot) => {
+                      const isSelected =
+                        !!formData.date &&
+                        format(formData.date, 'yyyy-MM-dd') === slot.date &&
+                        !!formData.time &&
+                        format(formData.time, 'HH:mm') === slot.time;
+
+                      return (
+                        <Chip
+                          key={slot.key}
+                          label={slot.label}
+                          variant={isSelected ? 'filled' : 'outlined'}
+                          color={isSelected ? 'primary' : 'default'}
+                          onClick={() => {
+                            const d = new Date(`${slot.date}T00:00:00`);
+                            const t = new Date(`${slot.date}T${slot.time}:00`);
+                            setFormData((prev) => ({
+                              ...prev,
+                              date: d,
+                              time: t,
+                            }));
+                          }}
+                        />
+                      );
+                    })}
                   </Box>
                 )}
               </Grid>
@@ -216,12 +358,13 @@ const BookingDialog: React.FC<BookingDialogProps> = ({
                 Session Details
               </Typography>
             </Grid>
+
             <Grid item xs={12} md={6}>
               <FormControl fullWidth>
                 <InputLabel>Session Type</InputLabel>
                 <Select
                   value={formData.sessionType}
-                  onChange={(e) => setFormData({ ...formData, sessionType: e.target.value })}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, sessionType: e.target.value }))}
                   label="Session Type"
                 >
                   {sessionTypes.map((type) => (
@@ -232,22 +375,24 @@ const BookingDialog: React.FC<BookingDialogProps> = ({
                 </Select>
               </FormControl>
             </Grid>
+
             <Grid item xs={12} md={6}>
               <FormControl fullWidth>
                 <InputLabel>Duration</InputLabel>
                 <Select
                   value={formData.duration}
-                  onChange={(e) => setFormData({ ...formData, duration: e.target.value as number })}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, duration: e.target.value as number }))}
                   label="Duration"
                 >
-                  {durations.map((duration) => (
-                    <MenuItem key={duration.value} value={duration.value}>
-                      {duration.label}
+                  {durations.map((d) => (
+                    <MenuItem key={d.value} value={d.value}>
+                      {d.label}
                     </MenuItem>
                   ))}
                 </Select>
               </FormControl>
             </Grid>
+
             <Grid item xs={12}>
               <TextField
                 fullWidth
@@ -256,7 +401,7 @@ const BookingDialog: React.FC<BookingDialogProps> = ({
                 label="Additional Notes"
                 placeholder="Tell your mentor about your goals, questions, or specific topics you'd like to discuss..."
                 value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
               />
             </Grid>
           </Grid>
@@ -268,68 +413,72 @@ const BookingDialog: React.FC<BookingDialogProps> = ({
             <Typography variant="h6" gutterBottom>
               Confirm Booking
             </Typography>
-            
+
             <Box sx={{ bgcolor: 'grey.50', p: 2, borderRadius: 1, mb: 3 }}>
               <Typography variant="subtitle1" gutterBottom>
                 Session Summary
               </Typography>
+
               <Grid container spacing={2}>
                 <Grid item xs={6}>
                   <Typography variant="body2" color="text.secondary">
                     Mentor
                   </Typography>
-                  <Typography variant="body1">
-                    {typeof mentor?.user === 'object' 
-                      ? `${mentor.user.first_name || ''} ${mentor.user.last_name || ''}`.trim() || mentor.user.username
-                      : 'Mentor'}
-                  </Typography>
+                  <Typography variant="body1">{displayMentorName}</Typography>
                 </Grid>
+
                 <Grid item xs={6}>
                   <Typography variant="body2" color="text.secondary">
                     Date & Time
                   </Typography>
                   <Typography variant="body1">
-                    {formData.date && formData.time && 
-                     `${format(formData.date, 'MMM dd, yyyy')} at ${format(formData.time, 'HH:mm')}`}
+                    {formData.date && formData.time
+                      ? `${format(formData.date, 'MMM dd, yyyy')} at ${format(formData.time, 'HH:mm')}`
+                      : '-'}
                   </Typography>
                 </Grid>
+
                 <Grid item xs={6}>
                   <Typography variant="body2" color="text.secondary">
                     Duration
                   </Typography>
-                  <Typography variant="body1">
-                    {formData.duration} minutes
-                  </Typography>
+                  <Typography variant="body1">{formData.duration} minutes</Typography>
                 </Grid>
+
                 <Grid item xs={6}>
                   <Typography variant="body2" color="text.secondary">
                     Session Type
                   </Typography>
                   <Typography variant="body1">
-                    {sessionTypes.find(t => t.value === formData.sessionType)?.label}
+                    {sessionTypes.find((t) => t.value === formData.sessionType)?.label || '-'}
                   </Typography>
                 </Grid>
+
                 <Grid item xs={12}>
                   <Typography variant="body2" color="text.secondary">
                     Total Price
                   </Typography>
-                  <Typography variant="h6" color="primary">
-                    ${getTotalPrice().toFixed(2)}
-                  </Typography>
+                  {totalPrice !== null ? (
+                    <Typography variant="h6" color="primary">
+                      ${totalPrice.toFixed(2)}
+                    </Typography>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">
+                      Price will be shown before confirmation
+                    </Typography>
+                  )}
                 </Grid>
               </Grid>
             </Box>
 
-            {formData.notes && (
+            {formData.notes ? (
               <Box sx={{ mb: 2 }}>
                 <Typography variant="subtitle2" gutterBottom>
                   Notes
                 </Typography>
-                <Typography variant="body2">
-                  {formData.notes}
-                </Typography>
+                <Typography variant="body2">{formData.notes}</Typography>
               </Box>
-            )}
+            ) : null}
           </Box>
         );
 
@@ -338,20 +487,14 @@ const BookingDialog: React.FC<BookingDialogProps> = ({
     }
   };
 
-  if (!mentor) return null;
-
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+    <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
       <DialogTitle>
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <Typography variant="h5">
-            Book Session with {typeof mentor?.user === 'object' 
-              ? `${mentor.user.first_name || ''} ${mentor.user.last_name || ''}`.trim() || mentor.user.username
-              : 'Mentor'}
-          </Typography>
-        </Box>
+        <Typography variant="h5">
+          Book Session with {displayMentorName}
+        </Typography>
       </DialogTitle>
-      
+
       <DialogContent>
         <Stepper activeStep={activeStep} sx={{ mb: 3 }}>
           {steps.map((label) => (
@@ -361,41 +504,40 @@ const BookingDialog: React.FC<BookingDialogProps> = ({
           ))}
         </Stepper>
 
-        {error && (
+        {error ? (
           <Alert severity="error" sx={{ mb: 2 }}>
             {error}
           </Alert>
-        )}
+        ) : null}
 
         {renderStepContent(activeStep)}
       </DialogContent>
 
       <DialogActions>
-        <Button onClick={onClose} disabled={loading}>
+        <Button onClick={handleClose} disabled={submitting}>
           Cancel
         </Button>
+
         <Box sx={{ flex: '1 1 auto' }} />
-        {activeStep > 0 && (
-          <Button onClick={handleBack} disabled={loading}>
+
+        {activeStep > 0 ? (
+          <Button onClick={handleBack} disabled={submitting}>
             Back
           </Button>
-        )}
+        ) : null}
+
         {activeStep < steps.length - 1 ? (
-          <Button
-            variant="contained"
-            onClick={handleNext}
-            disabled={loading || !formData.date || !formData.time}
-          >
+          <Button variant="contained" onClick={handleNext} disabled={isNextDisabled}>
             Next
           </Button>
         ) : (
           <Button
             variant="contained"
             onClick={handleSubmit}
-            disabled={loading}
-            startIcon={loading ? <CircularProgress size={20} /> : null}
+            disabled={submitting}
+            startIcon={submitting ? <CircularProgress size={18} /> : null}
           >
-            {loading ? 'Booking...' : 'Confirm Booking'}
+            {submitting ? 'Booking...' : 'Confirm Booking'}
           </Button>
         )}
       </DialogActions>
@@ -403,4 +545,4 @@ const BookingDialog: React.FC<BookingDialogProps> = ({
   );
 };
 
-export default BookingDialog; 
+export default BookingDialog;

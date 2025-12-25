@@ -1,5 +1,27 @@
 import apiClient from './client';
 
+/**
+ * Payload for creating mentor session (NEW – marketplace / mentor detail)
+ */
+export interface CreateSessionPayload {
+  mentor_id: number;
+  service_id: number;
+  scheduled_date: string;
+  scheduled_time: string;
+  user_notes?: string;
+  duration_minutes?: number;
+}
+
+/**
+ * Payload for legacy appointment creation (OLD – keep for backward compatibility)
+ */
+export interface CreateAppointmentPayload {
+  mentor: number;
+  date: string;
+  time: string;
+  notes?: string;
+}
+
 class AppointmentService {
   /**
    * Get all appointments
@@ -28,7 +50,8 @@ class AppointmentService {
   }
 
   /**
-   * Create appointment
+   * Create appointment (LEGACY – do not remove)
+   * Used by older pages
    */
   async createAppointment(data: {
     mentor: number;
@@ -36,11 +59,20 @@ class AppointmentService {
     time: string;
     notes?: string;
   }): Promise<any> {
+    return apiClient.post('/appointments/appointments/', data);
+  }
+
+  /**
+   * Create mentor session (NEW – mentor detail / marketplace)
+   */
+  async createSession(
+    data: CreateSessionPayload
+  ): Promise<any> {
     try {
       const response = await apiClient.post('/appointments/appointments/', data);
       return response.data;
     } catch (error) {
-      console.error('Failed to create appointment:', error);
+      console.error('Failed to create session:', error);
       throw error;
     }
   }
@@ -63,7 +95,10 @@ class AppointmentService {
    */
   async cancelAppointment(id: number, reason?: string): Promise<any> {
     try {
-      const response = await apiClient.post(`/appointments/appointments/${id}/cancel/`, { reason });
+      const response = await apiClient.post(
+        `/appointments/appointments/${id}/cancel/`,
+        { reason }
+      );
       return response.data;
     } catch (error) {
       console.error('Failed to cancel appointment:', error);
@@ -71,26 +106,12 @@ class AppointmentService {
     }
   }
 
-  /**
-   * Get available time slots for a mentor
-   */
-  async getAvailableTimeSlots(mentorId: number, date: string): Promise<any> {
-    try {
-      const response = await apiClient.get(`/appointments/available-slots/`, {
-        params: { mentor: mentorId, date },
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Failed to get available time slots:', error);
-      throw error;
-    }
-  }
 }
 
-// Use AppointmentFilters from types/index.ts instead
+// Export filters type (unchanged)
 export type { AppointmentFilters } from '../../types';
 
-// Keep old interface for backward compatibility (deprecated)
+// Deprecated legacy interface (keep for safety)
 export interface AppointmentFiltersOld {
   status?: string;
   dateFrom?: string;
@@ -100,4 +121,3 @@ export interface AppointmentFiltersOld {
 
 const appointmentService = new AppointmentService();
 export default appointmentService;
-

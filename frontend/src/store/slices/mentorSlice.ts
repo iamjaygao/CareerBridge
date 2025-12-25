@@ -1,37 +1,23 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import apiClient from '../../services/api/client';
+import { Mentor } from '../../types';
+import type { MentorFilters } from '../../types';
 
-interface Mentor {
-  id: number;
-  user: {
-    id: number;
-    username: string;
-    email: string;
-    role?: 'admin' | 'mentor' | 'student' | string;
-    avatar?: string;
-    first_name?: string;
-    last_name?: string;
-  };
-  expertise: string[];
-  bio: string;
-  rating: number;
-  price_per_hour: number;
-  availability: any;
-}
+
+/**
+ * Redux State
+ * =========================
+ * IMPORTANT:
+ * - Mentor type is the SaaS-aligned Mentor from /types
+ * - This must match MentorProfileSerializer output
+ */
 
 interface MentorState {
   mentors: Mentor[];
   loading: boolean;
   error: string | null;
-  filters: {
-    search?: string;
-    expertise?: string | string[];
-    industry?: string;
-    experience_level?: string;
-    specialization?: string;
-    minRating?: number;
-    maxPrice?: number;
-  };
+  filters: MentorFilters;
+
 }
 
 const initialState: MentorState = {
@@ -41,33 +27,67 @@ const initialState: MentorState = {
   filters: {},
 };
 
-export const fetchMentors = createAsyncThunk('mentors/fetchAll', async (filters: any = {}, { rejectWithValue }) => {
+/**
+ * Fetch mentor list
+ * =========================
+ * Returns SaaS Mentor list:
+ * - headline
+ * - job_title
+ * - starting_price
+ * - review_count
+ * - is_verified
+ * - system_role / system_insight / cta_label
+ */
+export const fetchMentors = createAsyncThunk<
+  Mentor[],
+  any
+>('mentors/fetchAll', async (filters = {}, { rejectWithValue }) => {
   try {
-    const params = filters || {};
-    const response = await apiClient.get('/mentors/', { params });
-    return response.data.results || response.data;
+    const response = await apiClient.get<Mentor[]>('/mentors/', {
+      params: filters,
+    });
+
+    // Support both paginated & non-paginated API
+    if ((response.data as any)?.results) {
+      return (response.data as any).results as Mentor[];
+    }
+
+    return response.data;
   } catch (error: any) {
     console.error('Failed to fetch mentors:', error);
-    // For 401 errors, still return empty array instead of rejecting
-    // This allows visitors to see the page without errors
+
+    // Visitor-safe behavior
     if (error.response?.status === 401) {
-      console.warn('Unauthorized access to mentors API, returning empty list');
       return [];
     }
-    return rejectWithValue(error.response?.data?.message || 'Failed to fetch mentors');
+
+    return rejectWithValue(
+      error.response?.data?.message || 'Failed to fetch mentors'
+    );
   }
 });
 
-export const fetchMentorById = createAsyncThunk('mentors/fetchById', async (id: number) => {
-  const response = await apiClient.get(`/mentors/${id}/`);
-  return response.data;
-});
+/**
+ * Fetch mentor detail
+ * =========================
+ * Used by MentorDetailPage
+ */
+export const fetchMentorById = createAsyncThunk<Mentor, number>(
+  'mentors/fetchById',
+  async (id: number) => {
+    const response = await apiClient.get<Mentor>(`/mentors/${id}/`);
+    return response.data;
+  }
+);
 
 const mentorSlice = createSlice({
   name: 'mentors',
   initialState,
   reducers: {
-    setFilters: (state, action: PayloadAction<MentorState['filters']>) => {
+    setFilters: (
+      state,
+      action: PayloadAction<MentorFilters>
+    ) => {
       state.filters = { ...state.filters, ...action.payload };
     },
     clearFilters: (state) => {
@@ -89,11 +109,18 @@ const mentorSlice = createSlice({
       })
       .addCase(fetchMentors.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.error.message || 'Failed to fetch mentors';
+        state.error =
+          (action.payload as string) ||
+          action.error.message ||
+          'Failed to fetch mentors';
       });
   },
 });
 
-export const { setFilters, clearFilters, clearError } = mentorSlice.actions;
-export default mentorSlice.reducer;
+export const {
+  setFilters,
+  clearFilters,
+  clearError,
+} = mentorSlice.actions;
 
+export default mentorSlice.reducer;

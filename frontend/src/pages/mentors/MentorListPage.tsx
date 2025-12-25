@@ -10,29 +10,48 @@ import {
   Pagination,
   Button,
   Paper,
-  Container,
 } from '@mui/material';
 import { ArrowForward as ArrowForwardIcon } from '@mui/icons-material';
+
 import { AppDispatch, RootState } from '../../store';
-import { fetchMentors, setFilters, clearFilters } from '../../store/slices/mentorSlice';
+import {
+  fetchMentors,
+  setFilters,
+  clearFilters,
+} from '../../store/slices/mentorSlice';
+
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import ErrorAlert from '../../components/common/ErrorAlert';
 import MentorFilterBar from '../../components/mentors/MentorFilterBar';
 import MentorCard from '../../components/mentors/MentorCard';
-import BookingDialog from '../../components/appointments/BookingDialog';
+
 import { MentorFilters } from '../../services/api/mentorService';
-import { Mentor } from '../../types';
-import { getUserRole, canViewFullMentorList, getFeaturedMentorsCount } from '../../utils/permissions';
+import { getUserRole, canViewFullMentorList } from '../../utils/permissions';
 
 const MentorListPage: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
-  const { mentors, loading, error, filters } = useSelector((state: RootState) => state.mentors);
-  const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
+
+  const { mentors: mentorList, loading, error, filters } = useSelector(
+    (state: RootState) => state.mentors
+  );
+  const { isAuthenticated, user } = useSelector(
+    (state: RootState) => state.auth
+  );
+
   const userRole = getUserRole(isAuthenticated, user?.role);
   const canViewFull = canViewFullMentorList(userRole);
-  const featuredCount = getFeaturedMentorsCount(userRole);
+
   const [searchTerm, setSearchTerm] = useState('');
+  const [page, setPage] = useState(1);
+
+  const PRIMARY_TRACK_LABELS: Record<string, string> = {
+    resume_review: 'resume review',
+    mock_interview: 'interview preparation',
+    career_switch: 'career switching',
+    advanced_interview: 'system design interviews',
+  };
+
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
@@ -42,30 +61,27 @@ const MentorListPage: React.FC = () => {
     message: '',
     severity: 'success',
   });
-  const [favorites, setFavorites] = useState<number[]>([]);
-  const [page, setPage] = useState(1);
-  const [bookingDialogOpen, setBookingDialogOpen] = useState(false);
-  const [selectedMentor, setSelectedMentor] = useState<Mentor | null>(null);
 
+  /* =========================
+     Data fetching
+  ========================= */
   useEffect(() => {
-    // For visitors: fetch only featured mentors (limit to 4)
-    // For authenticated users: fetch all mentors with pagination
     if (canViewFull) {
       dispatch(fetchMentors({ ...filters, page }));
     } else {
-      // Visitors: fetch only featured mentors (no pagination, limit to 4)
-      dispatch(fetchMentors({ ...filters, limit: 4 }));
+      if (filters.primary_track) {
+        dispatch(fetchMentors({ ...filters, track: filters.primary_track, limit: 6 }));
+      } else {
+        dispatch(fetchMentors({ ...filters, page: 1, limit: 4 }));
+      }
     }
   }, [dispatch, filters, page, canViewFull]);
 
-  const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const value = event.target.value;
-    setSearchTerm(value);
-    dispatch(setFilters({ ...filters, search: value }));
-  };
-
-  const handleFilterChange = (newFilters: MentorFilters) => {
-    dispatch(setFilters(newFilters));
+  /* =========================
+     Handlers
+  ========================= */
+  const handleFilterChange = (patch: Partial<MentorFilters>) => {
+    dispatch(setFilters(patch));
   };
 
   const handleFilterClear = () => {
@@ -73,152 +89,23 @@ const MentorListPage: React.FC = () => {
     dispatch(clearFilters());
   };
 
-  const handleFavorite = (mentorId: number) => {
-    if (favorites.includes(mentorId)) {
-      setFavorites(favorites.filter(id => id !== mentorId));
-      setSnackbar({
-        open: true,
-        message: 'Removed from favorites',
-        severity: 'success',
-      });
-    } else {
-      setFavorites([...favorites, mentorId]);
-      setSnackbar({
-        open: true,
-        message: 'Added to favorites',
-        severity: 'success',
-      });
-    }
-  };
+  if (loading) return <LoadingSpinner message="Loading mentors..." />;
+  if (error) return <ErrorAlert message={error} />;
 
-  const handleBookAppointment = (mentorId: number) => {
-    if (!isAuthenticated) {
-      navigate('/login', { state: { redirectTo: '/mentors' } });
-      return;
-    }
-    const mentor = mentors.find(m => m.id === mentorId);
-    if (mentor) {
-      setSelectedMentor(mentor as any);
-      setBookingDialogOpen(true);
-    }
-  };
-
-  const handleBookingComplete = () => {
-    setSnackbar({
-      open: true,
-      message: 'Appointment booked successfully!',
-      severity: 'success',
-    });
-  };
-
-  // Show loading and error states for all users
-  if (loading) {
-    return <LoadingSpinner message="Loading mentors..." />;
-  }
-
-  if (error) {
-    return <ErrorAlert message={error} />;
-  }
 
   return (
-    <Box sx={{ width: '100%', maxWidth: '1200px', mx: 'auto', px: { xs: 2, sm: 3, md: 6 }, py: { xs: 4, md: 6 } }}>
-      {/* Hero Banner Section */}
-      <Box
-        sx={{
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          py: { xs: 6, md: 8 },
-          px: { xs: 3, md: 4 },
-          borderRadius: { xs: 0, md: 3 },
-          mb: 4,
-        }}
-      >
-        <Box>
-          <Box
-            sx={{
-              display: 'flex',
-              flexDirection: { xs: 'column', md: 'row' },
-              alignItems: { xs: 'flex-start', md: 'center' },
-              justifyContent: 'space-between',
-              gap: 3,
-            }}
-          >
-            <Box sx={{ flex: 1, maxWidth: { md: '60%' } }}>
-              <Typography
-                variant="h3"
-                component="h1"
-                sx={{
-                  fontWeight: 700,
-                  fontSize: { xs: '2rem', md: '2.75rem' },
-                  color: 'white',
-                  mb: 2,
-                  lineHeight: 1.2,
-                }}
-              >
-                Unlock 1:1 Career Guidance From Top Tech Mentors
-              </Typography>
-              <Typography
-                variant="body1"
-                sx={{
-                  fontSize: { xs: '1rem', md: '1.125rem' },
-                  color: 'rgba(255, 255, 255, 0.9)',
-                  mb: 3,
-                  lineHeight: 1.6,
-                }}
-              >
-                Sign up free to access mentor profiles, availability, mock interviews, and personalized guidance for your career growth.
-              </Typography>
-            </Box>
-            <Box
-              sx={{
-                display: 'flex',
-                flexDirection: { xs: 'column', sm: 'row' },
-                gap: 2,
-                width: { xs: '100%', md: 'auto' },
-                minWidth: { md: '280px' },
-              }}
-            >
-              <Button
-                variant="outlined"
-                onClick={() => navigate('/login')}
-                sx={{
-                  textTransform: 'none',
-                  fontWeight: 500,
-                  py: 1.5,
-                  px: 3,
-                  borderColor: 'white',
-                  color: 'white',
-                  '&:hover': {
-                    borderColor: 'rgba(255, 255, 255, 0.8)',
-                    bgcolor: 'rgba(255, 255, 255, 0.1)',
-                  },
-                }}
-              >
-                Sign In
-              </Button>
-              <Button
-                variant="contained"
-                onClick={() => navigate('/register')}
-                endIcon={<ArrowForwardIcon />}
-                sx={{
-                  textTransform: 'none',
-                  fontWeight: 500,
-                  py: 1.5,
-                  px: 3,
-                  bgcolor: 'white',
-                  color: 'primary.main',
-                  '&:hover': {
-                    bgcolor: 'rgba(255, 255, 255, 0.9)',
-                  },
-                }}
-              >
-                Get Started Free
-              </Button>
-            </Box>
-          </Box>
-        </Box>
-      </Box>
-
-      {/* Filters Section */}
+    <Box
+      sx={{
+        width: '100%',
+        maxWidth: '1200px',
+        mx: 'auto',
+        px: { xs: 2, sm: 3, md: 6 },
+        py: { xs: 4, md: 6 },
+      }}
+    >
+      {/* =========================
+          Filters
+      ========================= */}
       <Box sx={{ mb: 4 }}>
         <MentorFilterBar
           filters={filters}
@@ -232,97 +119,130 @@ const MentorListPage: React.FC = () => {
         />
       </Box>
 
-      {/* Mentor Cards Grid */}
-      <Box sx={{ mb: 6 }}>
-        <Grid container spacing={4}>
-          {mentors.length > 0 ? (
-            mentors.map((mentor) => (
-              <Grid item xs={12} sm={6} lg={4} key={mentor.id}>
-                <MentorCard
-                  mentor={mentor as any}
-                  onFavorite={canViewFull ? handleFavorite : undefined}
-                  isFavorite={canViewFull && favorites.includes(mentor.id)}
-                  onBookAppointment={canViewFull ? handleBookAppointment : undefined}
-                  isVisitor={!canViewFull}
-                />
-              </Grid>
-            ))
-          ) : (
-            <Grid item xs={12}>
-              <Box
-                sx={{
-                  textAlign: 'center',
-                  py: 8,
-                  px: 2,
-                  bgcolor: 'background.paper',
-                  borderRadius: 2,
-                }}
-              >
-                <Typography variant="h6" gutterBottom>
-                  {canViewFull ? 'No mentors found' : 'Featured Mentors'}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {canViewFull 
-                    ? 'Try adjusting your filters or search terms'
-                    : 'Sign up to view all mentors and access full features'}
-                </Typography>
-              </Box>
-            </Grid>
-          )}
-        </Grid>
+      {/* =========================
+          Dynamic Heading (when primary_track is set)
+      ========================= */}
+      {filters.primary_track && PRIMARY_TRACK_LABELS[filters.primary_track] && (
+        <Typography variant="h4" sx={{ mt: 2, mb: 4, fontWeight: 700 }}>
+          Recommended mentors for {PRIMARY_TRACK_LABELS[filters.primary_track]}
+        </Typography>
+      )}
 
-        {/* Pagination */}
-        {canViewFull && mentors.length > 0 && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
-            <Pagination 
-              page={page} 
-              onChange={(_: React.ChangeEvent<unknown>, p: number) => setPage(p)} 
-              count={10} 
-              color="primary" 
-            />
-          </Box>
-        )}
+      {/* =========================
+          Mentor Grid
+      ========================= */}
+      <Grid container spacing={4}>
+        {mentorList.length > 0 ? (
+          (() => {
+            // When primary_track is set: sort and limit to exactly 6 cards
+            const mentorsToRender = filters.primary_track
+              ? [...mentorList]
+                  .sort((a, b) => {
+                    // Priority 1: mentors with badges including "top_pick"
+                    const aHasTopPick = a.badges?.includes('top_pick') ?? false;
+                    const bHasTopPick = b.badges?.includes('top_pick') ?? false;
+                    if (aHasTopPick && !bHasTopPick) return -1;
+                    if (!aHasTopPick && bHasTopPick) return 1;
 
-        {/* CTA Section for Visitors */}
-        {!canViewFull && mentors.length > 0 && (
-          <Box sx={{ textAlign: 'center', mt: 6, mb: 4 }}>
-            <Paper 
-              sx={{ 
-                p: 4, 
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', 
-                color: 'white',
-                borderRadius: 3,
-              }}
-            >
-              <Typography variant="h5" gutterBottom sx={{ fontWeight: 600 }}>
-                Want to see more mentors?
+                    // Priority 2: mentors with is_verified === true
+                    if (a.is_verified && !b.is_verified) return -1;
+                    if (!a.is_verified && b.is_verified) return 1;
+
+                    // Priority 3: higher review_count
+                    return (b.review_count ?? 0) - (a.review_count ?? 0);
+                  })
+                  .slice(0, 6)
+              : mentorList;
+
+            return mentorsToRender
+              .filter((mentor) => {
+                // Filter out mentors with no sellable services (starting_price > 0)
+                // Note: List endpoint does NOT include services array, use starting_price instead
+                return Number(mentor.starting_price || 0) > 0;
+              })
+              .map((mentor) => (
+                <Grid
+                  item
+                  xs={12}
+                  sm={6}
+                  lg={4}
+                  key={mentor.id}
+                  sx={{ display: 'flex' }}
+                >
+                  <MentorCard
+                    mentor={mentor}
+                    isVisitor={!canViewFull}
+                    activeTrack={filters.primary_track}
+                  />
+                </Grid>
+              ));
+          })()
+        ) : (
+          <Grid item xs={12}>
+            <Box sx={{ textAlign: 'center', py: 8 }}>
+              <Typography variant="h6">No mentors found</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Try adjusting your filters.
               </Typography>
-              <Typography variant="body1" sx={{ mb: 3, opacity: 0.9, maxWidth: '600px', mx: 'auto' }}>
-                Sign up for free to access our full mentor directory, detailed profiles, and book sessions with industry experts.
-              </Typography>
-              <Button
-                variant="contained"
-                onClick={() => navigate('/register')}
-                endIcon={<ArrowForwardIcon />}
-                sx={{
-                  bgcolor: 'white',
-                  color: 'primary.main',
-                  textTransform: 'none',
-                  fontWeight: 500,
-                  py: 1.5,
-                  px: 4,
-                  '&:hover': {
-                    bgcolor: 'rgba(255, 255, 255, 0.9)',
-                  },
-                }}
-              >
-                Sign Up Free
-              </Button>
-            </Paper>
-          </Box>
+            </Box>
+          </Grid>
         )}
-      </Box>
+      </Grid>
 
+      {/* =========================
+          Visitor Unlock CTA (hidden when primary_track is set)
+      ========================= */}
+      {!canViewFull && mentorList.length > 0 && !filters.primary_track && (
+        <Paper
+          elevation={0}
+          sx={{
+            mt: 6,
+            p: 4,
+            textAlign: 'center',
+            border: '1px dashed rgba(0,0,0,0.15)',
+            borderRadius: 3,
+          }}
+        >
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>
+            Unlock full mentor list
+          </Typography>
+
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ mt: 1, mb: 3 }}
+          >
+            Get matched with mentors based on your goals and experience.
+          </Typography>
+
+          <Button
+            variant="contained"
+            endIcon={<ArrowForwardIcon />}
+            onClick={() => navigate('/register')}
+            sx={{ textTransform: 'none', fontWeight: 700 }}
+          >
+            Get started
+          </Button>
+        </Paper>
+      )}
+
+      {/* =========================
+          Pagination (members only, hidden when primary_track is set)
+      ========================= */}
+      {canViewFull && mentorList.length > 0 && !filters.primary_track && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 5 }}>
+          <Pagination
+            page={page}
+            onChange={(_, p) => setPage(p)}
+            count={10}
+            color="primary"
+          />
+        </Box>
+      )}
+
+      {/* =========================
+          Snackbar
+      ========================= */}
       <Snackbar
         open={snackbar.open}
         autoHideDuration={3000}
@@ -337,15 +257,8 @@ const MentorListPage: React.FC = () => {
           {snackbar.message}
         </Alert>
       </Snackbar>
-
-      <BookingDialog
-        open={bookingDialogOpen}
-        onClose={() => setBookingDialogOpen(false)}
-        mentor={selectedMentor}
-        onBookingComplete={handleBookingComplete}
-      />
     </Box>
   );
 };
 
-export default MentorListPage; 
+export default MentorListPage;
