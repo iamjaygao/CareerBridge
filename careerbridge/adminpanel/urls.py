@@ -22,6 +22,7 @@ urlpatterns = [
     # Data export
     path('exports/', views.DataExportListView.as_view(), name='data-export-list'),
     path('exports/<int:pk>/', views.DataExportDetailView.as_view(), name='data-export-detail'),
+    path('exports/<int:pk>/download/', views.DataExportDownloadView.as_view(), name='data-export-download'),
     
     # Content moderation
     path('moderation/', views.ContentModerationListView.as_view(), name='content-moderation-list'),
@@ -40,6 +41,8 @@ urlpatterns = [
     # Appointments management
     path('appointments/', views.AppointmentManagementView.as_view(), name='appointment-management'),
     path('appointments/<int:pk>/', views.AppointmentManagementDetailView.as_view(), name='appointment-management-detail'),
+    path('staff/appointments/', views.StaffAppointmentListView.as_view(), name='staff-appointment-list'),
+    path('staff/appointments/<int:pk>/', views.StaffAppointmentDetailView.as_view(), name='staff-appointment-detail'),
     
     # Jobs management
     path('jobs/stats/', views.JobStatsView.as_view(), name='job-stats'),

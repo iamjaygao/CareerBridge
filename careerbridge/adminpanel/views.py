@@ -2,16 +2,20 @@ from rest_framework import generics, status, permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.decorators import action
+from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.db.models import Q, Count, Sum
 from django.contrib.auth import get_user_model
+from django.conf import settings
 from datetime import datetime, timedelta, date
 from decimal import Decimal
 from typing import Dict, Tuple, Optional, Union
 from dateutil.relativedelta import relativedelta
 import time
 import logging
+import csv
+import os
 from django.core.cache import cache
 from django.db import connection
 
@@ -697,6 +701,117 @@ class SystemConfigDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsSuperAdminOnly]
     queryset = SystemConfig.objects.all()
 
+
+def build_export_rows(export_type, filters, date_from=None, date_to=None):
+    if export_type == 'users':
+        User = get_user_model()
+        queryset = User.objects.all()
+        if filters.get('search'):
+            search_term = filters['search']
+            queryset = queryset.filter(
+                Q(username__icontains=search_term) |
+                Q(email__icontains=search_term) |
+                Q(first_name__icontains=search_term) |
+                Q(last_name__icontains=search_term)
+            )
+        if 'is_active' in filters:
+            queryset = queryset.filter(is_active=bool(filters['is_active']))
+        if filters.get('role'):
+            queryset = queryset.filter(role=filters['role'])
+        if 'is_staff' in filters:
+            queryset = queryset.filter(is_staff=bool(filters['is_staff']))
+        if filters.get('exclude_admin'):
+            queryset = queryset.exclude(role='admin').exclude(role='staff')
+
+        rows = [
+            {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'role': getattr(user, 'role', '') or 'student',
+                'is_active': user.is_active,
+                'is_staff': user.is_staff,
+                'date_joined': user.date_joined.isoformat() if user.date_joined else '',
+                'last_login': user.last_login.isoformat() if user.last_login else '',
+            }
+            for user in queryset.order_by('id')
+        ]
+        return rows
+
+    if export_type == 'mentors':
+        from mentors.models import MentorProfile
+
+        queryset = MentorProfile.objects.select_related('user').all()
+        if filters.get('status'):
+            queryset = queryset.filter(status=filters['status'])
+        rows = [
+            {
+                'mentor_id': mentor.id,
+                'user_id': mentor.user.id if mentor.user else '',
+                'username': mentor.user.username if mentor.user else '',
+                'email': mentor.user.email if mentor.user else '',
+                'status': mentor.status,
+                'average_rating': mentor.average_rating,
+                'total_reviews': mentor.total_reviews,
+                'total_sessions': mentor.total_sessions,
+                'total_earnings': mentor.total_earnings,
+            }
+            for mentor in queryset.order_by('id')
+        ]
+        return rows
+
+    if export_type == 'appointments':
+        from appointments.models import Appointment
+
+        queryset = Appointment.objects.select_related('user', 'mentor__user').all()
+        if date_from:
+            queryset = queryset.filter(scheduled_start__date__gte=date_from)
+        if date_to:
+            queryset = queryset.filter(scheduled_start__date__lte=date_to)
+        if filters.get('status'):
+            queryset = queryset.filter(status=filters['status'])
+        if 'is_paid' in filters:
+            queryset = queryset.filter(is_paid=bool(filters['is_paid']))
+
+        rows = [
+            {
+                'appointment_id': appointment.id,
+                'student_username': appointment.user.username if appointment.user else '',
+                'student_email': appointment.user.email if appointment.user else '',
+                'mentor_username': appointment.mentor.user.username if appointment.mentor else '',
+                'mentor_email': appointment.mentor.user.email if appointment.mentor else '',
+                'status': appointment.status,
+                'scheduled_start': appointment.scheduled_start.isoformat() if appointment.scheduled_start else '',
+                'price': appointment.price,
+                'is_paid': appointment.is_paid,
+            }
+            for appointment in queryset.order_by('id')
+        ]
+        return rows
+
+    return []
+
+
+def write_export_file(export_type, rows, export_id):
+    export_dir = os.path.join(settings.MEDIA_ROOT, 'exports')
+    os.makedirs(export_dir, exist_ok=True)
+    filename = f"export_{export_id}_{export_type}.csv"
+    file_path = os.path.join(export_dir, filename)
+
+    if rows:
+        headers = list(rows[0].keys())
+    else:
+        headers = []
+
+    with open(file_path, 'w', newline='', encoding='utf-8') as handle:
+        writer = csv.writer(handle)
+        if headers:
+            writer.writerow(headers)
+            for row in rows:
+                writer.writerow([row.get(key, '') for key in headers])
+
+    return file_path, os.path.getsize(file_path)
+
 class DataExportListView(generics.ListCreateAPIView):
     """Data export list"""
     serializer_class = DataExportSerializer
@@ -711,13 +826,54 @@ class DataExportListView(generics.ListCreateAPIView):
         return DataExport.objects.filter(requested_by=self.request.user)
     
     def perform_create(self, serializer):
-        serializer.save()
+        export = serializer.save()
+        export.status = 'processing'
+        export.started_at = timezone.now()
+        export.save(update_fields=['status', 'started_at'])
+
+        try:
+            filters = export.filters or {}
+            rows = build_export_rows(export.export_type, filters, export.date_from, export.date_to)
+            file_path, file_size = write_export_file(export.export_type, rows, export.id)
+            export.file_path = f"exports/{os.path.basename(file_path)}"
+            export.file_size = file_size
+            export.record_count = len(rows)
+            export.status = 'completed'
+            export.completed_at = timezone.now()
+            export.save()
+        except Exception as exc:
+            export.status = 'failed'
+            export.error_message = str(exc)
+            export.completed_at = timezone.now()
+            export.save()
 
 class DataExportDetailView(generics.RetrieveAPIView):
     """Data export details"""
     serializer_class = DataExportSerializer
     permission_classes = [IsAdminUser]
     queryset = DataExport.objects.all()
+
+
+class DataExportDownloadView(APIView):
+    """Download export file"""
+    permission_classes = [IsAdminUser]
+
+    def get(self, request, pk):
+        export = get_object_or_404(DataExport, pk=pk)
+
+        if not user_has_role(request.user, 'superadmin') and export.requested_by_id != request.user.id:
+            return Response({'error': 'Not allowed to download this export'}, status=status.HTTP_403_FORBIDDEN)
+
+        if not export.file_path:
+            return Response({'error': 'Export file not ready'}, status=status.HTTP_404_NOT_FOUND)
+
+        file_path = os.path.join(settings.MEDIA_ROOT, export.file_path)
+        if not os.path.exists(file_path):
+            return Response({'error': 'Export file missing'}, status=status.HTTP_404_NOT_FOUND)
+
+        response = FileResponse(open(file_path, 'rb'), content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="{os.path.basename(file_path)}"'
+        return response
 
 class ContentModerationListView(generics.ListAPIView):
     """Content moderation list"""
@@ -859,6 +1015,12 @@ class UserManagementView(generics.GenericAPIView):
                     {'error': 'Username, email, and password are required'}, 
                     status=status.HTTP_400_BAD_REQUEST
                 )
+
+            if role in ['admin', 'superadmin'] and not user_has_role(request.user, 'superadmin'):
+                return Response(
+                    {'error': 'Only superadmin can create admin or superadmin accounts'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
             
             # Check if user already exists
             if User.objects.filter(username=username).exists():
@@ -906,6 +1068,12 @@ class UserManagementView(generics.GenericAPIView):
         try:
             user_id = request.data.get('user_id')
             user = User.objects.get(id=user_id)
+
+            if user_has_role(user, 'superadmin') and not user_has_role(request.user, 'superadmin'):
+                return Response(
+                    {'error': 'Cannot update superadmin account'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
             
             # Update fields
             if 'username' in request.data:
@@ -927,6 +1095,11 @@ class UserManagementView(generics.GenericAPIView):
                 user.email = new_email
             
             if 'role' in request.data:
+                if request.data['role'] in ['admin', 'superadmin'] and not user_has_role(request.user, 'superadmin'):
+                    return Response(
+                        {'error': 'Only superadmin can assign admin or superadmin roles'},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
                 user.role = request.data['role']
             
             if 'is_staff' in request.data:
@@ -964,6 +1137,12 @@ class UserManagementView(generics.GenericAPIView):
         try:
             user_id = request.data.get('user_id')
             user = User.objects.get(id=user_id)
+
+            if user_has_role(user, 'superadmin') and not user_has_role(request.user, 'superadmin'):
+                return Response(
+                    {'error': 'Cannot delete superadmin account'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
             
             # Prevent deleting self
             if user.id == request.user.id:
@@ -1007,6 +1186,12 @@ class UserManagementView(generics.GenericAPIView):
         
         try:
             user = User.objects.get(id=user_id)
+
+            if user_has_role(user, 'superadmin') and not user_has_role(request.user, 'superadmin'):
+                return Response(
+                    {'error': 'Cannot update superadmin account status'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
             
             if action == 'activate':
                 user.is_active = True
@@ -1085,6 +1270,7 @@ class MentorApplicationsView(generics.GenericAPIView):
     def get(self, request):
         """Get mentor applications list"""
         from mentors.models import MentorApplication
+        from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
         
         applications = MentorApplication.objects.select_related('user', 'reviewed_by').all()
         
@@ -1103,9 +1289,27 @@ class MentorApplicationsView(generics.GenericAPIView):
                 Q(user__last_name__icontains=search_term)
             )
         
+        page = request.query_params.get('page', 1)
+        page_size = request.query_params.get('page_size', 10)
+
+        try:
+            page_size = int(page_size)
+        except ValueError:
+            page_size = 10
+
+        page_size = max(1, min(page_size, 50))
+        paginator = Paginator(applications, page_size)
+
+        try:
+            page_obj = paginator.page(page)
+        except PageNotAnInteger:
+            page_obj = paginator.page(1)
+        except EmptyPage:
+            page_obj = paginator.page(paginator.num_pages)
+
         # Convert to list of dicts with proper field names
         applications_list = []
-        for app in applications:
+        for app in page_obj:
             applications_list.append({
                 'id': app.id,
                 'user_id': app.user.id if app.user else None,
@@ -1123,7 +1327,13 @@ class MentorApplicationsView(generics.GenericAPIView):
             })
         
         serializer = MentorApplicationsSerializer(instance=applications_list, many=True)
-        return Response(serializer.data)
+        return Response({
+            'results': serializer.data,
+            'count': paginator.count,
+            'page': page_obj.number,
+            'page_size': page_size,
+            'total_pages': paginator.num_pages,
+        })
     
     def post(self, request):
         """Handle mentor application actions"""
@@ -1486,20 +1696,60 @@ class PingView(generics.GenericAPIView):
 # MISSING API VIEWS - Added to match frontend adminService calls
 # ============================================================
 
+def build_admin_appointment_payload(appointment):
+    student = appointment.user
+    mentor_user = appointment.mentor.user if appointment.mentor else None
+    duration_minutes = 0
+    if appointment.scheduled_start and appointment.scheduled_end:
+        duration_minutes = int((appointment.scheduled_end - appointment.scheduled_start).total_seconds() / 60)
+    return {
+        'id': appointment.id,
+        'student': {
+            'id': student.id,
+            'username': student.username,
+            'email': student.email,
+            'first_name': student.first_name or '',
+            'last_name': student.last_name or '',
+            'profile_picture': getattr(student, 'profile_picture', '') or '',
+        },
+        'mentor': {
+            'id': appointment.mentor.id if appointment.mentor else None,
+            'username': mentor_user.username if mentor_user else '',
+            'email': mentor_user.email if mentor_user else '',
+            'first_name': mentor_user.first_name if mentor_user else '',
+            'last_name': mentor_user.last_name if mentor_user else '',
+            'profile_picture': getattr(mentor_user, 'profile_picture', '') if mentor_user else '',
+            'expertise_areas': getattr(appointment.mentor, 'expertise_areas', []) if appointment.mentor else [],
+        },
+        'status': appointment.status,
+        'scheduled_at': appointment.scheduled_start,
+        'duration': duration_minutes,
+        'topic': appointment.service.title if appointment.service else appointment.title,
+        'notes': appointment.description or '',
+        'meeting_link': appointment.meeting_link or '',
+        'created_at': appointment.created_at,
+        'updated_at': appointment.updated_at,
+        'payment_status': 'completed' if appointment.is_paid else 'pending',
+        'amount': appointment.price,
+    }
+
 class AppointmentManagementView(generics.GenericAPIView):
     """Appointment management for admin"""
-    permission_classes = [IsAdminOrStaff]
+    permission_classes = [IsAdminUser]
     
     def get(self, request):
         """Get all appointments with filters"""
         from appointments.models import Appointment
-        
+        from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+
         # Get query parameters
         status = request.query_params.get('status')
         mentor_id = request.query_params.get('mentor_id')
         user_id = request.query_params.get('user_id')
         date_from = request.query_params.get('date_from')
         date_to = request.query_params.get('date_to')
+        payment_status = request.query_params.get('payment_status')
+        search_term = request.query_params.get('search')
         
         queryset = Appointment.objects.select_related('user', 'mentor__user').all()
         
@@ -1514,27 +1764,167 @@ class AppointmentManagementView(generics.GenericAPIView):
             queryset = queryset.filter(scheduled_start__gte=date_from)
         if date_to:
             queryset = queryset.filter(scheduled_start__lte=date_to)
-        
-        appointments = [
-            {
-                'appointment_id': appointment.id,
-                'user_username': appointment.user.username,
-                'mentor_name': appointment.mentor.user.get_full_name() or appointment.mentor.user.username,
-                'title': appointment.title,
-                'status': appointment.status,
-                'scheduled_start': appointment.scheduled_start,
-                'price': appointment.price,
-                'is_paid': appointment.is_paid,
-            }
-            for appointment in queryset
-        ]
+        if payment_status == 'completed':
+            queryset = queryset.filter(is_paid=True)
+        elif payment_status == 'pending':
+            queryset = queryset.filter(is_paid=False)
+        elif payment_status == 'refunded':
+            queryset = queryset.filter(refund_amount__gt=0)
+        if search_term:
+            queryset = queryset.filter(
+                Q(user__username__icontains=search_term) |
+                Q(user__email__icontains=search_term) |
+                Q(user__first_name__icontains=search_term) |
+                Q(user__last_name__icontains=search_term) |
+                Q(mentor__user__username__icontains=search_term) |
+                Q(mentor__user__email__icontains=search_term) |
+                Q(mentor__user__first_name__icontains=search_term) |
+                Q(mentor__user__last_name__icontains=search_term) |
+                Q(title__icontains=search_term)
+            )
 
+        page = request.query_params.get('page', 1)
+        page_size = request.query_params.get('page_size', 10)
+
+        try:
+            page_size = int(page_size)
+        except ValueError:
+            page_size = 10
+
+        page_size = max(1, min(page_size, 50))
+        paginator = Paginator(queryset, page_size)
+
+        try:
+            page_obj = paginator.page(page)
+        except PageNotAnInteger:
+            page_obj = paginator.page(1)
+        except EmptyPage:
+            page_obj = paginator.page(paginator.num_pages)
+
+        appointments = [build_admin_appointment_payload(appointment) for appointment in page_obj]
+
+        serializer = AppointmentManagementSerializer(instance=appointments, many=True)
+        return Response({
+            'results': serializer.data,
+            'count': paginator.count,
+            'page': page_obj.number,
+            'page_size': page_size,
+            'total_pages': paginator.num_pages,
+        })
+
+
+class AppointmentManagementDetailView(generics.RetrieveUpdateAPIView):
+    """Update appointment details for admin."""
+    permission_classes = [IsAdminUser]
+    serializer_class = AppointmentUpdateSerializer
+
+    def get_queryset(self):
+        from appointments.models import Appointment
+
+        return Appointment.objects.select_related('user', 'mentor__user', 'time_slot').all()
+
+    def update(self, request, *args, **kwargs):
+        appointment = self.get_object()
+        old_status = appointment.status
+        data = request.data.copy()
+        cancel_reason = data.pop('cancellation_reason', '') or data.pop('cancel_reason', '')
+        serializer = self.get_serializer(appointment, data=data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        appointment.refresh_from_db()
+
+        if appointment.status == 'cancelled' and old_status != 'cancelled':
+            appointment.cancelled_by = 'staff'
+            if cancel_reason:
+                appointment.cancellation_reason = cancel_reason
+            appointment.save(update_fields=['cancelled_by', 'cancellation_reason'])
+
+        if appointment.time_slot:
+            from appointments.models import Appointment as AppointmentModel
+
+            slot = appointment.time_slot
+            booked_count = AppointmentModel.objects.filter(
+                time_slot=slot,
+                status__in=['confirmed', 'completed']
+            ).count()
+            if slot.current_bookings != booked_count:
+                slot.current_bookings = booked_count
+                slot.save(update_fields=['current_bookings'])
+
+        if appointment.status in ['confirmed', 'cancelled'] and appointment.status != old_status:
+            from notifications.services.dispatcher import notify
+            from notifications.services.rules import NotificationType
+
+            mentor_name = appointment.mentor.user.get_full_name() or appointment.mentor.user.username
+            student_name = appointment.user.get_full_name() or appointment.user.username
+            appointment_details = appointment.get_notification_details()
+            priority = 'high' if appointment.status == 'cancelled' else 'normal'
+            status_text = appointment.get_status_display()
+
+            event_type = (
+                NotificationType.APPOINTMENT_CANCELLED
+                if appointment.status == 'cancelled'
+                else NotificationType.APPOINTMENT_CONFIRMED
+            )
+            notify(
+                event_type,
+                context={
+                    'appointment_id': appointment.id,
+                    'student': appointment.user,
+                    'mentor': appointment.mentor.user,
+                },
+                title='Appointment status updated',
+                message=(
+                    f'Appointment ({appointment_details}) between {student_name} and {mentor_name} '
+                    f'is now {status_text}.'
+                ),
+                priority=priority,
+                related_appointment=appointment,
+            )
+
+        return Response(serializer.data)
+
+
+class StaffAppointmentListView(generics.GenericAPIView):
+    """Appointment management for staff."""
+    permission_classes = [IsAdminOrStaff]
+
+    def get(self, request):
+        from appointments.models import Appointment
+
+        status = request.query_params.get('status')
+        mentor_id = request.query_params.get('mentor_id')
+        user_id = request.query_params.get('user_id')
+        date_from = request.query_params.get('date_from')
+        date_to = request.query_params.get('date_to')
+        payment_status = request.query_params.get('payment_status')
+
+        queryset = Appointment.objects.select_related('user', 'mentor__user').all()
+
+        if status:
+            queryset = queryset.filter(status=status)
+        if mentor_id:
+            queryset = queryset.filter(mentor_id=mentor_id)
+        if user_id:
+            queryset = queryset.filter(user_id=user_id)
+        if date_from:
+            queryset = queryset.filter(scheduled_start__gte=date_from)
+        if date_to:
+            queryset = queryset.filter(scheduled_start__lte=date_to)
+        if payment_status == 'completed':
+            queryset = queryset.filter(is_paid=True)
+        elif payment_status == 'pending':
+            queryset = queryset.filter(is_paid=False)
+        elif payment_status == 'refunded':
+            queryset = queryset.filter(refund_amount__gt=0)
+
+        appointments = [build_admin_appointment_payload(appointment) for appointment in queryset]
         serializer = AppointmentManagementSerializer(instance=appointments, many=True)
         return Response(serializer.data)
 
 
-class AppointmentManagementDetailView(generics.RetrieveUpdateAPIView):
-    """Update appointment details for staff/admin."""
+class StaffAppointmentDetailView(generics.RetrieveUpdateAPIView):
+    """Update appointment details for staff."""
     permission_classes = [IsAdminOrStaff]
     serializer_class = AppointmentUpdateSerializer
 
@@ -1613,15 +2003,30 @@ class JobStatsView(APIView):
         """Get job statistics"""
         try:
             from jobs.models import JobListing
+            from django.db.models.functions import TruncDate
             total_jobs = JobListing.objects.filter(is_active=True).count()
             last_crawl = JobListing.objects.order_by('-created_at').first()
             last_crawl_time = last_crawl.created_at.isoformat() if last_crawl else None
+            crawl_days = (
+                JobListing.objects.filter(created_at__isnull=False)
+                .annotate(day=TruncDate('created_at'))
+                .values('day')
+                .annotate(jobs_found=Count('id'))
+                .order_by('-day')[:7]
+            )
+            crawler_logs = [
+                {
+                    'id': idx + 1,
+                    'timestamp': entry['day'].isoformat() if entry['day'] else None,
+                    'status': 'success',
+                    'jobs_found': entry['jobs_found'],
+                }
+                for idx, entry in enumerate(crawl_days)
+            ]
         except ImportError:
             total_jobs = 0
             last_crawl_time = None
-        
-        # Mock crawler logs - TODO: implement actual crawler log model
-        crawler_logs = []
+            crawler_logs = []
         
         data = {
             'total_jobs': total_jobs,
@@ -2053,7 +2458,7 @@ class PublicSystemSettingsView(APIView):
 
 class SystemSettingsView(APIView):
     """System settings management - singleton pattern"""
-    permission_classes = [IsAdminOrSuperAdmin]
+    permission_classes = [IsSuperAdminOnly]
     
     def get(self, request):
         """Get system settings"""

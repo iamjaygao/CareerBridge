@@ -334,15 +334,20 @@ class MentorManagementSerializer(serializers.Serializer):
 
 class AppointmentManagementSerializer(serializers.Serializer):
     """Appointment management serializer"""
-    
-    appointment_id = serializers.IntegerField()
-    user_username = serializers.CharField()
-    mentor_name = serializers.CharField()
-    title = serializers.CharField()
+
+    id = serializers.IntegerField()
+    student = serializers.DictField()
+    mentor = serializers.DictField()
     status = serializers.CharField()
-    scheduled_start = serializers.DateTimeField()
-    price = serializers.DecimalField(max_digits=8, decimal_places=2)
-    is_paid = serializers.BooleanField()
+    scheduled_at = serializers.DateTimeField()
+    duration = serializers.IntegerField()
+    topic = serializers.CharField()
+    notes = serializers.CharField(allow_blank=True, required=False)
+    meeting_link = serializers.CharField(allow_blank=True, required=False)
+    created_at = serializers.DateTimeField()
+    updated_at = serializers.DateTimeField()
+    payment_status = serializers.CharField()
+    amount = serializers.DecimalField(max_digits=8, decimal_places=2)
 
 class SystemHealthSerializer(serializers.Serializer):
     """System health status serializer"""
