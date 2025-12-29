@@ -36,7 +36,6 @@ import {
   Cancel as RejectIcon,
   Visibility as ViewIcon,
   ExpandMore as ExpandMoreIcon,
-  FilterList as FilterIcon,
   Work as WorkIcon,
   Email as EmailIcon,
 } from '@mui/icons-material';
@@ -70,6 +69,8 @@ const MentorApplicationsPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
   const [selectedApplication, setSelectedApplication] = useState<MentorApplication | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogType, setDialogType] = useState<'view' | 'approve' | 'reject'>('view');
@@ -77,18 +78,29 @@ const MentorApplicationsPage: React.FC = () => {
 
   useEffect(() => {
     fetchApplications();
-  }, [page, searchTerm, statusFilter]);
+  }, [page, searchTerm, statusFilter, pageSize]);
 
   const fetchApplications = async () => {
     try {
       setLoading(true);
-      const params: any = {};
+      const params: any = { page, page_size: pageSize };
       if (statusFilter !== 'all') params.status = statusFilter;
       if (searchTerm) params.search = searchTerm;
       
       const data = await adminService.getMentorApplications(params);
-      setApplications(data);
-      setTotalPages(1); // TODO: Implement pagination
+      if (Array.isArray(data)) {
+        setApplications(data);
+        setTotalPages(1);
+        setTotalCount(data.length);
+      } else if (data?.results && Array.isArray(data.results)) {
+        setApplications(data.results);
+        setTotalPages(data.total_pages || Math.ceil((data.count || 0) / (data.page_size || 10)) || 1);
+        setTotalCount(data.count || data.results.length);
+      } else {
+        setApplications([]);
+        setTotalPages(1);
+        setTotalCount(0);
+      }
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to load applications');
       console.error('Error fetching applications:', err);
@@ -104,6 +116,11 @@ const MentorApplicationsPage: React.FC = () => {
 
   const handleStatusFilterChange = (event: any) => {
     setStatusFilter(event.target.value);
+    setPage(1);
+  };
+
+  const handlePageSizeChange = (event: any) => {
+    setPageSize(event.target.value);
     setPage(1);
   };
 
@@ -171,7 +188,7 @@ const MentorApplicationsPage: React.FC = () => {
           Mentor Applications
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Review and manage mentor applications
+          Review and manage mentor applications ({totalCount})
         </Typography>
       </Box>
 
@@ -212,13 +229,18 @@ const MentorApplicationsPage: React.FC = () => {
                   <MenuItem value="rejected">Rejected</MenuItem>
                 </Select>
               </FormControl>
-              <Button
-                variant="contained"
-                startIcon={<FilterIcon />}
-                onClick={() => {/* TODO: Implement advanced filters */}}
-              >
-                Advanced Filters
-              </Button>
+              <FormControl sx={{ minWidth: 150 }}>
+                <InputLabel>Page Size</InputLabel>
+                <Select
+                  value={pageSize}
+                  label="Page Size"
+                  onChange={handlePageSizeChange}
+                >
+                  <MenuItem value={10}>10</MenuItem>
+                  <MenuItem value={20}>20</MenuItem>
+                  <MenuItem value={50}>50</MenuItem>
+                </Select>
+              </FormControl>
             </Box>
           </CardContent>
         </Card>

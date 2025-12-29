@@ -84,9 +84,22 @@ const StaffReportsPage = lazy(() => import('./pages/staff/reports/ReportsPage'))
 
 // Admin
 const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage'));
+const AdminUserManagementPage = lazy(() => import('./pages/admin/UserManagementPage'));
+const AdminMentorsPage = lazy(() => import('./pages/admin/mentors/MentorsPage'));
+const AdminAppointmentsPage = lazy(() => import('./pages/admin/AppointmentManagementPage'));
+const AdminAssessmentPage = lazy(() => import('./pages/admin/AssessmentPage'));
+const AdminJobsPage = lazy(() => import('./pages/admin/JobsPage'));
+const AdminExportsPage = lazy(() => import('./pages/admin/ExportsPage'));
 
 // SuperAdmin
 const CommandCenter = lazy(() => import('./pages/superadmin/CommandCenter'));
+const SuperAdminSystemSettingsPage = lazy(() => import('./pages/admin/system/SystemSettingsPage'));
+const SuperAdminUsersPage = lazy(() => import('./pages/superadmin/UsersPage'));
+const SuperAdminMentorsPage = lazy(() => import('./pages/superadmin/MentorsPage'));
+const SuperAdminAppointmentsPage = lazy(() => import('./pages/superadmin/AppointmentsPage'));
+const SuperAdminAssessmentPage = lazy(() => import('./pages/superadmin/AssessmentPage'));
+const SuperAdminJobsPage = lazy(() => import('./pages/superadmin/JobsPage'));
+const SuperAdminSystemPage = lazy(() => import('./pages/superadmin/SystemPage'));
 
 // Notifications (shared)
 const NotificationsPage = lazy(() => import('./pages/notifications/NotificationsPage'));
@@ -217,6 +230,12 @@ const AppInner: React.FC = () => {
             <Route element={<AdminRoute />}>
               <Route element={<AdminLayout />}>
                 <Route path="/admin" element={<AdminDashboardPage />} />
+                <Route path="/admin/users" element={<AdminUserManagementPage />} />
+                <Route path="/admin/mentors" element={<AdminMentorsPage />} />
+                <Route path="/admin/appointments" element={<AdminAppointmentsPage />} />
+                <Route path="/admin/assessment" element={<AdminAssessmentPage />} />
+                <Route path="/admin/jobs" element={<AdminJobsPage />} />
+                <Route path="/admin/exports" element={<AdminExportsPage />} />
                 <Route path="/admin/notifications" element={<NotificationsPage />} />
               </Route>
             </Route>
@@ -226,6 +245,13 @@ const AppInner: React.FC = () => {
           <Route element={<ProtectedGate />}>
             <Route element={<SuperAdminLayout />}>
               <Route path="/superadmin" element={<CommandCenter />} />
+              <Route path="/superadmin/users" element={<SuperAdminUsersPage />} />
+              <Route path="/superadmin/mentors" element={<SuperAdminMentorsPage />} />
+              <Route path="/superadmin/appointments" element={<SuperAdminAppointmentsPage />} />
+              <Route path="/superadmin/assessment" element={<SuperAdminAssessmentPage />} />
+              <Route path="/superadmin/jobs" element={<SuperAdminJobsPage />} />
+              <Route path="/superadmin/system-console" element={<SuperAdminSystemPage />} />
+              <Route path="/superadmin/system" element={<SuperAdminSystemSettingsPage />} />
               <Route path="/superadmin/notifications" element={<NotificationsPage />} />
             </Route>
           </Route>

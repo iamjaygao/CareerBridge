@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Box,
   Typography,
@@ -13,9 +13,6 @@ import {
   Alert,
   Grid,
   Card,
-  CardContent,
-  CardHeader,
-  Chip,
   Accordion,
   AccordionSummary,
   AccordionDetails,
@@ -24,9 +21,11 @@ import {
   Save as SaveIcon,
   Refresh as RefreshIcon,
   Settings as SettingsIcon,
-  Security as SecurityIcon,
-  Notifications as NotificationsIcon,
-  Speed as SpeedIcon,
+  Campaign as CampaignIcon,
+  Palette as PaletteIcon,
+  Public as PublicIcon,
+  Key as KeyIcon,
+  Email as EmailIcon,
   ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
 
@@ -34,79 +33,78 @@ import LoadingSpinner from '../../../components/common/LoadingSpinner';
 import adminService from '../../../services/api/adminService';
 
 interface SystemSettings {
-  general: {
-    site_name: string;
-    site_description: string;
-    contact_email: string;
-    support_phone: string;
-    timezone: string;
-    date_format: string;
-    maintenance_mode: boolean;
-  };
-  security: {
-    session_timeout: number;
-    max_login_attempts: number;
-    password_min_length: number;
-    require_2fa: boolean;
-    enable_captcha: boolean;
-    allowed_file_types: string[];
-    max_file_size: number;
-  };
-  notifications: {
-    email_notifications: boolean;
-    sms_notifications: boolean;
-    push_notifications: boolean;
-    admin_notifications: boolean;
-    notification_frequency: string;
-  };
-  performance: {
-    cache_enabled: boolean;
-    cache_duration: number;
-    compression_enabled: boolean;
-    cdn_enabled: boolean;
-    max_upload_size: number;
-  };
+  platform_name: string;
+  company_name: string;
+  support_email: string;
+  support_phone: string;
+  office_address: string;
+  website_url: string;
+  contact_title: string;
+  contact_description: string;
+  announcement_enabled: boolean;
+  announcement_text: string;
+  announcement_type: 'info' | 'warning' | 'error' | 'success';
+  primary_color: string;
+  accent_color: string;
+  logo_url: string;
+  favicon_url: string;
+  theme: 'light' | 'dark' | 'auto';
+  linkedin_url: string;
+  twitter_url: string;
+  instagram_url: string;
+  youtube_url: string;
+  facebook_url: string;
+  smtp_host: string;
+  smtp_port: number;
+  smtp_username: string;
+  smtp_from_name: string;
+  template_footer_text: string;
 }
+
+const emptySettings: SystemSettings = {
+  platform_name: '',
+  company_name: '',
+  support_email: '',
+  support_phone: '',
+  office_address: '',
+  website_url: '',
+  contact_title: '',
+  contact_description: '',
+  announcement_enabled: false,
+  announcement_text: '',
+  announcement_type: 'info',
+  primary_color: '#2374e1',
+  accent_color: '#64748b',
+  logo_url: '',
+  favicon_url: '',
+  theme: 'light',
+  linkedin_url: '',
+  twitter_url: '',
+  instagram_url: '',
+  youtube_url: '',
+  facebook_url: '',
+  smtp_host: '',
+  smtp_port: 587,
+  smtp_username: '',
+  smtp_from_name: '',
+  template_footer_text: '',
+};
+
+const emptyApiKeys = {
+  openai_api_key: '',
+  stripe_secret_key: '',
+  email_api_key: '',
+  google_oauth_key: '',
+};
 
 const SystemSettingsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [settings, setSettings] = useState<SystemSettings>({
-    general: {
-      site_name: 'CareerBridge',
-      site_description: 'Professional mentoring platform',
-      contact_email: 'admin@careerbridge.com',
-      support_phone: '+1-555-0123',
-      timezone: 'UTC',
-      date_format: 'MM/DD/YYYY',
-      maintenance_mode: false,
-    },
-    security: {
-      session_timeout: 30,
-      max_login_attempts: 5,
-      password_min_length: 8,
-      require_2fa: false,
-      enable_captcha: true,
-      allowed_file_types: ['pdf', 'doc', 'docx', 'jpg', 'png'],
-      max_file_size: 10,
-    },
-    notifications: {
-      email_notifications: true,
-      sms_notifications: false,
-      push_notifications: true,
-      admin_notifications: true,
-      notification_frequency: 'immediate',
-    },
-    performance: {
-      cache_enabled: true,
-      cache_duration: 3600,
-      compression_enabled: true,
-      cdn_enabled: false,
-      max_upload_size: 10,
-    },
-  });
+  const [settings, setSettings] = useState<SystemSettings>(emptySettings);
+  const [apiKeys, setApiKeys] = useState(emptyApiKeys);
+  const [maskedKeys, setMaskedKeys] = useState(emptyApiKeys);
 
   useEffect(() => {
     fetchSettings();
@@ -115,8 +113,15 @@ const SystemSettingsPage: React.FC = () => {
   const fetchSettings = async () => {
     try {
       setLoading(true);
-      // TODO: Replace with actual system settings API
-      console.log('Loading system settings...');
+      const data = await adminService.getSystemSettings();
+      setSettings({ ...emptySettings, ...data });
+      setMaskedKeys({
+        openai_api_key: data.openai_api_key || '',
+        stripe_secret_key: data.stripe_secret_key || '',
+        email_api_key: data.email_api_key || '',
+        google_oauth_key: data.google_oauth_key || '',
+      });
+      setApiKeys(emptyApiKeys);
     } catch (err) {
       setError('Failed to load system settings');
       console.error('Error fetching settings:', err);
@@ -129,8 +134,23 @@ const SystemSettingsPage: React.FC = () => {
     try {
       setSaving(true);
       setError(null);
-      // TODO: Replace with actual API call
-      console.log('Saving settings:', settings);
+      const payload: Record<string, any> = { ...settings };
+
+      Object.entries(apiKeys).forEach(([key, value]) => {
+        if (value && value.trim()) {
+          payload[key] = value.trim();
+        }
+      });
+
+      const updated = await adminService.updateSystemSettings(payload);
+      setSettings({ ...emptySettings, ...updated });
+      setMaskedKeys({
+        openai_api_key: updated.openai_api_key || '',
+        stripe_secret_key: updated.stripe_secret_key || '',
+        email_api_key: updated.email_api_key || '',
+        google_oauth_key: updated.google_oauth_key || '',
+      });
+      setApiKeys(emptyApiKeys);
       setSuccess('Settings saved successfully');
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
@@ -141,35 +161,19 @@ const SystemSettingsPage: React.FC = () => {
     }
   };
 
-  const handleSettingChange = (section: keyof SystemSettings, field: string, value: any) => {
-    setSettings(prev => ({
-      ...prev,
-      [section]: {
-        ...prev[section],
-        [field]: value,
-      },
-    }));
-  };
-
-  const handleMaintenanceMode = async () => {
-    const newMode = !settings.general.maintenance_mode;
-    try {
-      console.log('Toggle maintenance mode:', newMode);
-      handleSettingChange('general', 'maintenance_mode', newMode);
-    } catch (err) {
-      console.error('Error toggling maintenance mode:', err);
-    }
-  };
-
   const handleCacheClear = async () => {
     try {
-      console.log('Clear cache');
+      await adminService.clearCache();
       setSuccess('Cache cleared successfully');
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
       setError('Failed to clear cache');
       console.error('Error clearing cache:', err);
     }
+  };
+
+  const handleSettingChange = (field: keyof SystemSettings, value: any) => {
+    setSettings(prev => ({ ...prev, [field]: value }));
   };
 
   if (loading) {
@@ -184,7 +188,7 @@ const SystemSettingsPage: React.FC = () => {
           System Settings
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Manage system-wide configuration and preferences
+          Manage platform-wide configuration and preferences
         </Typography>
       </Box>
 
@@ -234,15 +238,12 @@ const SystemSettingsPage: React.FC = () => {
             <Accordion defaultExpanded>
               <AccordionSummary
                 expandIcon={<ExpandMoreIcon />}
-                sx={{
-                  bgcolor: 'grey.50',
-                  '&:hover': { bgcolor: 'grey.100' },
-                }}
+                sx={{ bgcolor: 'grey.50', '&:hover': { bgcolor: 'grey.100' } }}
               >
                 <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
                   <SettingsIcon sx={{ mr: 2, color: 'primary.main' }} />
                   <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                    General Settings
+                    Platform Settings
                   </Typography>
                 </Box>
               </AccordionSummary>
@@ -251,26 +252,42 @@ const SystemSettingsPage: React.FC = () => {
                   <Grid item xs={12} md={6}>
                     <TextField
                       fullWidth
-                      label="Site Name"
-                      value={settings.general.site_name}
-                      onChange={(e) => handleSettingChange('general', 'site_name', e.target.value)}
+                      label="Platform Name"
+                      value={settings.platform_name}
+                      onChange={(e) => handleSettingChange('platform_name', e.target.value)}
                     />
                   </Grid>
                   <Grid item xs={12} md={6}>
                     <TextField
                       fullWidth
-                      label="Contact Email"
+                      label="Company Name"
+                      value={settings.company_name}
+                      onChange={(e) => handleSettingChange('company_name', e.target.value)}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="Support Email"
                       type="email"
-                      value={settings.general.contact_email}
-                      onChange={(e) => handleSettingChange('general', 'contact_email', e.target.value)}
+                      value={settings.support_email}
+                      onChange={(e) => handleSettingChange('support_email', e.target.value)}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="Support Phone"
+                      value={settings.support_phone}
+                      onChange={(e) => handleSettingChange('support_phone', e.target.value)}
                     />
                   </Grid>
                   <Grid item xs={12}>
                     <TextField
                       fullWidth
-                      label="Site Description"
-                      value={settings.general.site_description}
-                      onChange={(e) => handleSettingChange('general', 'site_description', e.target.value)}
+                      label="Office Address"
+                      value={settings.office_address}
+                      onChange={(e) => handleSettingChange('office_address', e.target.value)}
                       multiline
                       rows={2}
                     />
@@ -278,40 +295,286 @@ const SystemSettingsPage: React.FC = () => {
                   <Grid item xs={12} md={6}>
                     <TextField
                       fullWidth
-                      label="Support Phone"
-                      value={settings.general.support_phone}
-                      onChange={(e) => handleSettingChange('general', 'support_phone', e.target.value)}
+                      label="Website URL"
+                      value={settings.website_url}
+                      onChange={(e) => handleSettingChange('website_url', e.target.value)}
                     />
                   </Grid>
-                  <Grid item xs={12} md={6}>
-                    <FormControl fullWidth>
-                      <InputLabel>Timezone</InputLabel>
-                      <Select
-                        value={settings.general.timezone}
-                        label="Timezone"
-                        onChange={(e) => handleSettingChange('general', 'timezone', e.target.value)}
-                      >
-                        <MenuItem value="UTC">UTC</MenuItem>
-                        <MenuItem value="America/New_York">Eastern Time</MenuItem>
-                        <MenuItem value="America/Chicago">Central Time</MenuItem>
-                        <MenuItem value="America/Denver">Mountain Time</MenuItem>
-                        <MenuItem value="America/Los_Angeles">Pacific Time</MenuItem>
-                      </Select>
-                    </FormControl>
-                  </Grid>
+                </Grid>
+              </AccordionDetails>
+            </Accordion>
+          </Card>
+        </Grid>
+
+        {/* Announcement Settings */}
+        <Grid item xs={12}>
+          <Card>
+            <Accordion>
+              <AccordionSummary
+                expandIcon={<ExpandMoreIcon />}
+                sx={{ bgcolor: 'grey.50', '&:hover': { bgcolor: 'grey.100' } }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                  <CampaignIcon sx={{ mr: 2, color: 'primary.main' }} />
+                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                    Announcement Settings
+                  </Typography>
+                </Box>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Grid container spacing={3} sx={{ pt: 2 }}>
                   <Grid item xs={12}>
                     <FormControlLabel
                       control={
                         <Switch
-                          checked={settings.general.maintenance_mode}
-                          onChange={handleMaintenanceMode}
-                          color="warning"
+                          checked={settings.announcement_enabled}
+                          onChange={(e) => handleSettingChange('announcement_enabled', e.target.checked)}
                         />
                       }
-                      label="Maintenance Mode"
+                      label="Enable Announcement Banner"
                     />
-                    <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 0.5 }}>
-                      When enabled, only administrators can access the site
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <FormControl fullWidth>
+                      <InputLabel>Announcement Type</InputLabel>
+                      <Select
+                        value={settings.announcement_type}
+                        label="Announcement Type"
+                        onChange={(e) => handleSettingChange('announcement_type', e.target.value)}
+                      >
+                        <MenuItem value="info">Info</MenuItem>
+                        <MenuItem value="warning">Warning</MenuItem>
+                        <MenuItem value="error">Error</MenuItem>
+                        <MenuItem value="success">Success</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      label="Announcement Text"
+                      value={settings.announcement_text}
+                      onChange={(e) => handleSettingChange('announcement_text', e.target.value)}
+                      multiline
+                      rows={2}
+                    />
+                  </Grid>
+                </Grid>
+              </AccordionDetails>
+            </Accordion>
+          </Card>
+        </Grid>
+
+        {/* Appearance Settings */}
+        <Grid item xs={12}>
+          <Card>
+            <Accordion>
+              <AccordionSummary
+                expandIcon={<ExpandMoreIcon />}
+                sx={{ bgcolor: 'grey.50', '&:hover': { bgcolor: 'grey.100' } }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                  <PaletteIcon sx={{ mr: 2, color: 'primary.main' }} />
+                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                    Appearance
+                  </Typography>
+                </Box>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Grid container spacing={3} sx={{ pt: 2 }}>
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      fullWidth
+                      label="Primary Color"
+                      value={settings.primary_color}
+                      onChange={(e) => handleSettingChange('primary_color', e.target.value)}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      fullWidth
+                      label="Accent Color"
+                      value={settings.accent_color}
+                      onChange={(e) => handleSettingChange('accent_color', e.target.value)}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <FormControl fullWidth>
+                      <InputLabel>Theme</InputLabel>
+                      <Select
+                        value={settings.theme}
+                        label="Theme"
+                        onChange={(e) => handleSettingChange('theme', e.target.value)}
+                      >
+                        <MenuItem value="light">Light</MenuItem>
+                        <MenuItem value="dark">Dark</MenuItem>
+                        <MenuItem value="auto">Auto</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="Logo URL"
+                      value={settings.logo_url}
+                      onChange={(e) => handleSettingChange('logo_url', e.target.value)}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="Favicon URL"
+                      value={settings.favicon_url}
+                      onChange={(e) => handleSettingChange('favicon_url', e.target.value)}
+                    />
+                  </Grid>
+                </Grid>
+              </AccordionDetails>
+            </Accordion>
+          </Card>
+        </Grid>
+
+        {/* Contact Page */}
+        <Grid item xs={12}>
+          <Card>
+            <Accordion>
+              <AccordionSummary
+                expandIcon={<ExpandMoreIcon />}
+                sx={{ bgcolor: 'grey.50', '&:hover': { bgcolor: 'grey.100' } }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                  <PublicIcon sx={{ mr: 2, color: 'primary.main' }} />
+                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                    Contact Page
+                  </Typography>
+                </Box>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Grid container spacing={3} sx={{ pt: 2 }}>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="Contact Title"
+                      value={settings.contact_title}
+                      onChange={(e) => handleSettingChange('contact_title', e.target.value)}
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      label="Contact Description"
+                      value={settings.contact_description}
+                      onChange={(e) => handleSettingChange('contact_description', e.target.value)}
+                      multiline
+                      rows={2}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      fullWidth
+                      label="LinkedIn URL"
+                      value={settings.linkedin_url}
+                      onChange={(e) => handleSettingChange('linkedin_url', e.target.value)}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      fullWidth
+                      label="Twitter URL"
+                      value={settings.twitter_url}
+                      onChange={(e) => handleSettingChange('twitter_url', e.target.value)}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      fullWidth
+                      label="Instagram URL"
+                      value={settings.instagram_url}
+                      onChange={(e) => handleSettingChange('instagram_url', e.target.value)}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      fullWidth
+                      label="YouTube URL"
+                      value={settings.youtube_url}
+                      onChange={(e) => handleSettingChange('youtube_url', e.target.value)}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      fullWidth
+                      label="Facebook URL"
+                      value={settings.facebook_url}
+                      onChange={(e) => handleSettingChange('facebook_url', e.target.value)}
+                    />
+                  </Grid>
+                </Grid>
+              </AccordionDetails>
+            </Accordion>
+          </Card>
+        </Grid>
+
+        {/* API Keys */}
+        <Grid item xs={12}>
+          <Card>
+            <Accordion>
+              <AccordionSummary
+                expandIcon={<ExpandMoreIcon />}
+                sx={{ bgcolor: 'grey.50', '&:hover': { bgcolor: 'grey.100' } }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                  <KeyIcon sx={{ mr: 2, color: 'primary.main' }} />
+                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                    API Keys
+                  </Typography>
+                </Box>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Grid container spacing={3} sx={{ pt: 2 }}>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="OpenAI API Key"
+                      type="password"
+                      value={apiKeys.openai_api_key}
+                      onChange={(e) => setApiKeys(prev => ({ ...prev, openai_api_key: e.target.value }))}
+                      helperText={maskedKeys.openai_api_key ? `Current: ${maskedKeys.openai_api_key}` : 'Not set'}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="Stripe Secret Key"
+                      type="password"
+                      value={apiKeys.stripe_secret_key}
+                      onChange={(e) => setApiKeys(prev => ({ ...prev, stripe_secret_key: e.target.value }))}
+                      helperText={maskedKeys.stripe_secret_key ? `Current: ${maskedKeys.stripe_secret_key}` : 'Not set'}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="Email API Key"
+                      type="password"
+                      value={apiKeys.email_api_key}
+                      onChange={(e) => setApiKeys(prev => ({ ...prev, email_api_key: e.target.value }))}
+                      helperText={maskedKeys.email_api_key ? `Current: ${maskedKeys.email_api_key}` : 'Not set'}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="Google OAuth Key"
+                      type="password"
+                      value={apiKeys.google_oauth_key}
+                      onChange={(e) => setApiKeys(prev => ({ ...prev, google_oauth_key: e.target.value }))}
+                      helperText={maskedKeys.google_oauth_key ? `Current: ${maskedKeys.google_oauth_key}` : 'Not set'}
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Typography variant="caption" color="text.secondary">
+                      Leave fields blank to keep existing keys unchanged.
                     </Typography>
                   </Grid>
                 </Grid>
@@ -320,21 +583,18 @@ const SystemSettingsPage: React.FC = () => {
           </Card>
         </Grid>
 
-        {/* Security Settings */}
+        {/* Email Settings */}
         <Grid item xs={12}>
           <Card>
             <Accordion>
               <AccordionSummary
                 expandIcon={<ExpandMoreIcon />}
-                sx={{
-                  bgcolor: 'grey.50',
-                  '&:hover': { bgcolor: 'grey.100' },
-                }}
+                sx={{ bgcolor: 'grey.50', '&:hover': { bgcolor: 'grey.100' } }}
               >
                 <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-                  <SecurityIcon sx={{ mr: 2, color: 'primary.main' }} />
+                  <EmailIcon sx={{ mr: 2, color: 'primary.main' }} />
                   <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                    Security Settings
+                    Email Configuration
                   </Typography>
                 </Box>
               </AccordionSummary>
@@ -343,231 +603,44 @@ const SystemSettingsPage: React.FC = () => {
                   <Grid item xs={12} md={6}>
                     <TextField
                       fullWidth
+                      label="SMTP Host"
+                      value={settings.smtp_host}
+                      onChange={(e) => handleSettingChange('smtp_host', e.target.value)}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={3}>
+                    <TextField
+                      fullWidth
                       type="number"
-                      label="Session Timeout (minutes)"
-                      value={settings.security.session_timeout}
-                      onChange={(e) => handleSettingChange('security', 'session_timeout', parseInt(e.target.value))}
+                      label="SMTP Port"
+                      value={settings.smtp_port}
+                      onChange={(e) => handleSettingChange('smtp_port', Number(e.target.value))}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={3}>
+                    <TextField
+                      fullWidth
+                      label="SMTP Username"
+                      value={settings.smtp_username}
+                      onChange={(e) => handleSettingChange('smtp_username', e.target.value)}
                     />
                   </Grid>
                   <Grid item xs={12} md={6}>
                     <TextField
                       fullWidth
-                      type="number"
-                      label="Max Login Attempts"
-                      value={settings.security.max_login_attempts}
-                      onChange={(e) => handleSettingChange('security', 'max_login_attempts', parseInt(e.target.value))}
+                      label="From Name"
+                      value={settings.smtp_from_name}
+                      onChange={(e) => handleSettingChange('smtp_from_name', e.target.value)}
                     />
                   </Grid>
-                  <Grid item xs={12} md={6}>
+                  <Grid item xs={12}>
                     <TextField
                       fullWidth
-                      type="number"
-                      label="Password Min Length"
-                      value={settings.security.password_min_length}
-                      onChange={(e) => handleSettingChange('security', 'password_min_length', parseInt(e.target.value))}
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      fullWidth
-                      type="number"
-                      label="Max File Size (MB)"
-                      value={settings.security.max_file_size}
-                      onChange={(e) => handleSettingChange('security', 'max_file_size', parseInt(e.target.value))}
-                    />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600 }}>
-                      Allowed File Types:
-                    </Typography>
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                      {settings.security.allowed_file_types.map((type) => (
-                        <Chip key={type} label={type.toUpperCase()} size="small" />
-                      ))}
-                    </Box>
-                  </Grid>
-                  <Grid item xs={12}>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={settings.security.require_2fa}
-                          onChange={(e) => handleSettingChange('security', 'require_2fa', e.target.checked)}
-                        />
-                      }
-                      label="Require Two-Factor Authentication"
-                    />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={settings.security.enable_captcha}
-                          onChange={(e) => handleSettingChange('security', 'enable_captcha', e.target.checked)}
-                        />
-                      }
-                      label="Enable CAPTCHA on Login"
-                    />
-                  </Grid>
-                </Grid>
-              </AccordionDetails>
-            </Accordion>
-          </Card>
-        </Grid>
-
-        {/* Notification Settings */}
-        <Grid item xs={12}>
-          <Card>
-            <Accordion>
-              <AccordionSummary
-                expandIcon={<ExpandMoreIcon />}
-                sx={{
-                  bgcolor: 'grey.50',
-                  '&:hover': { bgcolor: 'grey.100' },
-                }}
-              >
-                <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-                  <NotificationsIcon sx={{ mr: 2, color: 'primary.main' }} />
-                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                    Notification Settings
-                  </Typography>
-                </Box>
-              </AccordionSummary>
-              <AccordionDetails>
-                <Grid container spacing={3} sx={{ pt: 2 }}>
-                  <Grid item xs={12} md={6}>
-                    <FormControl fullWidth>
-                      <InputLabel>Notification Frequency</InputLabel>
-                      <Select
-                        value={settings.notifications.notification_frequency}
-                        label="Notification Frequency"
-                        onChange={(e) => handleSettingChange('notifications', 'notification_frequency', e.target.value)}
-                      >
-                        <MenuItem value="immediate">Immediate</MenuItem>
-                        <MenuItem value="hourly">Hourly</MenuItem>
-                        <MenuItem value="daily">Daily</MenuItem>
-                        <MenuItem value="weekly">Weekly</MenuItem>
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                  <Grid item xs={12}>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={settings.notifications.email_notifications}
-                          onChange={(e) => handleSettingChange('notifications', 'email_notifications', e.target.checked)}
-                        />
-                      }
-                      label="Email Notifications"
-                    />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={settings.notifications.sms_notifications}
-                          onChange={(e) => handleSettingChange('notifications', 'sms_notifications', e.target.checked)}
-                        />
-                      }
-                      label="SMS Notifications"
-                    />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={settings.notifications.push_notifications}
-                          onChange={(e) => handleSettingChange('notifications', 'push_notifications', e.target.checked)}
-                        />
-                      }
-                      label="Push Notifications"
-                    />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={settings.notifications.admin_notifications}
-                          onChange={(e) => handleSettingChange('notifications', 'admin_notifications', e.target.checked)}
-                        />
-                      }
-                      label="Admin Notifications"
-                    />
-                  </Grid>
-                </Grid>
-              </AccordionDetails>
-            </Accordion>
-          </Card>
-        </Grid>
-
-        {/* Performance Settings */}
-        <Grid item xs={12}>
-          <Card>
-            <Accordion>
-              <AccordionSummary
-                expandIcon={<ExpandMoreIcon />}
-                sx={{
-                  bgcolor: 'grey.50',
-                  '&:hover': { bgcolor: 'grey.100' },
-                }}
-              >
-                <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-                  <SpeedIcon sx={{ mr: 2, color: 'primary.main' }} />
-                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                    Performance Settings
-                  </Typography>
-                </Box>
-              </AccordionSummary>
-              <AccordionDetails>
-                <Grid container spacing={3} sx={{ pt: 2 }}>
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      fullWidth
-                      type="number"
-                      label="Cache Duration (seconds)"
-                      value={settings.performance.cache_duration}
-                      onChange={(e) => handleSettingChange('performance', 'cache_duration', parseInt(e.target.value))}
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      fullWidth
-                      type="number"
-                      label="Max Upload Size (MB)"
-                      value={settings.performance.max_upload_size}
-                      onChange={(e) => handleSettingChange('performance', 'max_upload_size', parseInt(e.target.value))}
-                    />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={settings.performance.cache_enabled}
-                          onChange={(e) => handleSettingChange('performance', 'cache_enabled', e.target.checked)}
-                        />
-                      }
-                      label="Enable Caching"
-                    />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={settings.performance.compression_enabled}
-                          onChange={(e) => handleSettingChange('performance', 'compression_enabled', e.target.checked)}
-                        />
-                      }
-                      label="Enable Compression"
-                    />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={settings.performance.cdn_enabled}
-                          onChange={(e) => handleSettingChange('performance', 'cdn_enabled', e.target.checked)}
-                        />
-                      }
-                      label="Enable CDN"
+                      label="Email Template Footer"
+                      value={settings.template_footer_text}
+                      onChange={(e) => handleSettingChange('template_footer_text', e.target.value)}
+                      multiline
+                      rows={2}
                     />
                   </Grid>
                 </Grid>

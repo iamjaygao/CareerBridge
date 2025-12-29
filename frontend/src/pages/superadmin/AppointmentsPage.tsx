@@ -47,16 +47,16 @@ const AppointmentsPage: React.FC = () => {
         
         // Normalize appointment objects
         const normalizedAppointments = appointmentsList.map((apt: any) => ({
-          id: apt.id,
-          student: apt.student?.user?.first_name && apt.student?.user?.last_name
-            ? `${apt.student.user.first_name} ${apt.student.user.last_name}`
-            : apt.student?.user?.username || apt.student_name || apt.student || 'Unknown',
-          mentor: apt.mentor?.user?.first_name && apt.mentor?.user?.last_name
-            ? `${apt.mentor.user.first_name} ${apt.mentor.user.last_name}`
-            : apt.mentor?.user?.username || apt.mentor_name || apt.mentor || 'Unknown',
-          date: apt.scheduled_start 
-            ? new Date(apt.scheduled_start).toLocaleDateString()
-            : apt.date || 'N/A',
+          id: apt.id || apt.appointment_id,
+          student: apt.student
+            ? `${apt.student.first_name || ''} ${apt.student.last_name || ''}`.trim() || apt.student.username
+            : apt.student_name || apt.student || 'Unknown',
+          mentor: apt.mentor
+            ? `${apt.mentor.first_name || ''} ${apt.mentor.last_name || ''}`.trim() || apt.mentor.username
+            : apt.mentor_name || apt.mentor || 'Unknown',
+          date: apt.scheduled_at
+            ? new Date(apt.scheduled_at).toLocaleDateString()
+            : (apt.scheduled_start ? new Date(apt.scheduled_start).toLocaleDateString() : (apt.date || 'N/A')),
           status: apt.status || 'pending',
         }));
         
@@ -158,4 +158,3 @@ const AppointmentsPage: React.FC = () => {
 };
 
 export default AppointmentsPage;
-

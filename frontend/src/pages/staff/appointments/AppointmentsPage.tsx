@@ -60,23 +60,31 @@ const AppointmentsPage: React.FC = () => {
   useEffect(() => {
     const fetchAppointments = async () => {
       try {
-        const data = await adminService.getAppointments();
+        const data = await adminService.getStaffAppointments();
         const list = Array.isArray(data) ? data : (data?.results || []);
-        const mapped = list.map((apt: any) => ({
-          id: apt.appointment_id || apt.id,
-          student: {
-            name: apt.user_username || 'Student',
-            email: '',
-          },
-          mentor: {
-            name: apt.mentor_name || 'Mentor',
-            email: '',
-          },
-          scheduled_at: apt.scheduled_start,
-          duration: 60,
-          status: apt.status || 'scheduled',
-          topic: apt.title || 'Session',
-        }));
+        const mapped = list.map((apt: any) => {
+          const studentName = apt.student
+            ? `${apt.student.first_name || ''} ${apt.student.last_name || ''}`.trim() || apt.student.username
+            : apt.user_username || 'Student';
+          const mentorName = apt.mentor
+            ? `${apt.mentor.first_name || ''} ${apt.mentor.last_name || ''}`.trim() || apt.mentor.username
+            : apt.mentor_name || 'Mentor';
+          return {
+            id: apt.id || apt.appointment_id,
+            student: {
+              name: studentName,
+              email: apt.student?.email || '',
+            },
+            mentor: {
+              name: mentorName,
+              email: apt.mentor?.email || '',
+            },
+            scheduled_at: apt.scheduled_at || apt.scheduled_start,
+            duration: apt.duration || 60,
+            status: apt.status || 'pending',
+            topic: apt.topic || apt.title || 'Session',
+          };
+        });
         setAppointments(mapped);
       } catch {
         setAppointments([]);
@@ -113,7 +121,7 @@ const AppointmentsPage: React.FC = () => {
       if (actionType === 'cancel' && cancelReason.trim()) {
         payload.cancellation_reason = cancelReason.trim();
       }
-      const updated = await adminService.updateAppointment(selectedAppointment.id, payload);
+      const updated = await adminService.updateStaffAppointment(selectedAppointment.id, payload);
       setAppointments(prev =>
         prev.map(apt =>
           apt.id === selectedAppointment.id

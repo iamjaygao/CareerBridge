@@ -128,17 +128,27 @@ const JobsPage: React.FC = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {crawlerLogs.map((log) => (
-                <TableRow key={log.id}>
-                  <TableCell>{log.timestamp}</TableCell>
-                  <TableCell>
-                    <Typography color={log.status === 'success' ? 'success.main' : 'error.main'}>
-                      {log.status}
+              {crawlerLogs.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={3} align="center">
+                    <Typography variant="body2" color="text.secondary">
+                      No crawler logs available yet.
                     </Typography>
                   </TableCell>
-                  <TableCell>{log.jobsFound}</TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                crawlerLogs.map((log) => (
+                  <TableRow key={log.id || log.timestamp}>
+                    <TableCell>{log.timestamp || log.date || 'N/A'}</TableCell>
+                    <TableCell>
+                      <Typography color={log.status === 'success' ? 'success.main' : 'error.main'}>
+                        {log.status || 'success'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>{log.jobs_found ?? log.jobsFound ?? 0}</TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </TableContainer>
@@ -148,4 +158,3 @@ const JobsPage: React.FC = () => {
 };
 
 export default JobsPage;
-

@@ -75,6 +75,14 @@ const SystemPage: React.FC = () => {
   const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null);
   const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(null);
   const [errorLogs, setErrorLogs] = useState<string[]>([]);
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditFilters, setAuditFilters] = useState({
+    admin_user: '',
+    action_type: '',
+    date_from: '',
+    date_to: '',
+  });
   
   // Dialog states
   const [errorLogsOpen, setErrorLogsOpen] = useState(false);
@@ -103,14 +111,16 @@ const SystemPage: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      const [healthData, settingsData] = await Promise.all([
+      const [healthData, settingsData, actionsData] = await Promise.all([
         adminService.getSystemHealth(),
         adminService.getSystemSettings(),
+        adminService.getAdminActions({ page_size: 10 }),
       ]);
       
       setSystemHealth(healthData);
       setSystemSettings(settingsData);
       setSettingsForm(settingsData);
+      setAuditLogs(Array.isArray(actionsData) ? actionsData : (actionsData?.results || []));
     } catch (err: any) {
       const errorMessage = err?.response?.data?.detail 
         || err?.response?.data?.error
@@ -120,6 +130,27 @@ const SystemPage: React.FC = () => {
       console.error('Failed to fetch system data:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAuditLogs = async () => {
+    try {
+      setAuditLoading(true);
+      const params: any = { page_size: 20 };
+      if (auditFilters.admin_user) params.admin_user = auditFilters.admin_user;
+      if (auditFilters.action_type) params.action_type = auditFilters.action_type;
+      if (auditFilters.date_from) params.date_from = auditFilters.date_from;
+      if (auditFilters.date_to) params.date_to = auditFilters.date_to;
+      const data = await adminService.getAdminActions(params);
+      setAuditLogs(Array.isArray(data) ? data : (data?.results || []));
+    } catch (err: any) {
+      const errorMessage = err?.response?.data?.detail 
+        || err?.response?.data?.error
+        || err?.message 
+        || 'Failed to load audit logs';
+      showNotification(errorMessage, 'error');
+    } finally {
+      setAuditLoading(false);
     }
   };
 
@@ -1290,30 +1321,70 @@ const SystemPage: React.FC = () => {
         >
           Audit Logs
         </Typography>
-        <TableContainer>
-          <Table>
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2 }}>
+          <TextField
+            label="Admin User"
+            value={auditFilters.admin_user}
+            onChange={(event) => setAuditFilters(prev => ({ ...prev, admin_user: event.target.value }))}
+          />
+          <TextField
+            label="Action Type"
+            value={auditFilters.action_type}
+            onChange={(event) => setAuditFilters(prev => ({ ...prev, action_type: event.target.value }))}
+          />
+          <TextField
+            label="From"
+            type="date"
+            value={auditFilters.date_from}
+            onChange={(event) => setAuditFilters(prev => ({ ...prev, date_from: event.target.value }))}
+            InputLabelProps={{ shrink: true }}
+          />
+          <TextField
+            label="To"
+            type="date"
+            value={auditFilters.date_to}
+            onChange={(event) => setAuditFilters(prev => ({ ...prev, date_to: event.target.value }))}
+            InputLabelProps={{ shrink: true }}
+          />
+          <Button
+            variant="contained"
+            onClick={fetchAuditLogs}
+            disabled={auditLoading}
+          >
+            {auditLoading ? 'Loading...' : 'Load Logs'}
+          </Button>
+        </Box>
+        <TableContainer component={Paper} variant="outlined">
+          <Table size="small">
             <TableHead>
               <TableRow>
+                <TableCell sx={{ fontWeight: 600 }}>Time</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Admin</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Action</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>User</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>Timestamp</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Description</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Target</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              <TableRow>
-                <TableCell 
-                  colSpan={3} 
-                  align="center"
-                  sx={{ 
-                    py: 6,
-                    bgcolor: 'grey.50',
-                  }}
-                >
-                  <Typography variant="body2" color="text.secondary">
-                    No audit logs recorded yet.
-                  </Typography>
-                </TableCell>
-              </TableRow>
+              {auditLogs.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} align="center" sx={{ py: 6, bgcolor: 'grey.50' }}>
+                    <Typography variant="body2" color="text.secondary">
+                      No audit logs recorded yet.
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                auditLogs.map((log) => (
+                  <TableRow key={log.id}>
+                    <TableCell>{log.created_at ? new Date(log.created_at).toLocaleString() : 'N/A'}</TableCell>
+                    <TableCell>{log.admin_user || 'N/A'}</TableCell>
+                    <TableCell>{log.action_type_display || log.action_type}</TableCell>
+                    <TableCell>{log.action_description}</TableCell>
+                    <TableCell>{log.target_model ? `${log.target_model} ${log.target_id || ''}` : 'N/A'}</TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </TableContainer>

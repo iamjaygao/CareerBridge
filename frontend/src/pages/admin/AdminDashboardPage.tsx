@@ -191,6 +191,7 @@ const AdminDashboardPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [dashboardStats, setDashboardStats] = useState<AdminDashboardStats | null>(null);
   const [systemHealth, setSystemHealth] = useState<AdminSystemHealth | null>(null);
+  const [aiStats, setAiStats] = useState<any>(null);
   
   // Check if user has admin access (admin or superadmin)
   const canAccessAdmin = hasAdminAccess(user);
@@ -199,12 +200,14 @@ const AdminDashboardPage: React.FC = () => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [stats, health] = await Promise.all([
+        const [stats, health, assessmentStats] = await Promise.all([
           adminService.getDashboardStats(),
           adminService.getSystemHealth(),
+          adminService.getAssessmentStats(),
         ]);
         setDashboardStats(stats);
         setSystemHealth(health);
+        setAiStats(assessmentStats);
       } catch (err) {
         setError('Failed to load dashboard data. Please check your connection and try again.');
         console.error('Dashboard error:', err);
@@ -363,9 +366,8 @@ const AdminDashboardPage: React.FC = () => {
             </Grid>
 
 
-            {/* AI Usage Stats - Removed hardcoded values */}
-            {/* TODO: Add backend endpoint for AI usage statistics */}
-            {/* <Grid item xs={12} md={6}>
+            {/* AI Usage Stats */}
+            <Grid item xs={12} md={6}>
               <Card>
                 <CardContent>
                   <Typography variant="h6" gutterBottom>
@@ -376,28 +378,28 @@ const AdminDashboardPage: React.FC = () => {
                       Resume Analyses (This Month)
                     </Typography>
                     <Typography variant="h5" fontWeight="bold">
-                      {aiStats?.resume_analyses || 0}
+                      {aiStats?.total_assessments || 0}
                     </Typography>
                   </Box>
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="body2" color="text.secondary">
-                      Job Matches Generated
+                      Resumes Analyzed
                     </Typography>
                     <Typography variant="h5" fontWeight="bold">
-                      {aiStats?.job_matches || 0}
+                      {aiStats?.total_resumes || 0}
                     </Typography>
                   </Box>
                   <Box>
                     <Typography variant="body2" color="text.secondary">
-                      Average Analysis Time
+                      AI Usage Count
                     </Typography>
                     <Typography variant="h5" fontWeight="bold">
-                      {aiStats?.avg_analysis_time || 0}s
+                      {aiStats?.ai_usage || 0}
                     </Typography>
                   </Box>
                 </CardContent>
               </Card>
-            </Grid> */}
+            </Grid>
 
             {/* Quick Actions */}
             <Grid item xs={12} md={6}>

@@ -30,10 +30,7 @@ import {
 } from '@mui/material';
 import {
   Search as SearchIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
   Visibility as ViewIcon,
-  FilterList as FilterIcon,
   Event as EventIcon,
   Cancel as CancelIcon,
 } from '@mui/icons-material';
@@ -61,7 +58,7 @@ interface Appointment {
     profile_picture?: string;
     expertise_areas: string[];
   };
-  status: 'scheduled' | 'completed' | 'cancelled' | 'no_show';
+  status: 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'no_show';
   scheduled_at: string;
   duration: number; // in minutes
   topic: string;
@@ -80,15 +77,18 @@ const AppointmentManagementPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [paymentFilter, setPaymentFilter] = useState('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogType, setDialogType] = useState<'view' | 'edit' | 'delete' | 'cancel'>('view');
+  const [dialogType, setDialogType] = useState<'view' | 'cancel'>('view');
+  const [cancelReason, setCancelReason] = useState('');
 
   useEffect(() => {
     fetchAppointments();
-  }, [page, searchTerm, statusFilter, paymentFilter]);
+  }, [page, searchTerm, statusFilter, paymentFilter, dateFrom, dateTo]);
 
   const fetchAppointments = async () => {
     try {
@@ -111,19 +111,106 @@ const AppointmentManagementPage: React.FC = () => {
       if (paymentFilter !== 'all') {
         params.payment_status = paymentFilter;
       }
+      if (dateFrom) {
+        params.date_from = dateFrom;
+      }
+      if (dateTo) {
+        params.date_to = dateTo;
+      }
       
       const data = await adminService.getAppointments(params);
       
       // Handle different response formats
       let appointmentsData: Appointment[] = [];
       if (Array.isArray(data)) {
-        appointmentsData = data;
+        appointmentsData = data.map((item: any) => ({
+          id: item.id || item.appointment_id,
+          student: item.student || {
+            id: item.user_id || 0,
+            username: item.user_username || 'Student',
+            email: item.user_email || '',
+            first_name: item.user_first_name || '',
+            last_name: item.user_last_name || '',
+          },
+          mentor: item.mentor || {
+            id: item.mentor_id || 0,
+            username: item.mentor_username || 'Mentor',
+            email: item.mentor_email || '',
+            first_name: item.mentor_first_name || '',
+            last_name: item.mentor_last_name || '',
+            expertise_areas: item.mentor_expertise_areas || [],
+          },
+          status: item.status || 'pending',
+          scheduled_at: item.scheduled_at || item.scheduled_start,
+          duration: item.duration || 0,
+          topic: item.topic || item.title || 'Session',
+          notes: item.notes || '',
+          meeting_link: item.meeting_link || '',
+          created_at: item.created_at || item.scheduled_at || item.scheduled_start,
+          updated_at: item.updated_at || item.scheduled_at || item.scheduled_start,
+          payment_status: item.payment_status || (item.is_paid ? 'completed' : 'pending'),
+          amount: Number(item.amount ?? item.price ?? 0),
+        }));
         setTotalPages(1);
       } else if (data.results && Array.isArray(data.results)) {
-        appointmentsData = data.results;
+        appointmentsData = data.results.map((item: any) => ({
+          id: item.id || item.appointment_id,
+          student: item.student || {
+            id: item.user_id || 0,
+            username: item.user_username || 'Student',
+            email: item.user_email || '',
+            first_name: item.user_first_name || '',
+            last_name: item.user_last_name || '',
+          },
+          mentor: item.mentor || {
+            id: item.mentor_id || 0,
+            username: item.mentor_username || 'Mentor',
+            email: item.mentor_email || '',
+            first_name: item.mentor_first_name || '',
+            last_name: item.mentor_last_name || '',
+            expertise_areas: item.mentor_expertise_areas || [],
+          },
+          status: item.status || 'pending',
+          scheduled_at: item.scheduled_at || item.scheduled_start,
+          duration: item.duration || 0,
+          topic: item.topic || item.title || 'Session',
+          notes: item.notes || '',
+          meeting_link: item.meeting_link || '',
+          created_at: item.created_at || item.scheduled_at || item.scheduled_start,
+          updated_at: item.updated_at || item.scheduled_at || item.scheduled_start,
+          payment_status: item.payment_status || (item.is_paid ? 'completed' : 'pending'),
+          amount: Number(item.amount ?? item.price ?? 0),
+        }));
         setTotalPages(data.total_pages || Math.ceil((data.count || 0) / (data.page_size || 10)) || 1);
       } else if (data.data && Array.isArray(data.data)) {
-        appointmentsData = data.data;
+        appointmentsData = data.data.map((item: any) => ({
+          id: item.id || item.appointment_id,
+          student: item.student || {
+            id: item.user_id || 0,
+            username: item.user_username || 'Student',
+            email: item.user_email || '',
+            first_name: item.user_first_name || '',
+            last_name: item.user_last_name || '',
+          },
+          mentor: item.mentor || {
+            id: item.mentor_id || 0,
+            username: item.mentor_username || 'Mentor',
+            email: item.mentor_email || '',
+            first_name: item.mentor_first_name || '',
+            last_name: item.mentor_last_name || '',
+            expertise_areas: item.mentor_expertise_areas || [],
+          },
+          status: item.status || 'pending',
+          scheduled_at: item.scheduled_at || item.scheduled_start,
+          duration: item.duration || 0,
+          topic: item.topic || item.title || 'Session',
+          notes: item.notes || '',
+          meeting_link: item.meeting_link || '',
+          created_at: item.created_at || item.scheduled_at || item.scheduled_start,
+          updated_at: item.updated_at || item.scheduled_at || item.scheduled_start,
+          payment_status: item.payment_status || (item.is_paid ? 'completed' : 'pending'),
+          amount: Number(item.amount ?? item.price ?? 0),
+        }));
         setTotalPages(data.total_pages || 1);
       } else {
         console.warn('Unexpected appointments response format:', data);
@@ -166,7 +253,7 @@ const AppointmentManagementPage: React.FC = () => {
     setPage(value);
   };
 
-  const handleAppointmentAction = (appointment: Appointment, action: 'view' | 'edit' | 'delete' | 'cancel') => {
+  const handleAppointmentAction = (appointment: Appointment, action: 'view' | 'cancel') => {
     setSelectedAppointment(appointment);
     setDialogType(action);
     setDialogOpen(true);
@@ -175,6 +262,7 @@ const AppointmentManagementPage: React.FC = () => {
   const handleDialogClose = () => {
     setDialogOpen(false);
     setSelectedAppointment(null);
+    setCancelReason('');
   };
 
   const handleConfirmAction = async () => {
@@ -182,17 +270,11 @@ const AppointmentManagementPage: React.FC = () => {
 
     try {
       switch (dialogType) {
-        case 'edit':
-          // TODO: Implement edit appointment
-          console.log('Edit appointment:', selectedAppointment.id);
-          break;
-        case 'delete':
-          // TODO: Implement delete appointment
-          console.log('Delete appointment:', selectedAppointment.id);
-          break;
         case 'cancel':
-          // TODO: Implement cancel appointment
-          console.log('Cancel appointment:', selectedAppointment.id);
+          await adminService.updateAppointment(selectedAppointment.id, {
+            status: 'cancelled',
+            cancellation_reason: cancelReason,
+          });
           break;
       }
       handleDialogClose();
@@ -205,6 +287,8 @@ const AppointmentManagementPage: React.FC = () => {
   const getStatusChip = (status: string) => {
     switch (status) {
       case 'scheduled':
+      case 'pending':
+      case 'confirmed':
         return <Chip label="Scheduled" color="primary" size="small" />;
       case 'completed':
         return <Chip label="Completed" color="success" size="small" />;
@@ -283,7 +367,8 @@ const AppointmentManagementPage: React.FC = () => {
                   onChange={handleStatusFilterChange}
                 >
                   <MenuItem value="all">All Status</MenuItem>
-                  <MenuItem value="scheduled">Scheduled</MenuItem>
+                  <MenuItem value="pending">Pending</MenuItem>
+                  <MenuItem value="confirmed">Confirmed</MenuItem>
                   <MenuItem value="completed">Completed</MenuItem>
                   <MenuItem value="cancelled">Cancelled</MenuItem>
                   <MenuItem value="no_show">No Show</MenuItem>
@@ -302,13 +387,28 @@ const AppointmentManagementPage: React.FC = () => {
                   <MenuItem value="refunded">Refunded</MenuItem>
                 </Select>
               </FormControl>
-              <Button
-                variant="contained"
-                startIcon={<FilterIcon />}
-                onClick={() => {/* TODO: Implement advanced filters */}}
-              >
-                Advanced Filters
-              </Button>
+              <TextField
+                label="From"
+                type="date"
+                value={dateFrom}
+                onChange={(event) => {
+                  setDateFrom(event.target.value);
+                  setPage(1);
+                }}
+                InputLabelProps={{ shrink: true }}
+                sx={{ minWidth: 160 }}
+              />
+              <TextField
+                label="To"
+                type="date"
+                value={dateTo}
+                onChange={(event) => {
+                  setDateTo(event.target.value);
+                  setPage(1);
+                }}
+                InputLabelProps={{ shrink: true }}
+                sx={{ minWidth: 160 }}
+              />
             </Box>
           </CardContent>
         </Card>
@@ -347,11 +447,11 @@ const AppointmentManagementPage: React.FC = () => {
                         <TableCell>
                           <Box sx={{ display: 'flex', alignItems: 'center' }}>
                             <Avatar sx={{ mr: 2, width: 32, height: 32 }}>
-                              {appointment.student.first_name.charAt(0)}
+                              {(appointment.student.first_name || appointment.student.username || 'S').charAt(0)}
                             </Avatar>
                             <Box>
                               <Typography variant="body2" fontWeight="medium">
-                                {appointment.student.first_name} {appointment.student.last_name}
+                                {`${appointment.student.first_name || ''} ${appointment.student.last_name || ''}`.trim() || appointment.student.username}
                               </Typography>
                               <Typography variant="caption" color="text.secondary">
                                 {appointment.student.email}
@@ -414,15 +514,8 @@ const AppointmentManagementPage: React.FC = () => {
                           >
                             <ViewIcon />
                           </IconButton>
-                          {appointment.status === 'scheduled' && (
+                          {(appointment.status === 'pending' || appointment.status === 'confirmed') && (
                             <>
-                              <IconButton
-                                size="small"
-                                onClick={() => handleAppointmentAction(appointment, 'edit')}
-                                color="primary"
-                              >
-                                <EditIcon />
-                              </IconButton>
                               <IconButton
                                 size="small"
                                 onClick={() => handleAppointmentAction(appointment, 'cancel')}
@@ -432,13 +525,6 @@ const AppointmentManagementPage: React.FC = () => {
                               </IconButton>
                             </>
                           )}
-                          <IconButton
-                            size="small"
-                            onClick={() => handleAppointmentAction(appointment, 'delete')}
-                            color="error"
-                          >
-                            <DeleteIcon />
-                          </IconButton>
                         </TableCell>
                       </TableRow>
                     ))
@@ -465,8 +551,6 @@ const AppointmentManagementPage: React.FC = () => {
       <Dialog open={dialogOpen} onClose={handleDialogClose} maxWidth="md" fullWidth>
         <DialogTitle>
           {dialogType === 'view' && 'Appointment Details'}
-          {dialogType === 'edit' && 'Edit Appointment'}
-          {dialogType === 'delete' && 'Delete Appointment'}
           {dialogType === 'cancel' && 'Cancel Appointment'}
         </DialogTitle>
         <DialogContent>
@@ -480,11 +564,11 @@ const AppointmentManagementPage: React.FC = () => {
                     </Typography>
                     <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                       <Avatar sx={{ mr: 2, width: 48, height: 48 }}>
-                        {selectedAppointment.student.first_name.charAt(0)}
+                        {(selectedAppointment.student.first_name || selectedAppointment.student.username || 'S').charAt(0)}
                       </Avatar>
                       <Box>
                         <Typography variant="body1" fontWeight="medium">
-                          {selectedAppointment.student.first_name} {selectedAppointment.student.last_name}
+                          {`${selectedAppointment.student.first_name || ''} ${selectedAppointment.student.last_name || ''}`.trim() || selectedAppointment.student.username}
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
                           {selectedAppointment.student.email}
@@ -564,27 +648,27 @@ const AppointmentManagementPage: React.FC = () => {
                 </Grid>
               )}
 
-              {dialogType === 'delete' && (
-                <Typography>
-                  Are you sure you want to delete this appointment? This action cannot be undone.
-                </Typography>
-              )}
-
               {dialogType === 'cancel' && (
-                <Typography>
-                  Are you sure you want to cancel this appointment? The student will be notified.
-                </Typography>
+                <Box>
+                  <Typography>
+                    Are you sure you want to cancel this appointment? The student will be notified.
+                  </Typography>
+                  <TextField
+                    fullWidth
+                    multiline
+                    minRows={3}
+                    value={cancelReason}
+                    onChange={(event) => setCancelReason(event.target.value)}
+                    placeholder="Cancellation reason (optional)"
+                    sx={{ mt: 2 }}
+                  />
+                </Box>
               )}
             </Box>
           )}
         </DialogContent>
         <DialogActions>
           <Button onClick={handleDialogClose}>Cancel</Button>
-          {dialogType === 'delete' && (
-            <Button onClick={handleConfirmAction} color="error" variant="contained">
-              Delete
-            </Button>
-          )}
           {dialogType === 'cancel' && (
             <Button onClick={handleConfirmAction} color="warning" variant="contained">
               Cancel Appointment

@@ -19,6 +19,7 @@ import {
   Event,
   Assessment,
   Work as WorkIcon,
+  Download,
 } from '@mui/icons-material';
 
 const drawerWidth = 260;
@@ -39,6 +40,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ mobileOpen, onMobileClose }
     { text: 'Appointments', icon: <Event />, path: '/admin/appointments' },
     { text: 'Assessment Engine', icon: <Assessment />, path: '/admin/assessment' },
     { text: 'Market Intelligence', icon: <WorkIcon />, path: '/admin/jobs' },
+    { text: 'Exports', icon: <Download />, path: '/admin/exports' },
     // Removed: System Settings (only for superadmin)
     // Removed: Payouts, Promotions, Content (operational features can be added back if needed)
   ];
@@ -162,4 +164,3 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ mobileOpen, onMobileClose }
 };
 
 export default AdminSidebar;
-

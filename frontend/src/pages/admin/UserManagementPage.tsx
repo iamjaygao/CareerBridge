@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSelector } from 'react-redux';
 import {
   Card,
   CardContent,
@@ -19,6 +20,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Tooltip,
   FormControl,
   InputLabel,
   Select,
@@ -38,11 +40,14 @@ import {
   Block as BlockIcon,
   CheckCircle as CheckCircleIcon,
   FilterList as FilterIcon,
+  Lock as LockIcon,
+  Download as DownloadIcon,
 } from '@mui/icons-material';
 
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import SkeletonLoader from '../../components/common/SkeletonLoader';
 import adminService from '../../services/api/adminService';
+import { RootState } from '../../store';
 
 interface User {
   user_id: number;
@@ -58,6 +63,8 @@ interface User {
 }
 
 const UserManagementPage: React.FC = () => {
+  const currentUser = useSelector((state: RootState) => state.auth.user);
+  const isSuperAdmin = currentUser?.role === 'superadmin';
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
@@ -115,59 +122,32 @@ const UserManagementPage: React.FC = () => {
       }
       if (page > 1) params.page = page;
       
-      console.log('>>> DEBUG: Fetching users with params:', params);
       const response = await adminService.getUsers(params);
-      console.log('>>> DEBUG: Users API response (from adminService):', response);
-      console.log('>>> DEBUG: Response type:', typeof response);
-      console.log('>>> DEBUG: Response isArray:', Array.isArray(response));
-      console.log('>>> DEBUG: Response keys:', response && typeof response === 'object' ? Object.keys(response) : 'N/A');
       
       // Handle different response formats
       // adminService.getUsers already returns response.data, so response is the actual data
       let usersData: any[] = [];
       let totalPagesCount = 1;
       
-      console.log('>>> DEBUG: Processing response:', {
-        type: typeof response,
-        isArray: Array.isArray(response),
-        keys: response && typeof response === 'object' ? Object.keys(response) : 'N/A',
-        response: response
-      });
-      
       // Option A: Direct array response (most common case)
       if (Array.isArray(response)) {
         usersData = response;
-        console.log('>>> DEBUG: Option A - Direct array response with', usersData.length, 'users');
       }
       // Option B: Paginated response: { count, next, previous, results: [...] }
       else if (response && typeof response === 'object' && Array.isArray(response.results)) {
         usersData = response.results;
         totalPagesCount = Math.ceil((response.count || usersData.length) / 10) || 1;
-        console.log('>>> DEBUG: Option B - Paginated response:', {
-          count: response.count,
-          results: usersData.length,
-          totalPages: totalPagesCount
-        });
       }
       // Option C: Nested data response: { data: [...] }
       else if (response && typeof response === 'object' && Array.isArray(response.data)) {
         usersData = response.data;
-        console.log('>>> DEBUG: Option C - Nested data response with', usersData.length, 'users');
       }
       // Option D: Double nested: { data: { results: [...] } }
       else if (response && typeof response === 'object' && response.data && Array.isArray(response.data.results)) {
         usersData = response.data.results;
         totalPagesCount = Math.ceil((response.data.count || usersData.length) / 10) || 1;
-        console.log('>>> DEBUG: Option D - Double nested response with', usersData.length, 'users');
       }
       else {
-        console.error('>>> DEBUG: UNEXPECTED RESPONSE FORMAT:', response);
-        console.error('>>> DEBUG: Response structure:', JSON.stringify(response, null, 2));
-        console.error('>>> DEBUG: Response type:', typeof response);
-        console.error('>>> DEBUG: Response isArray:', Array.isArray(response));
-        if (response && typeof response === 'object') {
-          console.error('>>> DEBUG: Response keys:', Object.keys(response));
-        }
         usersData = [];
         setError(`Unexpected response format from backend. Received: ${typeof response}. Check console for details.`);
       }
@@ -176,9 +156,7 @@ const UserManagementPage: React.FC = () => {
       const validUsers: User[] = [];
       usersData.forEach((user: any, index: number) => {
         const isValid = user && (user.user_id || user.id) && user.username && user.email;
-        if (!isValid) {
-          console.warn(`>>> DEBUG: Invalid user object at index ${index}:`, user);
-        } else {
+        if (isValid) {
           // Normalize user object to ensure consistent structure
           validUsers.push({
             user_id: user.user_id || user.id,
@@ -195,20 +173,10 @@ const UserManagementPage: React.FC = () => {
         }
       });
       
-      console.log('>>> DEBUG: Valid users count:', validUsers.length);
-      console.log('>>> DEBUG: First valid user sample:', validUsers[0]);
-      
-      if (validUsers.length === 0 && usersData.length > 0) {
-        console.error('>>> DEBUG: ALL USERS WERE INVALID! Raw usersData:', usersData);
-        setError('Received invalid user data from backend. Check console for details.');
-      }
-      
       setUsers(validUsers);
       setTotalPages(totalPagesCount);
-      console.log('>>> DEBUG: Set users state with', validUsers.length, 'valid users');
       
     } catch (err: any) {
-      console.error('>>> DEBUG: Error fetching users:', err);
       const errorMessage = err?.response?.data?.detail 
         || err?.response?.data?.error 
         || err?.response?.data?.message
@@ -264,6 +232,14 @@ const UserManagementPage: React.FC = () => {
   };
 
   const handleUserAction = (user: User, action: 'edit' | 'delete' | 'block') => {
+    if (user.role === 'superadmin') {
+      if (action === 'delete') {
+        setError('Super admin accounts cannot be deleted.');
+      } else {
+        setError('Super admin accounts cannot be edited or blocked.');
+      }
+      return;
+    }
     setSelectedUser(user);
     setDialogType(action);
     
@@ -281,6 +257,10 @@ const UserManagementPage: React.FC = () => {
   };
 
   const handleCreateUser = (role: 'student' | 'mentor' | 'staff' | 'admin') => {
+    if (role === 'admin' && !isSuperAdmin) {
+      setError('Only super admin can create admin accounts.');
+      return;
+    }
     setSelectedUser(null);
     setDialogType('create');
     
@@ -292,6 +272,32 @@ const UserManagementPage: React.FC = () => {
       is_staff: false // Staff is now a separate role
     });
     setDialogOpen(true);
+  };
+
+  const handleExportUsers = async () => {
+    try {
+      setActionLoading(true);
+      setError(null);
+      const filters: any = {};
+      if (searchTerm) filters.search = searchTerm;
+      if (statusFilter !== 'all') filters.is_active = statusFilter === 'active';
+      if (roleFilter !== 'all') filters.role = roleFilter;
+      if (staffFilter !== 'all') filters.is_staff = staffFilter === 'staff';
+
+      const exportName = `users_export_${new Date().toISOString().slice(0, 10)}`;
+      await adminService.createDataExport({
+        name: exportName,
+        export_type: 'users',
+        format: 'csv',
+        filters,
+      });
+      setSuccess('Export request created. View it under Admin > Exports.');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: any) {
+      setError(err?.response?.data?.error || 'Failed to create export.');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const handleFormChange = (field: string, value: string | boolean) => {
@@ -518,6 +524,7 @@ const UserManagementPage: React.FC = () => {
                       color="error"
                       onClick={() => handleCreateUser('admin')}
                       size="small"
+                      disabled={!isSuperAdmin}
                     >
                       Admin
                     </Button>
@@ -532,6 +539,14 @@ const UserManagementPage: React.FC = () => {
           <CardContent>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
               <Typography variant="h6">Users ({users.length})</Typography>
+              <Button
+                variant="outlined"
+                startIcon={<DownloadIcon />}
+                onClick={handleExportUsers}
+                disabled={actionLoading}
+              >
+                Export Users
+              </Button>
             </Box>
 
             <TableContainer component={Paper} variant="outlined">
@@ -585,6 +600,7 @@ const UserManagementPage: React.FC = () => {
                             <Chip 
                               label={user.role || 'student'} 
                               color={
+                                user.role === 'superadmin' ? 'secondary' :
                                 user.role === 'admin' ? 'error' : 
                                 user.role === 'mentor' ? 'primary' : 
                                 user.role === 'staff' ? 'warning' :
@@ -592,6 +608,15 @@ const UserManagementPage: React.FC = () => {
                               } 
                               size="small" 
                             />
+                            {user.role === 'superadmin' && (
+                              <Chip
+                                icon={<LockIcon />}
+                                label="Locked"
+                                color="secondary"
+                                size="small"
+                                variant="outlined"
+                              />
+                            )}
                             {user.is_staff && (
                               <Chip 
                                 label="Staff" 
@@ -608,27 +633,42 @@ const UserManagementPage: React.FC = () => {
                           {new Date(user.last_login).toLocaleDateString()}
                         </TableCell>
                         <TableCell align="right">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleUserAction(user, 'edit')}
-                            color="primary"
-                          >
-                            <EditIcon />
-                          </IconButton>
-                          <IconButton
-                            size="small"
-                            onClick={() => handleUserAction(user, 'block')}
-                            color={user.is_active ? 'warning' : 'success'}
-                          >
-                            {user.is_active ? <BlockIcon /> : <CheckCircleIcon />}
-                          </IconButton>
-                          <IconButton
-                            size="small"
-                            onClick={() => handleUserAction(user, 'delete')}
-                            color="error"
-                          >
-                            <DeleteIcon />
-                          </IconButton>
+                          <Tooltip title={user.role === 'superadmin' ? 'Super admin is locked' : 'Edit'}>
+                            <span>
+                              <IconButton
+                                size="small"
+                                onClick={() => handleUserAction(user, 'edit')}
+                                color="primary"
+                                disabled={user.role === 'superadmin'}
+                              >
+                                <EditIcon />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                          <Tooltip title={user.role === 'superadmin' ? 'Super admin is locked' : (user.is_active ? 'Block' : 'Unblock')}>
+                            <span>
+                              <IconButton
+                                size="small"
+                                onClick={() => handleUserAction(user, 'block')}
+                                color={user.is_active ? 'warning' : 'success'}
+                                disabled={user.role === 'superadmin'}
+                              >
+                                {user.is_active ? <BlockIcon /> : <CheckCircleIcon />}
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                          <Tooltip title={user.role === 'superadmin' ? 'Super admin is locked' : 'Delete'}>
+                            <span>
+                              <IconButton
+                                size="small"
+                                onClick={() => handleUserAction(user, 'delete')}
+                                color="error"
+                                disabled={user.role === 'superadmin'}
+                              >
+                                <DeleteIcon />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
                         </TableCell>
                       </TableRow>
                     ))
@@ -702,7 +742,7 @@ const UserManagementPage: React.FC = () => {
                         <MenuItem value="student">Student</MenuItem>
                         <MenuItem value="mentor">Mentor</MenuItem>
                         <MenuItem value="staff">Staff</MenuItem>
-                        <MenuItem value="admin">Admin</MenuItem>
+                        {isSuperAdmin && <MenuItem value="admin">Admin</MenuItem>}
                       </Select>
                     </FormControl>
                     {/* Staff is now a separate role, so is_staff switch is only for legacy compatibility */}

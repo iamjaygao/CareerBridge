@@ -147,6 +147,19 @@ class AdminService {
   }
 
   /**
+   * Get staff appointments
+   */
+  async getStaffAppointments(params?: any): Promise<any> {
+    try {
+      const response = await apiClient.get('/adminpanel/staff/appointments/', { params });
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get staff appointments:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Update appointment
    */
   async updateAppointment(appointmentId: number, data: any): Promise<any> {
@@ -155,6 +168,19 @@ class AdminService {
       return response.data;
     } catch (error) {
       console.error('Failed to update appointment:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update staff appointment
+   */
+  async updateStaffAppointment(appointmentId: number, data: any): Promise<any> {
+    try {
+      const response = await apiClient.put(`/adminpanel/staff/appointments/${appointmentId}/`, data);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to update staff appointment:', error);
       throw error;
     }
   }
@@ -577,6 +603,45 @@ class AdminService {
       return response.data;
     } catch (error) {
       console.error('Failed to get error logs:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get admin action logs
+   */
+  async getAdminActions(params?: any): Promise<any> {
+    try {
+      const response = await apiClient.get('/adminpanel/actions/', { params });
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get admin actions:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create a data export request
+   */
+  async createDataExport(payload: any): Promise<any> {
+    try {
+      const response = await apiClient.post('/adminpanel/exports/', payload);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to create data export:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get data export requests
+   */
+  async getDataExports(params?: any): Promise<any> {
+    try {
+      const response = await apiClient.get('/adminpanel/exports/', { params });
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get data exports:', error);
       throw error;
     }
   }
