@@ -9,11 +9,13 @@ import {
   Avatar,
   Chip,
   Divider,
+  Alert,
 } from '@mui/material';
 import {
   Star as StarIcon,
 } from '@mui/icons-material';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import mentorService from '../../services/api/mentorService';
 
 interface Feedback {
   id: number;
@@ -29,54 +31,77 @@ interface Feedback {
 
 const MentorFeedbackPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState({
-    averageRating: 4.8,
-    totalReviews: 45,
+    averageRating: 0,
+    totalReviews: 0,
   });
+  const [ratingCounts, setRatingCounts] = useState<Record<number, number>>({});
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
 
   useEffect(() => {
-    setTimeout(() => {
-      setFeedbacks([
-        {
-          id: 1,
-          student: { name: 'Alice Johnson' },
-          rating: 5,
-          comment: 'Excellent mentor! Provided great insights on my career transition. Very helpful and professional.',
-          session_type: 'Career Chat',
-          date: '2025-01-15T10:00:00Z',
-        },
-        {
-          id: 2,
-          student: { name: 'Bob Smith' },
-          rating: 5,
-          comment: 'The mock interview was incredibly valuable. Helped me identify areas for improvement and build confidence.',
-          session_type: 'Mock Interview',
-          date: '2025-01-12T14:30:00Z',
-        },
-        {
-          id: 3,
-          student: { name: 'Charlie Brown' },
-          rating: 4,
-          comment: 'Good resume review session. Got helpful feedback on formatting and content structure.',
-          session_type: 'Resume Review',
-          date: '2025-01-10T09:15:00Z',
-        },
-        {
-          id: 4,
-          student: { name: 'Diana Prince' },
-          rating: 5,
-          comment: 'Amazing mentor! Very knowledgeable and patient. Would definitely book another session.',
-          session_type: 'Career Chat',
-          date: '2025-01-08T16:00:00Z',
-        },
-      ]);
-      setLoading(false);
-    }, 500);
+    const fetchFeedback = async () => {
+      try {
+        setError(null);
+        const profile = await mentorService.getMyProfile();
+        const mentorId = profile?.id;
+        if (!mentorId) {
+          setError('Mentor profile not found.');
+          return;
+        }
+
+        const reviews = await mentorService.getMentorReviews(mentorId);
+        const list = Array.isArray(reviews) ? reviews : ((reviews as any)?.results || []);
+        const mapped = list.map((review: any) => {
+          const studentName = review.user
+            ? `${review.user.first_name || ''} ${review.user.last_name || ''}`.trim() || review.user.username
+            : 'Student';
+          return {
+            id: review.id,
+            student: {
+              name: studentName,
+              avatar: review.user?.avatar,
+            },
+            rating: review.rating,
+            comment: review.comment,
+            session_type: 'Session',
+            date: review.created_at,
+          } as Feedback;
+        });
+
+        const totalReviews = mapped.length;
+        const averageRating = totalReviews
+          ? mapped.reduce((sum: number, item: Feedback) => sum + (item.rating || 0), 0) / totalReviews
+          : 0;
+        const counts = mapped.reduce((acc: Record<number, number>, item: Feedback) => {
+          const rating = Math.round(item.rating || 0);
+          if (!rating) return acc;
+          acc[rating] = (acc[rating] || 0) + 1;
+          return acc;
+        }, {} as Record<number, number>);
+
+        setSummary({
+          averageRating: Number(averageRating.toFixed(1)),
+          totalReviews,
+        });
+        setRatingCounts(counts);
+        setFeedbacks(mapped);
+      } catch {
+        setError('Failed to load feedback.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchFeedback();
   }, []);
 
   if (loading) {
     return <LoadingSpinner message="Loading feedback..." />;
+  }
+
+  if (error) {
+    return <Alert severity="error">{error}</Alert>;
   }
 
   return (
@@ -121,7 +146,7 @@ const MentorFeedbackPage: React.FC = () => {
             <Grid item xs={12} md={6}>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                 {[5, 4, 3, 2, 1].map((rating) => {
-                  const count = Math.floor(summary.totalReviews * (rating === 5 ? 0.6 : rating === 4 ? 0.25 : rating === 3 ? 0.1 : rating === 2 ? 0.04 : 0.01));
+                  const count = ratingCounts[rating] || 0;
                   return (
                     <Box key={rating} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <Typography variant="body2" sx={{ minWidth: 40 }}>
@@ -131,7 +156,7 @@ const MentorFeedbackPage: React.FC = () => {
                         <Box
                           sx={{
                             height: '100%',
-                            width: `${(count / summary.totalReviews) * 100}%`,
+                            width: summary.totalReviews ? `${(count / summary.totalReviews) * 100}%` : '0%',
                             bgcolor: 'primary.main',
                             borderRadius: 1,
                           }}
@@ -191,4 +216,3 @@ const MentorFeedbackPage: React.FC = () => {
 };
 
 export default MentorFeedbackPage;
-

@@ -22,47 +22,78 @@ import {
   AttachMoney as MoneyIcon,
 } from '@mui/icons-material';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import mentorService from '../../services/api/mentorService';
+import { Alert } from '@mui/material';
 
 interface Payout {
   id: number;
   date: string;
   amount: number;
-  status: 'pending' | 'completed' | 'processing';
+  status: 'pending' | 'completed' | 'processing' | 'failed' | 'cancelled' | 'refunded';
 }
 
 const MentorEarningsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [earnings, setEarnings] = useState({
-    currentBalance: 450.00,
-    monthlyEarnings: 1250.00,
-    totalEarnings: 8750.00,
+    currentBalance: 0,
+    monthlyEarnings: 0,
+    totalEarnings: 0,
   });
   const [payouts, setPayouts] = useState<Payout[]>([]);
 
   useEffect(() => {
-    setTimeout(() => {
-      setPayouts([
-        {
-          id: 1,
-          date: '2025-01-15T10:00:00Z',
-          amount: 800.00,
-          status: 'completed',
-        },
-        {
-          id: 2,
-          date: '2025-01-01T10:00:00Z',
-          amount: 950.00,
-          status: 'completed',
-        },
-        {
-          id: 3,
-          date: '2025-01-20T10:00:00Z',
-          amount: 450.00,
-          status: 'pending',
-        },
-      ]);
-      setLoading(false);
-    }, 500);
+    const fetchPayments = async () => {
+      try {
+        setError(null);
+        const payload = await mentorService.getMentorPayments();
+        const list = Array.isArray(payload) ? payload : (payload?.results || []);
+        const now = new Date();
+
+        let totalEarnings = 0;
+        let monthlyEarnings = 0;
+        let currentBalance = 0;
+
+        const mappedPayouts = list.map((payment: any) => {
+          const amount = Number(payment.mentor_earnings || payment.total_amount || 0);
+          const createdAt = payment.processed_at || payment.created_at;
+          const createdDate = createdAt ? new Date(createdAt) : null;
+
+          if (payment.payment_status === 'completed') {
+            totalEarnings += amount;
+            if (
+              createdDate &&
+              createdDate.getMonth() === now.getMonth() &&
+              createdDate.getFullYear() === now.getFullYear()
+            ) {
+              monthlyEarnings += amount;
+            }
+          } else if (payment.payment_status === 'pending' || payment.payment_status === 'processing') {
+            currentBalance += amount;
+          }
+
+          return {
+            id: payment.id,
+            date: createdAt || payment.created_at,
+            amount,
+            status: payment.payment_status === 'processing' ? 'processing' : payment.payment_status,
+          } as Payout;
+        });
+
+        setEarnings({
+          currentBalance,
+          monthlyEarnings,
+          totalEarnings,
+        });
+        setPayouts(mappedPayouts);
+      } catch {
+        setError('Failed to load earnings.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPayments();
   }, []);
 
   const getStatusChip = (status: string) => {
@@ -70,12 +101,19 @@ const MentorEarningsPage: React.FC = () => {
       pending: 'warning',
       processing: 'info',
       completed: 'success',
+      failed: 'error',
+      cancelled: 'error',
+      refunded: 'default',
     };
     return <Chip label={status.charAt(0).toUpperCase() + status.slice(1)} color={colors[status] || 'default'} size="small" />;
   };
 
   if (loading) {
     return <LoadingSpinner message="Loading earnings..." />;
+  }
+
+  if (error) {
+    return <Alert severity="error">{error}</Alert>;
   }
 
   return (
@@ -225,4 +263,3 @@ const MentorEarningsPage: React.FC = () => {
 };
 
 export default MentorEarningsPage;
-

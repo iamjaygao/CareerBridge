@@ -14,52 +14,65 @@ import {
   Description as DocsIcon,
 } from '@mui/icons-material';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import ErrorAlert from '../../components/common/ErrorAlert';
+import apiClient from '../../services/api/client';
 
 interface Resource {
   id: number;
   title: string;
   description: string;
   icon: React.ReactNode;
+  url?: string;
 }
 
 const MentorResourcesPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [resources, setResources] = useState<Resource[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setTimeout(() => {
-      setResources([
-        {
-          id: 1,
-          title: 'Mentor Handbook',
-          description: 'Complete guide to being an effective mentor on CareerBridge. Learn best practices, platform features, and tips for success.',
-          icon: <HandbookIcon sx={{ fontSize: 40 }} />,
-        },
-        {
-          id: 2,
-          title: 'How to Run a Great Mock Interview',
-          description: 'Step-by-step guide on conducting effective mock interviews that help students prepare for real-world interviews.',
-          icon: <InterviewIcon sx={{ fontSize: 40 }} />,
-        },
-        {
-          id: 3,
-          title: 'Platform Guidelines & Code of Conduct',
-          description: 'Understand the platform rules, professional standards, and code of conduct expected from all mentors.',
-          icon: <GuidelinesIcon sx={{ fontSize: 40 }} />,
-        },
-        {
-          id: 4,
-          title: 'Resume Review Best Practices',
-          description: 'Learn how to provide constructive feedback on resumes that helps students improve their job applications.',
-          icon: <DocsIcon sx={{ fontSize: 40 }} />,
-        },
-      ]);
-      setLoading(false);
-    }, 500);
+    const fetchResources = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await apiClient.get('/adminpanel/content/public/', {
+          params: { content_type: 'guide' },
+        });
+        const list = Array.isArray(response.data) ? response.data : (response.data?.results || []);
+        const mapped = list.map((item: any, index: number) => {
+          const description = item.summary || item.body || 'Resource details coming soon.';
+          const trimmed = description.length > 180 ? `${description.slice(0, 177)}...` : description;
+          const icons = [
+            <HandbookIcon sx={{ fontSize: 40 }} key="handbook" />,
+            <InterviewIcon sx={{ fontSize: 40 }} key="interview" />,
+            <GuidelinesIcon sx={{ fontSize: 40 }} key="guidelines" />,
+            <DocsIcon sx={{ fontSize: 40 }} key="docs" />,
+          ];
+          return {
+            id: item.id,
+            title: item.title,
+            description: trimmed,
+            icon: icons[index % icons.length],
+            url: '',
+          };
+        });
+        setResources(mapped);
+      } catch (err: any) {
+        setError(err?.response?.data?.error || 'Failed to load mentor resources');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchResources();
   }, []);
 
   if (loading) {
     return <LoadingSpinner message="Loading resources..." />;
+  }
+
+  if (error) {
+    return <ErrorAlert message={error} />;
   }
 
   return (
@@ -76,7 +89,18 @@ const MentorResourcesPage: React.FC = () => {
 
       {/* Resources Grid */}
       <Grid container spacing={3}>
-        {resources.map((resource) => (
+        {resources.length === 0 ? (
+          <Grid item xs={12}>
+            <Card>
+              <CardContent>
+                <Typography variant="body2" color="text.secondary">
+                  No published resources yet.
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        ) : (
+          resources.map((resource) => (
           <Grid item xs={12} md={6} key={resource.id}>
             <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
               <CardContent sx={{ flexGrow: 1 }}>
@@ -103,20 +127,27 @@ const MentorResourcesPage: React.FC = () => {
                   variant="outlined"
                   fullWidth
                   onClick={() => {
-                    // Placeholder: link to resource
-                    alert(`Opening ${resource.title}...`);
+                    if (resource.url) {
+                      window.open(resource.url, '_blank', 'noopener,noreferrer');
+                    }
                   }}
+                  disabled={!resource.url}
                 >
-                  View Resource
+                  {resource.url ? 'View Resource' : 'Coming Soon'}
                 </Button>
+                {!resource.url && (
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                    Resources are being finalized.
+                  </Typography>
+                )}
               </CardContent>
             </Card>
           </Grid>
-        ))}
+          ))
+        )}
       </Grid>
     </Box>
   );
 };
 
 export default MentorResourcesPage;
-

@@ -26,9 +26,13 @@ import {
   Star as StarIcon,
   CheckCircle as CheckCircleIcon,
   ArrowForward as ArrowForwardIcon,
+  NotificationsActive as NotificationsActiveIcon,
 } from '@mui/icons-material';
 import { RootState } from '../../store';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import appointmentService from '../../services/api/appointmentService';
+import mentorService from '../../services/api/mentorService';
+import { getNotifications, Notification } from '../../services/api/notificationService';
 
 interface UpcomingAppointment {
   id: number;
@@ -45,49 +49,143 @@ const MentorDashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useSelector((state: RootState) => state.auth);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState({
-    upcomingToday: 2,
-    upcomingThisWeek: 5,
-    pendingRequests: 3,
-    monthlyEarnings: 1250,
-    averageRating: 4.8,
+    upcomingToday: 0,
+    upcomingThisWeek: 0,
+    nextTwoWeeks: 0,
+    monthlyEarnings: 0,
+    averageRating: 0,
   });
   const [upcomingAppointments, setUpcomingAppointments] = useState<UpcomingAppointment[]>([]);
+  const [reminders, setReminders] = useState<Notification[]>([]);
 
   useEffect(() => {
-    setTimeout(() => {
-      setUpcomingAppointments([
-        {
-          id: 1,
-          student: { name: 'Alice Johnson' },
-          session_type: 'Career Chat',
-          scheduled_at: '2025-01-20T14:00:00Z',
-          duration: 60,
-        },
-        {
-          id: 2,
-          student: { name: 'Bob Smith' },
-          session_type: 'Resume Review',
-          scheduled_at: '2025-01-20T16:00:00Z',
-          duration: 45,
-        },
-        {
-          id: 3,
-          student: { name: 'Charlie Brown' },
-          session_type: 'Mock Interview',
-          scheduled_at: '2025-01-21T10:00:00Z',
-          duration: 60,
-        },
-      ]);
-      setLoading(false);
-    }, 500);
+    const fetchDashboard = async () => {
+      try {
+        setError(null);
+        const [statsResult, appointmentsResult, profileResult, notificationsResult] = await Promise.allSettled([
+          appointmentService.getAppointmentStats(),
+          appointmentService.getMentorAppointments(),
+          mentorService.getMyProfile(),
+          getNotifications({ is_read: false, limit: 6 }),
+        ]);
+
+        const appointments = appointmentsResult.status === 'fulfilled'
+          ? (Array.isArray(appointmentsResult.value)
+              ? appointmentsResult.value
+              : ((appointmentsResult.value as any)?.results || []))
+          : [];
+
+        const now = new Date();
+        const weekAhead = new Date();
+        weekAhead.setDate(now.getDate() + 7);
+
+        const upcoming = appointments.filter((apt: any) => {
+          if (!apt.scheduled_start) return false;
+          const start = new Date(apt.scheduled_start);
+          return (apt.status === 'pending' || apt.status === 'confirmed') && start > now;
+        });
+
+        const upcomingThisWeek = upcoming.filter((apt: any) => new Date(apt.scheduled_start) <= weekAhead).length;
+        const twoWeeksAhead = new Date(now);
+        twoWeeksAhead.setDate(now.getDate() + 14);
+        const nextTwoWeeks = upcoming.filter((apt: any) => new Date(apt.scheduled_start) <= twoWeeksAhead).length;
+        const upcomingToday = appointments.filter((apt: any) => {
+          if (!apt.scheduled_start) return false;
+          const start = new Date(apt.scheduled_start);
+          return (apt.status === 'pending' || apt.status === 'confirmed') &&
+            start.toDateString() === now.toDateString();
+        }).length;
+
+        const monthlyEarnings = appointments.reduce((total: number, apt: any) => {
+          if (!apt.scheduled_start || !apt.price) return total;
+          const start = new Date(apt.scheduled_start);
+          const sameMonth = start.getMonth() === now.getMonth() && start.getFullYear() === now.getFullYear();
+          if (!sameMonth) return total;
+          if (apt.status !== 'confirmed' && apt.status !== 'completed') return total;
+          const amount = typeof apt.price === 'string' ? parseFloat(apt.price) : Number(apt.price);
+          return total + (Number.isNaN(amount) ? 0 : amount);
+        }, 0);
+
+        const averageRating = profileResult.status === 'fulfilled'
+          ? (profileResult.value?.rating ?? 0)
+          : 0;
+
+        const notificationList = notificationsResult.status === 'fulfilled'
+          ? (notificationsResult.value?.results || [])
+          : [];
+        const reminderItems = notificationList
+          .filter((notice) => !notice.is_read)
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+          .slice(0, 3);
+
+        const upcomingCards = upcoming
+          .sort((a: any, b: any) => new Date(a.scheduled_start).getTime() - new Date(b.scheduled_start).getTime())
+          .slice(0, 3)
+          .map((apt: any) => {
+            const studentName = apt.user
+              ? `${apt.user.first_name || ''} ${apt.user.last_name || ''}`.trim() || apt.user.username
+              : 'Student';
+            const duration = apt.scheduled_start && apt.scheduled_end
+              ? Math.round((new Date(apt.scheduled_end).getTime() - new Date(apt.scheduled_start).getTime()) / (1000 * 60))
+              : 60;
+            return {
+              id: apt.id,
+              student: { name: studentName },
+              session_type: apt.service?.title || apt.title || 'Session',
+              scheduled_at: apt.scheduled_start,
+              duration,
+            };
+          });
+
+        setStats({
+          upcomingToday,
+          upcomingThisWeek,
+          nextTwoWeeks,
+          monthlyEarnings: Number(monthlyEarnings.toFixed(2)),
+          averageRating,
+        });
+        setUpcomingAppointments(upcomingCards);
+        setReminders(reminderItems);
+      } catch {
+        setError('Failed to load mentor dashboard data.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboard();
   }, []);
 
   if (loading) {
     return <LoadingSpinner message="Loading dashboard..." />;
   }
 
+  if (error) {
+    return (
+      <Box>
+        <Alert severity="error">{error}</Alert>
+      </Box>
+    );
+  }
+
   const mentorName = user?.first_name || user?.username || 'Mentor';
+  const getPriorityColor = (priority?: Notification['priority']) => {
+    switch (priority) {
+      case 'urgent':
+      case 'critical':
+        return 'error.main';
+      case 'high':
+        return 'warning.main';
+      case 'medium':
+        return 'info.main';
+      case 'low':
+        return 'text.secondary';
+      default:
+        return 'primary.main';
+    }
+  };
 
   return (
     <Box>
@@ -127,14 +225,14 @@ const MentorDashboardPage: React.FC = () => {
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                 <ScheduleIcon sx={{ color: 'warning.main', mr: 1 }} />
                 <Typography variant="body2" color="text.secondary">
-                  Pending Requests
+                  Next 2 Weeks
                 </Typography>
               </Box>
               <Typography variant="h4" sx={{ fontWeight: 700 }}>
-                {stats.pendingRequests}
+                {stats.nextTwoWeeks}
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                Awaiting approval
+                Upcoming sessions scheduled
               </Typography>
             </CardContent>
           </Card>
@@ -148,9 +246,9 @@ const MentorDashboardPage: React.FC = () => {
                   This Month's Earnings
                 </Typography>
               </Box>
-              <Typography variant="h4" sx={{ fontWeight: 700 }}>
-                ${stats.monthlyEarnings}
-              </Typography>
+                <Typography variant="h4" sx={{ fontWeight: 700 }}>
+                ${stats.monthlyEarnings.toFixed(2)}
+                </Typography>
               <Typography variant="caption" color="text.secondary">
                 From {stats.upcomingThisWeek} sessions
               </Typography>
@@ -176,6 +274,59 @@ const MentorDashboardPage: React.FC = () => {
           </Card>
         </Grid>
       </Grid>
+
+      {reminders.length > 0 && (
+        <Box sx={{ mb: 4 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+              Reminders
+            </Typography>
+            <Button size="small" onClick={() => navigate('/mentor/notifications')}>
+              View All
+            </Button>
+          </Box>
+          <Grid container spacing={3}>
+            {reminders.map((reminder) => (
+              <Grid item xs={12} md={4} key={reminder.id}>
+                <Card
+                  onClick={() => navigate('/mentor/notifications')}
+                  sx={{
+                    height: '100%',
+                    cursor: 'pointer',
+                    borderLeft: '4px solid',
+                    borderColor: getPriorityColor(reminder.priority),
+                  }}
+                >
+                  <CardContent>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                      <NotificationsActiveIcon sx={{ color: getPriorityColor(reminder.priority), mr: 1 }} />
+                      <Typography variant="body2" color="text.secondary">
+                        {new Date(reminder.created_at).toLocaleString()}
+                      </Typography>
+                    </Box>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+                      {reminder.title}
+                    </Typography>
+                    {reminder.message && (
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                        {reminder.message}
+                      </Typography>
+                    )}
+                    {reminder.priority && (
+                      <Chip
+                        label={reminder.priority.toUpperCase()}
+                        size="small"
+                        sx={{ textTransform: 'uppercase' }}
+                        color={reminder.priority === 'urgent' || reminder.priority === 'critical' ? 'error' : 'default'}
+                      />
+                    )}
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+        </Box>
+      )}
 
       <Grid container spacing={3}>
         {/* Next Actions */}
@@ -294,4 +445,3 @@ const MentorDashboardPage: React.FC = () => {
 };
 
 export default MentorDashboardPage;
-

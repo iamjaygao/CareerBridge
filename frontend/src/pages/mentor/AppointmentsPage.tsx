@@ -35,8 +35,10 @@ import {
   Visibility as ViewIcon,
 } from '@mui/icons-material';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import appointmentService from '../../services/api/appointmentService';
+import { useNotification } from '../../components/common/NotificationProvider';
 
-interface Appointment {
+interface AppointmentRow {
   id: number;
   student: {
     name: string;
@@ -46,61 +48,99 @@ interface Appointment {
   session_type: string;
   scheduled_at: string;
   duration: number;
-  status: 'pending' | 'confirmed' | 'canceled' | 'completed';
+  status: string;
+  isRequest?: boolean;
 }
 
 const MentorAppointmentsPage: React.FC = () => {
+  const { showSuccess, showError } = useNotification();
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [tabValue, setTabValue] = useState(0);
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
+  const [requests, setRequests] = useState<AppointmentRow[]>([]);
   const [statusFilter, setStatusFilter] = useState('all');
-  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
+  const [selectedAppointment, setSelectedAppointment] = useState<AppointmentRow | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [actionType, setActionType] = useState<'view' | 'approve' | 'decline' | 'reschedule'>('view');
   const [newDate, setNewDate] = useState('');
   const [newTime, setNewTime] = useState('');
 
   useEffect(() => {
-    setTimeout(() => {
-      setAppointments([
-        {
-          id: 1,
-          student: { name: 'Alice Johnson', email: 'alice@example.com' },
-          session_type: 'Career Chat',
-          scheduled_at: '2025-01-20T14:00:00Z',
-          duration: 60,
-          status: 'confirmed',
-        },
-        {
-          id: 2,
-          student: { name: 'Bob Smith', email: 'bob@example.com' },
-          session_type: 'Resume Review',
-          scheduled_at: '2025-01-20T16:00:00Z',
-          duration: 45,
-          status: 'pending',
-        },
-        {
-          id: 3,
-          student: { name: 'Charlie Brown', email: 'charlie@example.com' },
-          session_type: 'Mock Interview',
-          scheduled_at: '2025-01-18T10:00:00Z',
-          duration: 60,
-          status: 'completed',
-        },
-        {
-          id: 4,
-          student: { name: 'Diana Prince', email: 'diana@example.com' },
-          session_type: 'Career Chat',
-          scheduled_at: '2025-01-19T15:00:00Z',
-          duration: 45,
-          status: 'canceled',
-        },
-      ]);
-      setLoading(false);
-    }, 500);
+    const fetchAppointments = async () => {
+      try {
+        setError(null);
+        const [appointmentsResult, requestsResult] = await Promise.allSettled([
+          appointmentService.getMentorAppointments(),
+          appointmentService.getAppointmentRequests(),
+        ]);
+
+        if (appointmentsResult.status === 'fulfilled') {
+          const payload = appointmentsResult.value as any;
+          const list = Array.isArray(payload) ? payload : (payload?.results || []);
+          const rows = list.map((apt: any) => {
+            const studentName = apt.user
+              ? `${apt.user.first_name || ''} ${apt.user.last_name || ''}`.trim() || apt.user.username
+              : 'Student';
+            const duration = apt.scheduled_start && apt.scheduled_end
+              ? Math.round((new Date(apt.scheduled_end).getTime() - new Date(apt.scheduled_start).getTime()) / (1000 * 60))
+              : 60;
+              return {
+              id: apt.id,
+              student: {
+                name: studentName,
+                email: apt.user?.email || '',
+                avatar: apt.user?.avatar,
+              },
+              session_type: apt.service?.title || apt.title || 'Session',
+              scheduled_at: apt.scheduled_start,
+              duration,
+              status: apt.status,
+            } as AppointmentRow;
+          });
+          setAppointments(rows);
+        }
+
+        if (requestsResult.status === 'fulfilled') {
+          const payload = requestsResult.value as any;
+          const list = Array.isArray(payload) ? payload : (payload?.results || []);
+          const requestRows = list.map((req: any) => {
+            const studentName = req.user
+              ? `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() || req.user.username
+              : 'Student';
+            const scheduledAt = req.preferred_date && req.preferred_time_start
+              ? `${req.preferred_date}T${req.preferred_time_start}`
+              : '';
+            const duration = req.preferred_time_start && req.preferred_time_end
+              ? Math.round((new Date(`${req.preferred_date}T${req.preferred_time_end}`).getTime() - new Date(scheduledAt).getTime()) / (1000 * 60))
+              : 60;
+            return {
+              id: req.id,
+              student: {
+                name: studentName,
+                email: req.user?.email || '',
+                avatar: req.user?.avatar,
+              },
+              session_type: req.title || 'Appointment Request',
+              scheduled_at: scheduledAt,
+              duration,
+              status: req.status,
+              isRequest: true,
+            } as AppointmentRow;
+          });
+          setRequests(requestRows);
+        }
+      } catch {
+        setError('Failed to load appointments.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAppointments();
   }, []);
 
-  const handleAction = (appointment: Appointment, type: 'view' | 'approve' | 'decline' | 'reschedule') => {
+  const handleAction = (appointment: AppointmentRow, type: 'view' | 'approve' | 'decline' | 'reschedule') => {
     setSelectedAppointment(appointment);
     setActionType(type);
     setDialogOpen(true);
@@ -108,39 +148,48 @@ const MentorAppointmentsPage: React.FC = () => {
     setNewTime('');
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!selectedAppointment) return;
 
-    if (actionType === 'approve') {
-      setAppointments(appointments.map(app =>
-        app.id === selectedAppointment.id
-          ? { ...app, status: 'confirmed' as const }
-          : app
-      ));
-    } else if (actionType === 'decline') {
-      setAppointments(appointments.map(app =>
-        app.id === selectedAppointment.id
-          ? { ...app, status: 'canceled' as const }
-          : app
-      ));
-    } else if (actionType === 'reschedule' && newDate && newTime) {
-      setAppointments(appointments.map(app =>
-        app.id === selectedAppointment.id
-          ? { ...app, scheduled_at: `${newDate}T${newTime}:00Z` }
-          : app
-      ));
+    try {
+      if (selectedAppointment.isRequest) {
+        if (actionType === 'approve' || actionType === 'decline') {
+          await appointmentService.respondAppointmentRequest(selectedAppointment.id, {
+            status: actionType === 'approve' ? 'accepted' : 'rejected',
+          });
+          setRequests((prev) => prev.filter((req) => req.id !== selectedAppointment.id));
+          showSuccess(actionType === 'approve' ? 'Request approved.' : 'Request declined.');
+        }
+      } else if (actionType === 'approve' || actionType === 'decline') {
+        await appointmentService.updateMentorAppointmentStatus(selectedAppointment.id, {
+          status: actionType === 'approve' ? 'confirmed' : 'cancelled',
+        });
+        setAppointments((prev) => prev.map((apt) => (
+          apt.id === selectedAppointment.id
+            ? { ...apt, status: actionType === 'approve' ? 'confirmed' : 'cancelled' }
+            : apt
+        )));
+        showSuccess(actionType === 'approve' ? 'Appointment confirmed.' : 'Appointment cancelled.');
+      } else if (actionType === 'reschedule') {
+        showError('Rescheduling must be initiated by the student for now.');
+      }
+    } catch (err: any) {
+      showError(err?.response?.data?.error || 'Action failed. Please try again.');
+    } finally {
+      setDialogOpen(false);
+      setSelectedAppointment(null);
     }
-
-    setDialogOpen(false);
-    setSelectedAppointment(null);
   };
 
   const getStatusChip = (status: string) => {
     const colors: Record<string, 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'> = {
       pending: 'warning',
       confirmed: 'info',
-      canceled: 'error',
+      cancelled: 'error',
       completed: 'success',
+      accepted: 'success',
+      rejected: 'error',
+      expired: 'default',
     };
     return <Chip label={status.charAt(0).toUpperCase() + status.slice(1)} color={colors[status] || 'default'} size="small" />;
   };
@@ -151,8 +200,8 @@ const MentorAppointmentsPage: React.FC = () => {
   };
 
   const upcomingAppointments = appointments.filter(a => a.status === 'confirmed' || a.status === 'pending');
-  const pastAppointments = appointments.filter(a => a.status === 'completed' || a.status === 'canceled');
-  const pendingRequests = appointments.filter(a => a.status === 'pending');
+  const pastAppointments = appointments.filter(a => a.status === 'completed' || a.status === 'cancelled' || a.status === 'expired');
+  const pendingRequests = requests.filter(a => a.status === 'pending');
 
   const filteredAppointments = tabValue === 0
     ? upcomingAppointments.filter(a => statusFilter === 'all' || a.status === statusFilter)
@@ -162,6 +211,10 @@ const MentorAppointmentsPage: React.FC = () => {
 
   if (loading) {
     return <LoadingSpinner message="Loading appointments..." />;
+  }
+
+  if (error) {
+    return <Alert severity="error">{error}</Alert>;
   }
 
   return (
@@ -180,11 +233,11 @@ const MentorAppointmentsPage: React.FC = () => {
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Tabs value={tabValue} onChange={(e, newValue) => setTabValue(newValue)} sx={{ mb: 2 }}>
-            <Tab label={`Upcoming (${upcomingAppointments.length})`} />
-            <Tab label={`Past (${pastAppointments.length})`} />
-            <Tab label={`Requests (${pendingRequests.length})`} />
-          </Tabs>
-          <FormControl sx={{ minWidth: 200 }}>
+              <Tab label={`Upcoming (${upcomingAppointments.length})`} />
+              <Tab label={`Past (${pastAppointments.length})`} />
+              <Tab label={`Requests (${pendingRequests.length})`} />
+            </Tabs>
+            <FormControl sx={{ minWidth: 200 }}>
             <InputLabel>Filter by Status</InputLabel>
             <Select
               value={statusFilter}
@@ -195,7 +248,7 @@ const MentorAppointmentsPage: React.FC = () => {
               <MenuItem value="pending">Pending</MenuItem>
               <MenuItem value="confirmed">Confirmed</MenuItem>
               <MenuItem value="completed">Completed</MenuItem>
-              <MenuItem value="canceled">Canceled</MenuItem>
+              <MenuItem value="cancelled">Cancelled</MenuItem>
             </Select>
           </FormControl>
         </CardContent>
@@ -258,7 +311,7 @@ const MentorAppointmentsPage: React.FC = () => {
                       >
                         <ViewIcon />
                       </IconButton>
-                      {appointment.status === 'pending' && (
+                      {appointment.status === 'pending' && appointment.isRequest && (
                         <>
                           <IconButton
                             size="small"
@@ -276,7 +329,7 @@ const MentorAppointmentsPage: React.FC = () => {
                           </IconButton>
                         </>
                       )}
-                      {appointment.status === 'confirmed' && (
+                      {appointment.status === 'confirmed' && !appointment.isRequest && (
                         <IconButton
                           size="small"
                           onClick={() => handleAction(appointment, 'reschedule')}
@@ -382,4 +435,3 @@ const MentorAppointmentsPage: React.FC = () => {
 };
 
 export default MentorAppointmentsPage;
-

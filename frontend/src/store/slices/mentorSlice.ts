@@ -3,7 +3,6 @@ import apiClient from '../../services/api/client';
 import { Mentor } from '../../types';
 import type { MentorFilters } from '../../types';
 
-
 /**
  * Redux State
  * =========================
@@ -17,7 +16,7 @@ interface MentorState {
   loading: boolean;
   error: string | null;
   filters: MentorFilters;
-
+  count: number; // ✅ total mentors count (for pagination)
 }
 
 const initialState: MentorState = {
@@ -25,40 +24,57 @@ const initialState: MentorState = {
   loading: false,
   error: null,
   filters: {},
+  count: 0,
 };
 
 /**
  * Fetch mentor list
  * =========================
- * Returns SaaS Mentor list:
- * - headline
- * - job_title
- * - starting_price
- * - review_count
- * - is_verified
- * - system_role / system_insight / cta_label
+ * Supports:
+ * - DRF paginated response: { results, count, next, previous }
+ * - Non-paginated response: Mentor[]
  */
 export const fetchMentors = createAsyncThunk<
-  Mentor[],
+  { results: Mentor[]; count: number },
   any
 >('mentors/fetchAll', async (filters = {}, { rejectWithValue }) => {
   try {
-    const response = await apiClient.get<Mentor[]>('/mentors/', {
+    const response = await apiClient.get('/mentors/', {
       params: filters,
     });
 
-    // Support both paginated & non-paginated API
-    if ((response.data as any)?.results) {
-      return (response.data as any).results as Mentor[];
+    const data: any = response.data;
+
+    // ✅ DRF paginated response
+    if (data?.results && typeof data.count === 'number') {
+      return {
+        results: data.results as Mentor[],
+        count: data.count,
+      };
     }
 
-    return response.data;
+    // ✅ Non-paginated fallback (dev / legacy)
+    if (Array.isArray(data)) {
+      return {
+        results: data as Mentor[],
+        count: data.length,
+      };
+    }
+
+    // Safety fallback
+    return {
+      results: [],
+      count: 0,
+    };
   } catch (error: any) {
     console.error('Failed to fetch mentors:', error);
 
     // Visitor-safe behavior
     if (error.response?.status === 401) {
-      return [];
+      return {
+        results: [],
+        count: 0,
+      };
     }
 
     return rejectWithValue(
@@ -105,7 +121,9 @@ const mentorSlice = createSlice({
       })
       .addCase(fetchMentors.fulfilled, (state, action) => {
         state.loading = false;
-        state.mentors = action.payload;
+        state.error = null;
+        state.mentors = action.payload.results; // ✅ 正确
+        state.count = action.payload.count;     // ✅ 正确
       })
       .addCase(fetchMentors.rejected, (state, action) => {
         state.loading = false;
