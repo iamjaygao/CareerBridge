@@ -22,6 +22,16 @@ class TimeSlot(models.Model):
     price = models.DecimalField(max_digits=8, decimal_places=2, help_text="Price")
     currency = models.CharField(max_length=3, default='USD', help_text="Currency")
     
+    # Hold fields
+    reserved_until = models.DateTimeField(null=True, blank=True)
+    reserved_appointment = models.ForeignKey(
+        "Appointment",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="reserved_slot",
+    )
+    
     # Metadata
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -59,12 +69,20 @@ class Appointment(models.Model):
         ('completed', 'Completed'),
         ('cancelled', 'Cancelled'),
         ('no_show', 'No Show'),
+        ('expired', 'Expired'),
     )
     
     # Basic information
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='appointments')
     mentor = models.ForeignKey('mentors.MentorProfile', on_delete=models.CASCADE, related_name='appointments')
     time_slot = models.ForeignKey(TimeSlot, on_delete=models.CASCADE, related_name='appointments')
+    service = models.ForeignKey(
+        'mentors.MentorService',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='appointments',
+    )
     
     # Appointment details
     title = models.CharField(max_length=200, help_text="Appointment title")
@@ -120,6 +138,25 @@ class Appointment(models.Model):
     
     def __str__(self):
         return f"{self.user.username} - {self.mentor.user.get_full_name()} - {self.scheduled_start.strftime('%Y-%m-%d %H:%M')}"
+
+    def get_service_label(self) -> str:
+        if self.service and getattr(self.service, "title", ""):
+            return self.service.title
+        if self.title:
+            return self.title
+        return "Session"
+
+    def get_scheduled_label(self) -> str:
+        if not self.scheduled_start:
+            return ""
+        return self.scheduled_start.strftime("%Y-%m-%d %H:%M")
+
+    def get_notification_details(self) -> str:
+        service_label = self.get_service_label()
+        scheduled_label = self.get_scheduled_label()
+        if scheduled_label:
+            return f"{service_label} on {scheduled_label}"
+        return service_label
     
     @property
     def is_upcoming(self):
@@ -130,6 +167,13 @@ class Appointment(models.Model):
     def is_past(self):
         """Check if the appointment is in the past"""
         return self.scheduled_end < timezone.now()
+    
+    @property
+    def duration_minutes(self):
+        """Calculate duration in minutes"""
+        if self.scheduled_start and self.scheduled_end:
+            return int((self.scheduled_end - self.scheduled_start).total_seconds() / 60)
+        return 0
     
     @property
     def can_cancel(self):

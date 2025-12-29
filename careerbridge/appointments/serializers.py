@@ -1,6 +1,7 @@
 from rest_framework import serializers
+from datetime import timedelta
 from .models import TimeSlot, Appointment, AppointmentRequest
-from mentors.serializers import MentorProfileSerializer
+from mentors.serializers import MentorProfileSerializer, MentorServiceSerializer
 from users.serializers import UserSerializer
 
 class TimeSlotSerializer(serializers.ModelSerializer):
@@ -25,24 +26,28 @@ class AppointmentSerializer(serializers.ModelSerializer):
     
     user = UserSerializer(read_only=True)
     mentor = MentorProfileSerializer(read_only=True)
+    service = MentorServiceSerializer(read_only=True)
     time_slot = TimeSlotSerializer(read_only=True)
     time_slot_id = serializers.IntegerField(write_only=True)
+    service_id = serializers.IntegerField(required=False, allow_null=True)
     
     # Computed properties
     is_upcoming = serializers.ReadOnlyField()
     is_past = serializers.ReadOnlyField()
     can_cancel = serializers.ReadOnlyField()
     
+    duration_minutes = serializers.ReadOnlyField()
+    
     class Meta:
         model = Appointment
         fields = [
-            'id', 'user', 'mentor', 'time_slot', 'time_slot_id', 'title', 'description',
+            'id', 'user', 'mentor', 'service', 'time_slot', 'time_slot_id', 'service_id', 'title', 'description',
             'status', 'scheduled_start', 'scheduled_end', 'actual_start', 'actual_end',
             'price', 'currency', 'is_paid', 'payment_method', 'meeting_link',
             'meeting_platform', 'meeting_notes', 'user_rating', 'user_feedback',
             'mentor_rating', 'mentor_feedback', 'cancellation_reason', 'cancelled_by',
             'cancellation_fee', 'refund_amount', 'is_upcoming', 'is_past', 'can_cancel',
-            'created_at', 'updated_at'
+            'duration_minutes', 'created_at', 'updated_at'
         ]
         read_only_fields = [
             'id', 'user', 'mentor', 'time_slot', 'created_at', 'updated_at',
@@ -62,8 +67,24 @@ class AppointmentSerializer(serializers.ModelSerializer):
     
     def validate(self, data):
         """Validate appointment data"""
+        from mentors.models import MentorService
+        from datetime import timedelta
+        
         # Check if time slot is available
         time_slot = TimeSlot.objects.get(id=data['time_slot_id'])
+        
+        service_id = data.get('service_id')
+        if not service_id:
+            raise serializers.ValidationError("service_id is required")
+        
+        try:
+            service = MentorService.objects.get(id=service_id)
+            if not service.is_active:
+                raise serializers.ValidationError("Service is not active")
+            if service.mentor_id != time_slot.mentor_id:
+                raise serializers.ValidationError("Service does not belong to this mentor")
+        except MentorService.DoesNotExist:
+            raise serializers.ValidationError("Service not found")
         
         # Check if user has conflicting appointments
         user = self.context['request'].user
@@ -81,7 +102,14 @@ class AppointmentSerializer(serializers.ModelSerializer):
         data['price'] = time_slot.price
         data['currency'] = time_slot.currency
         data['scheduled_start'] = time_slot.start_time
-        data['scheduled_end'] = time_slot.end_time
+        
+        scheduled_start = time_slot.start_time
+        scheduled_end = scheduled_start + timedelta(minutes=service.duration_minutes)
+        
+        if scheduled_end > time_slot.end_time:
+            raise serializers.ValidationError("Service duration exceeds available slot")
+        
+        data['scheduled_end'] = scheduled_end
         
         return data
     
@@ -217,6 +245,13 @@ class TimeSlotCreateSerializer(serializers.ModelSerializer):
         # Check if end time is later than start time
         if data['end_time'] <= data['start_time']:
             raise serializers.ValidationError("End time must be after start time")
+
+        duration = data['end_time'] - data['start_time']
+        duration_seconds = duration.total_seconds()
+        if duration_seconds < 60 * 60:
+            raise serializers.ValidationError("Time slot must be at least 60 minutes")
+        if duration_seconds % (60 * 60) != 0:
+            raise serializers.ValidationError("Time slot duration must be in 60-minute increments")
         
         # Check for time conflicts
         mentor = self.context['request'].user.mentor_profile
@@ -234,4 +269,25 @@ class TimeSlotCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         """Create time slot"""
         mentor = self.context['request'].user.mentor_profile
-        return TimeSlot.objects.create(mentor=mentor, **validated_data) 
+        start_time = validated_data['start_time']
+        end_time = validated_data['end_time']
+        slot_minutes = 60
+
+        created_slots = []
+        cursor = start_time
+        while cursor < end_time:
+            next_end = cursor + timedelta(minutes=slot_minutes)
+            created_slots.append(TimeSlot.objects.create(
+                mentor=mentor,
+                start_time=cursor,
+                end_time=next_end,
+                is_available=validated_data.get('is_available', True),
+                is_recurring=validated_data.get('is_recurring', False),
+                recurring_pattern=validated_data.get('recurring_pattern', ''),
+                max_bookings=validated_data.get('max_bookings', 1),
+                price=validated_data.get('price'),
+                currency=validated_data.get('currency', 'USD'),
+            ))
+            cursor = next_end
+
+        return created_slots[0]

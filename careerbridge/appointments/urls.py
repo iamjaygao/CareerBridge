@@ -15,11 +15,22 @@ urlpatterns = [
     
     # Mentor appointment management
     path('mentor/appointments/', views.MentorAppointmentListView.as_view(), name='mentor-appointment-list'),
+    path('mentor/appointments/<int:pk>/status/', views.MentorAppointmentStatusView.as_view(), name='mentor-appointment-status'),
     
     # Appointment request related
     path('requests/', views.AppointmentRequestListView.as_view(), name='appointment-request-list'),
     path('requests/<int:pk>/', views.AppointmentRequestDetailView.as_view(), name='appointment-request-detail'),
+    path('requests/<int:pk>/respond/', views.appointment_request_respond, name='appointment-request-respond'),
     
     # Statistics
     path('stats/', views.AppointmentStatsView.as_view(), name='appointment-stats'),
+    
+    # Slot locking
+    path('lock-slot/', views.lock_slot, name='lock-slot'),
+    path(
+        'lock-status/<int:appointment_id>/',
+        views.appointment_lock_status,
+        name='appointment-lock-status'
+    ),
+
 ]
