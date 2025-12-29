@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -14,128 +15,175 @@ import {
   Chip,
   IconButton,
   Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Avatar,
-  TextField,
-  Alert,
   Tabs,
   Tab,
 } from '@mui/material';
 import {
-  Edit as EditIcon,
-  Cancel as CancelIcon,
   Visibility as ViewIcon,
 } from '@mui/icons-material';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
-
-interface Appointment {
-  id: number;
-  mentor: {
-    name: string;
-    avatar?: string;
-  };
-  scheduled_at: string;
-  duration: number;
-  topic: string;
-  status: 'scheduled' | 'completed' | 'cancelled';
-  meeting_link?: string;
-}
+import ErrorAlert from '../../components/common/ErrorAlert';
+import appointmentService from '../../services/api/appointmentService';
+import apiClient from '../../services/api/client';
+import { Appointment } from '../../types';
+import { format } from 'date-fns';
 
 const StudentAppointmentsPage: React.FC = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [tabValue, setTabValue] = useState(0);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [actionType, setActionType] = useState<'view' | 'reschedule' | 'cancel'>('view');
-  const [newDate, setNewDate] = useState('');
-  const [newTime, setNewTime] = useState('');
 
   useEffect(() => {
-    setTimeout(() => {
-      setAppointments([
-        {
-          id: 1,
-          mentor: { name: 'John Doe' },
-          scheduled_at: '2025-01-20T14:00:00Z',
-          duration: 60,
-          topic: 'Career Transition Advice',
-          status: 'scheduled',
-          meeting_link: 'https://meet.example.com/abc123',
-        },
-        {
-          id: 2,
-          mentor: { name: 'Jane Smith' },
-          scheduled_at: '2025-01-18T10:00:00Z',
-          duration: 45,
-          topic: 'Technical Interview Prep',
-          status: 'completed',
-        },
-        {
-          id: 3,
-          mentor: { name: 'Bob Johnson' },
-          scheduled_at: '2025-01-15T09:00:00Z',
-          duration: 60,
-          topic: 'Resume Review',
-          status: 'completed',
-        },
-      ]);
-      setLoading(false);
-    }, 500);
+    fetchAppointments();
   }, []);
 
-  const handleAction = (appointment: Appointment, type: 'view' | 'reschedule' | 'cancel') => {
-    setSelectedAppointment(appointment);
-    setActionType(type);
-    setDialogOpen(true);
-    setNewDate('');
-    setNewTime('');
-  };
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const paymentStatus = params.get('payment');
+    const sessionId = params.get('session_id');
+    const paymentIntentId = params.get('payment_intent') || params.get('payment_intent_id');
 
-  const handleConfirm = () => {
-    if (!selectedAppointment) return;
-
-    if (actionType === 'cancel') {
-      setAppointments(appointments.map(app => 
-        app.id === selectedAppointment.id 
-          ? { ...app, status: 'cancelled' as const }
-          : app
-      ));
-    } else if (actionType === 'reschedule' && newDate && newTime) {
-      setAppointments(appointments.map(app => 
-        app.id === selectedAppointment.id 
-          ? { ...app, scheduled_at: `${newDate}T${newTime}:00Z` }
-          : app
-      ));
+    if (paymentStatus === 'success' && (sessionId || paymentIntentId)) {
+      (async () => {
+        try {
+          await apiClient.post('/payments/reconcile/', {
+            session_id: sessionId,
+            payment_intent_id: paymentIntentId,
+          });
+          await fetchAppointments();
+        } catch (err: any) {
+          console.error('Payment reconcile failed:', err);
+        } finally {
+          navigate('/student/appointments', { replace: true });
+        }
+      })();
     }
+  }, [location.search, navigate]);
 
-    setDialogOpen(false);
-    setSelectedAppointment(null);
+  const fetchAppointments = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await appointmentService.getAppointments();
+      const data = Array.isArray(response) ? response : ((response as any).results || []);
+      
+      // Transform backend data to match Appointment interface
+      const transformedAppointments: Appointment[] = data.map((apt: any) => {
+        const scheduledStart = new Date(apt.scheduled_start);
+        const scheduledEnd = new Date(apt.scheduled_end);
+        const serviceTitle = apt.service?.title;
+        
+        return {
+          id: apt.id,
+          mentor: apt.mentor,
+          user: apt.user,
+          date: format(scheduledStart, 'yyyy-MM-dd'),
+          time: format(scheduledStart, 'HH:mm'),
+          status: apt.status,
+          is_paid: apt.is_paid,
+          notes: apt.description,
+          meeting_link: apt.meeting_link,
+          meeting_platform: apt.meeting_platform,
+          user_feedback: apt.user_feedback,
+          mentor_feedback: apt.mentor_feedback,
+          user_rating: apt.user_rating,
+          scheduled_start: apt.scheduled_start,
+          scheduled_end: apt.scheduled_end,
+          title: serviceTitle || apt.title,
+        };
+      });
+      
+      setAppointments(transformedAppointments);
+    } catch (err: any) {
+      setError(err?.response?.data?.error || 'Failed to load appointments');
+      console.error('Failed to fetch appointments:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const getStatusChip = (status: string) => {
+  const getStatusChip = (status: string, isPaid?: boolean) => {
     const colors: Record<string, 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'> = {
-      scheduled: 'info',
-      completed: 'success',
+      pending: 'warning',
+      confirmed: 'success',
+      completed: 'info',
       cancelled: 'error',
+      expired: 'error',
     };
-    return <Chip label={status.charAt(0).toUpperCase() + status.slice(1)} color={colors[status] || 'default'} size="small" />;
+    const labels: Record<string, string> = {
+      pending: isPaid ? 'Pending Confirmation' : 'Pending Payment',
+      confirmed: 'Confirmed',
+      completed: 'Completed',
+      cancelled: 'Cancelled',
+      expired: 'Expired',
+    };
+    return (
+      <Chip
+        label={labels[status] || status.charAt(0).toUpperCase() + status.slice(1)}
+        color={colors[status] || 'default'}
+        size="small"
+      />
+    );
   };
 
   const formatDateTime = (dateString: string) => {
+    if (!dateString) return 'N/A';
     const date = new Date(dateString);
-    return date.toLocaleString();
+    return format(date, 'MMM dd, yyyy HH:mm');
   };
 
-  const upcomingAppointments = appointments.filter(a => a.status === 'scheduled');
-  const pastAppointments = appointments.filter(a => a.status === 'completed' || a.status === 'cancelled');
+  const getMentorName = (mentor: any): string => {
+    if (typeof mentor === 'object' && mentor !== null) {
+      if (mentor.user) {
+        const firstName = mentor.user.first_name || '';
+        const lastName = mentor.user.last_name || '';
+        const fullName = `${firstName} ${lastName}`.trim();
+        return fullName || mentor.user.username || 'Mentor';
+      }
+      return mentor.name || 'Mentor';
+    }
+    return 'Mentor';
+  };
+
+  const getDuration = (appointment: Appointment): number => {
+    if (appointment.scheduled_start && appointment.scheduled_end) {
+      const start = new Date(appointment.scheduled_start);
+      const end = new Date(appointment.scheduled_end);
+      return Math.round((end.getTime() - start.getTime()) / (1000 * 60));
+    }
+    return 60; // default
+  };
+
+  // Classify appointments based on status and scheduled_start time
+  const now = new Date();
+  const upcomingAppointments = appointments.filter((apt) => {
+    if (!apt.scheduled_start) return false;
+    const appointmentTime = new Date(apt.scheduled_start);
+    return (
+      (apt.status === 'pending' || apt.status === 'confirmed') &&
+      appointmentTime > now
+    );
+  });
+  
+  const pastAppointments = appointments.filter((apt) => {
+    if (!apt.scheduled_start) return false;
+    const appointmentTime = new Date(apt.scheduled_start);
+    const isUpcoming = (apt.status === 'pending' || apt.status === 'confirmed') && appointmentTime > now;
+    return !isUpcoming;
+  });
 
   if (loading) {
     return <LoadingSpinner message="Loading appointments..." />;
   }
+
+  if (error) {
+    return <ErrorAlert message={error} />;
+  }
+
+  const displayedAppointments = tabValue === 0 ? upcomingAppointments : pastAppointments;
 
   return (
     <Box>
@@ -175,162 +223,86 @@ const StudentAppointmentsPage: React.FC = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {(tabValue === 0 ? upcomingAppointments : pastAppointments).map((appointment) => (
-                  <TableRow key={appointment.id} hover>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <Avatar sx={{ mr: 2, width: 32, height: 32 }}>
-                          {appointment.mentor.name.charAt(0)}
-                        </Avatar>
-                        <Typography variant="body2" fontWeight="medium">
-                          {appointment.mentor.name}
-                        </Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2">
-                        {formatDateTime(appointment.scheduled_at)}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2">
-                        {appointment.duration} min
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" noWrap sx={{ maxWidth: 150 }}>
-                        {appointment.topic}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      {getStatusChip(appointment.status)}
-                    </TableCell>
-                    <TableCell align="right">
-                      <IconButton
-                        size="small"
-                        onClick={() => handleAction(appointment, 'view')}
-                        color="primary"
-                      >
-                        <ViewIcon />
-                      </IconButton>
-                      {appointment.status === 'scheduled' && (
-                        <>
+                {displayedAppointments.length > 0 ? (
+                  displayedAppointments.map((appointment) => {
+                    const mentor = typeof appointment.mentor === 'object' ? appointment.mentor : null;
+                    const mentorName = getMentorName(appointment.mentor);
+                    const mentorInitial = mentorName.charAt(0).toUpperCase();
+                    
+                    return (
+                      <TableRow key={appointment.id} hover>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <Box
+                              sx={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: '50%',
+                                bgcolor: 'primary.main',
+                                color: 'white',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                mr: 2,
+                                fontSize: '0.875rem',
+                                fontWeight: 600,
+                              }}
+                            >
+                              {mentorInitial}
+                            </Box>
+                            <Typography variant="body2" fontWeight="medium">
+                              {mentorName}
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {appointment.scheduled_start ? formatDateTime(appointment.scheduled_start) : 'N/A'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {getDuration(appointment)} min
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" noWrap sx={{ maxWidth: 150 }}>
+                            {appointment.title || appointment.notes || 'Career Guidance'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          {getStatusChip(appointment.status, appointment.is_paid)}
+                        </TableCell>
+                        <TableCell align="right">
                           <IconButton
                             size="small"
-                            onClick={() => handleAction(appointment, 'reschedule')}
+                            onClick={() => navigate(`/student/appointments/${appointment.id}`)}
                             color="primary"
                           >
-                            <EditIcon />
+                            <ViewIcon />
                           </IconButton>
-                          <IconButton
-                            size="small"
-                            onClick={() => handleAction(appointment, 'cancel')}
-                            color="error"
-                          >
-                            <CancelIcon />
-                          </IconButton>
-                        </>
-                      )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        {tabValue === 0
+                          ? 'No upcoming appointments'
+                          : 'No past appointments'}
+                      </Typography>
                     </TableCell>
                   </TableRow>
-                ))}
+                )}
               </TableBody>
             </Table>
           </TableContainer>
         </CardContent>
       </Card>
-
-      {/* Action Dialog */}
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          {actionType === 'view' && 'Appointment Details'}
-          {actionType === 'reschedule' && 'Reschedule Appointment'}
-          {actionType === 'cancel' && 'Cancel Appointment'}
-        </DialogTitle>
-        <DialogContent>
-          {selectedAppointment && (
-            <Box sx={{ pt: 2 }}>
-              {actionType === 'view' && (
-                <>
-                  <Box sx={{ mb: 2 }}>
-                    <Typography variant="body2" color="text.secondary">Mentor</Typography>
-                    <Typography variant="body1" fontWeight="medium">
-                      {selectedAppointment.mentor.name}
-                    </Typography>
-                  </Box>
-                  <Box sx={{ mb: 2 }}>
-                    <Typography variant="body2" color="text.secondary">Scheduled Time</Typography>
-                    <Typography variant="body1">
-                      {formatDateTime(selectedAppointment.scheduled_at)}
-                    </Typography>
-                  </Box>
-                  <Box sx={{ mb: 2 }}>
-                    <Typography variant="body2" color="text.secondary">Topic</Typography>
-                    <Typography variant="body1">
-                      {selectedAppointment.topic}
-                    </Typography>
-                  </Box>
-                  {selectedAppointment.meeting_link && (
-                    <Button
-                      variant="contained"
-                      fullWidth
-                      href={selectedAppointment.meeting_link}
-                      target="_blank"
-                      sx={{ mt: 2 }}
-                    >
-                      Join Meeting
-                    </Button>
-                  )}
-                </>
-              )}
-              {actionType === 'reschedule' && (
-                <>
-                  <TextField
-                    fullWidth
-                    type="date"
-                    label="New Date"
-                    value={newDate}
-                    onChange={(e) => setNewDate(e.target.value)}
-                    InputLabelProps={{ shrink: true }}
-                    sx={{ mb: 2 }}
-                    required
-                  />
-                  <TextField
-                    fullWidth
-                    type="time"
-                    label="New Time"
-                    value={newTime}
-                    onChange={(e) => setNewTime(e.target.value)}
-                    InputLabelProps={{ shrink: true }}
-                    required
-                  />
-                </>
-              )}
-              {actionType === 'cancel' && (
-                <Alert severity="warning" sx={{ mb: 2 }}>
-                  Are you sure you want to cancel this appointment? This action cannot be undone.
-                </Alert>
-              )}
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>Close</Button>
-          {actionType !== 'view' && (
-            <Button
-              variant="contained"
-              onClick={handleConfirm}
-              color={actionType === 'cancel' ? 'error' : 'primary'}
-              disabled={actionType === 'reschedule' && (!newDate || !newTime)}
-            >
-              {actionType === 'reschedule' ? 'Reschedule' : 'Cancel Appointment'}
-            </Button>
-          )}
-        </DialogActions>
-      </Dialog>
     </Box>
   );
 };
 
 export default StudentAppointmentsPage;
-

@@ -20,20 +20,67 @@ import {
   CheckCircle as CheckCircleIcon,
 } from '@mui/icons-material';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import mentorService from '../../services/api/mentorService';
+import resumeService, { Resume } from '../../services/api/resumeService';
+import appointmentService from '../../services/api/appointmentService';
+import { Mentor } from '../../types';
 
 const StudentDashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState({
-    assessment: 75,
-    insights: 60,
-    appointments: 2,
+    assessment: 0,
+    insights: 0,
+    appointments: 0,
   });
+  const [recommendedMentors, setRecommendedMentors] = useState<Mentor[]>([]);
+  const [latestResume, setLatestResume] = useState<Resume | null>(null);
 
   useEffect(() => {
-    setTimeout(() => {
-      setLoading(false);
-    }, 500);
+    const fetchDashboardData = async () => {
+      try {
+        const [mentorResponse, resumes, upcomingAppointments] = await Promise.all([
+          mentorService.getMentors({ page: 1, limit: 3 }),
+          resumeService.getResumes(),
+          appointmentService.getMyAppointments({ upcoming: 'true' }),
+        ]);
+
+        const mentorResults = mentorResponse?.results ?? mentorResponse ?? [];
+        setRecommendedMentors(mentorResults.slice(0, 3));
+
+        const latest = resumes?.[0] ?? null;
+        setLatestResume(latest);
+
+        const resumeStatus = latest?.status ?? null;
+        let assessment = 0;
+        let insights = 0;
+
+        if (resumeStatus === 'uploaded') {
+          assessment = 30;
+          insights = 0;
+        } else if (resumeStatus === 'analyzing') {
+          assessment = 60;
+          insights = 30;
+        } else if (resumeStatus === 'analyzed') {
+          assessment = 100;
+          insights = 100;
+        }
+
+        setProgress({
+          assessment,
+          insights,
+          appointments: Array.isArray(upcomingAppointments) ? upcomingAppointments.length : 0,
+        });
+      } catch {
+        setProgress((prev) => ({ ...prev, appointments: 0 }));
+        setRecommendedMentors([]);
+        setLatestResume(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
   }, []);
 
   if (loading) {
@@ -61,7 +108,9 @@ const StudentDashboardPage: React.FC = () => {
                 Your Next Step
               </Typography>
               <Typography variant="body1" sx={{ opacity: 0.9, mb: 2 }}>
-                Upload your resume to get personalized career insights and recommendations
+                {latestResume
+                  ? 'Update your resume to refresh insights and recommendations'
+                  : 'Upload your resume to get personalized career insights and recommendations'}
               </Typography>
               <Box sx={{ display: 'flex', gap: 2 }}>
                 <Button
@@ -76,7 +125,7 @@ const StudentDashboardPage: React.FC = () => {
                     },
                   }}
                 >
-                  Upload Resume
+                  {latestResume ? 'Update Resume' : 'Upload Resume'}
                 </Button>
                 <Button
                   variant="outlined"
@@ -90,7 +139,7 @@ const StudentDashboardPage: React.FC = () => {
                     },
                   }}
                 >
-                  Continue Analysis
+                  {latestResume ? 'Continue Analysis' : 'Start Analysis'}
                 </Button>
               </Box>
             </Box>
@@ -188,31 +237,32 @@ const StudentDashboardPage: React.FC = () => {
           </Button>
         </Box>
         <Grid container spacing={3}>
-          {[1, 2, 3].map((item) => (
-            <Grid item xs={12} sm={6} md={4} key={item}>
+          {recommendedMentors.map((mentor) => (
+            <Grid item xs={12} sm={6} md={4} key={mentor.id}>
               <Card>
                 <CardContent>
                   <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                     <Avatar sx={{ width: 56, height: 56, mr: 2, bgcolor: 'primary.main' }}>
-                      M{item}
+                      {(mentor.display_name || mentor.user?.first_name || 'M').charAt(0)}
                     </Avatar>
                     <Box>
                       <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                        Mentor {item}
+                        {mentor.display_name || mentor.user?.first_name || mentor.user?.username || 'Mentor'}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        Software Engineering
+                        {mentor.headline || mentor.job_title || mentor.industry || 'Career Mentor'}
                       </Typography>
                     </Box>
                   </Box>
                   <Box sx={{ display: 'flex', gap: 0.5, mb: 2, flexWrap: 'wrap' }}>
-                    <Chip label="Career Advice" size="small" />
-                    <Chip label="Resume Review" size="small" />
+                    {(mentor.expertise || []).slice(0, 2).map((tag) => (
+                      <Chip key={tag} label={tag} size="small" />
+                    ))}
                   </Box>
                   <Button
                     variant="contained"
                     fullWidth
-                    onClick={() => navigate('/student/mentors')}
+                    onClick={() => navigate(`/student/mentors/${mentor.id}`)}
                     sx={{
                       background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                       '&:hover': {
@@ -300,4 +350,3 @@ const StudentDashboardPage: React.FC = () => {
 };
 
 export default StudentDashboardPage;
-

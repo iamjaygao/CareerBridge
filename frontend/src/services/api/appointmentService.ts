@@ -1,123 +1,275 @@
 import apiClient from './client';
 
+/* =====================================================
+ * Types
+ * ===================================================== */
+
 /**
- * Payload for creating mentor session (NEW – marketplace / mentor detail)
+ * NEW – Slot locking / booking flow
  */
-export interface CreateSessionPayload {
-  mentor_id: number;
-  service_id: number;
-  scheduled_date: string;
-  scheduled_time: string;
-  user_notes?: string;
-  duration_minutes?: number;
+export interface LockSlotPayload {
+  appointment_id?: number;
+  action?: 'cancel';
+  time_slot_id?: number;
+  service_id?: number;
+  title?: string;
+  description?: string;
+  cancel_reason?: string;
 }
 
 /**
- * Payload for legacy appointment creation (OLD – keep for backward compatibility)
+ * LEGACY – old appointment creation
+ * ⚠️ DO NOT USE IN NEW PAGES
  */
 export interface CreateAppointmentPayload {
   mentor: number;
-  date: string;
-  time: string;
+  date: string;   // yyyy-MM-dd
+  time: string;   // HH:mm
   notes?: string;
 }
 
+/**
+ * Appointment query params
+ */
+export interface AppointmentQuery {
+  status?: 'pending' | 'confirmed' | 'completed' | 'expired' | 'cancelled';
+  upcoming?: 'true' | 'false';
+}
+
+/* =====================================================
+ * AppointmentService
+ * ===================================================== */
+
 class AppointmentService {
+  /* ---------------------------------------------
+   * 🔒 NEW – Slot based booking (CURRENT SYSTEM)
+   * -------------------------------------------*/
+
   /**
-   * Get all appointments
+   * Lock a time slot and create (or reuse) a pending appointment
    */
-  async getAppointments(params?: any): Promise<any> {
-    try {
-      const response = await apiClient.get('/appointments/appointments/', { params });
-      return response.data;
-    } catch (error) {
-      console.error('Failed to get appointments:', error);
-      throw error;
-    }
+  async lockSlot(data: LockSlotPayload): Promise<any> {
+    const response = await apiClient.post(
+      '/appointments/lock-slot/',
+      data
+    );
+    return response.data;
   }
 
   /**
-   * Get appointment by ID
+   * Check appointment lock status (countdown / expired repair)
+   */
+  async getLockStatus(appointmentId: number): Promise<any> {
+    const response = await apiClient.get(
+      `/appointments/appointment-lock-status/${appointmentId}/`
+    );
+    return response.data;
+  }
+
+  /**
+   * Get current user's appointments (used by Upcoming / Past pages)
+   */
+  async getMyAppointments(
+    params?: AppointmentQuery
+  ): Promise<any[]> {
+    const response = await apiClient.get(
+      '/appointments/appointments/',
+      { params }
+    );
+    return response.data;
+  }
+
+  /**
+   * Get appointments (alias for getMyAppointments)
+   */
+  async getAppointments(
+    params?: AppointmentQuery
+  ): Promise<any[]> {
+    return this.getMyAppointments(params);
+  }
+
+  /**
+   * Get appointment detail
    */
   async getAppointmentById(id: number): Promise<any> {
-    try {
-      const response = await apiClient.get(`/appointments/appointments/${id}/`);
-      return response.data;
-    } catch (error) {
-      console.error('Failed to get appointment:', error);
-      throw error;
-    }
+    const response = await apiClient.get(
+      `/appointments/appointments/${id}/`
+    );
+    return response.data;
   }
 
   /**
-   * Create appointment (LEGACY – do not remove)
-   * Used by older pages
+   * Get appointment stats for current user (mentor or student)
    */
-  async createAppointment(data: {
-    mentor: number;
-    date: string;
-    time: string;
-    notes?: string;
-  }): Promise<any> {
-    return apiClient.post('/appointments/appointments/', data);
+  async getAppointmentStats(): Promise<any> {
+    const response = await apiClient.get(
+      '/appointments/stats/'
+    );
+    return response.data;
   }
 
   /**
-   * Create mentor session (NEW – mentor detail / marketplace)
+   * Get mentor's appointments
    */
-  async createSession(
-    data: CreateSessionPayload
+  async getMentorAppointments(): Promise<any[]> {
+    const response = await apiClient.get(
+      '/appointments/mentor/appointments/'
+    );
+    return response.data;
+  }
+
+  /**
+   * Mentor updates appointment status
+   */
+  async updateMentorAppointmentStatus(
+    id: number,
+    data: { status?: string; meeting_link?: string; meeting_platform?: string; meeting_notes?: string }
   ): Promise<any> {
-    try {
-      const response = await apiClient.post('/appointments/appointments/', data);
-      return response.data;
-    } catch (error) {
-      console.error('Failed to create session:', error);
-      throw error;
-    }
+    const response = await apiClient.patch(
+      `/appointments/mentor/appointments/${id}/status/`,
+      data
+    );
+    return response.data;
   }
 
   /**
-   * Update appointment
+   * Get appointment requests
    */
-  async updateAppointment(id: number, data: any): Promise<any> {
-    try {
-      const response = await apiClient.put(`/appointments/appointments/${id}/`, data);
-      return response.data;
-    } catch (error) {
-      console.error('Failed to update appointment:', error);
-      throw error;
-    }
+  async getAppointmentRequests(): Promise<any[]> {
+    const response = await apiClient.get(
+      '/appointments/requests/'
+    );
+    return response.data;
+  }
+
+  /**
+   * Respond to appointment request
+   */
+  async respondAppointmentRequest(
+    id: number,
+    data: { status: 'accepted' | 'rejected'; response?: string; suggested_time_slots?: any[] }
+  ): Promise<any> {
+    const response = await apiClient.post(
+      `/appointments/requests/${id}/respond/`,
+      data
+    );
+    return response.data;
+  }
+
+  /**
+   * Get mentor time slots within date range
+   */
+  async getMentorTimeSlots(params: { mentor_id: number; from: string; to: string }): Promise<any[]> {
+    const response = await apiClient.get(
+      '/appointments/time-slots/',
+      { params }
+    );
+    return response.data;
+  }
+
+  /**
+   * Create mentor time slot(s)
+   */
+  async createTimeSlot(data: {
+    start_time: string;
+    end_time: string;
+    is_available?: boolean;
+    is_recurring?: boolean;
+    recurring_pattern?: string;
+    max_bookings?: number;
+    price: number;
+    currency?: string;
+  }): Promise<any> {
+    const response = await apiClient.post(
+      '/appointments/time-slots/create/',
+      data
+    );
+    return response.data;
+  }
+
+  /**
+   * Update a time slot
+   */
+  async updateTimeSlot(id: number, data: { is_available?: boolean }): Promise<any> {
+    const response = await apiClient.patch(
+      `/appointments/time-slots/${id}/`,
+      data
+    );
+    return response.data;
   }
 
   /**
    * Cancel appointment
    */
-  async cancelAppointment(id: number, reason?: string): Promise<any> {
-    try {
-      const response = await apiClient.post(
-        `/appointments/appointments/${id}/cancel/`,
-        { reason }
-      );
-      return response.data;
-    } catch (error) {
-      console.error('Failed to cancel appointment:', error);
-      throw error;
-    }
+  async cancelAppointment(
+    id: number,
+    reason?: string
+  ): Promise<any> {
+    const response = await apiClient.post(
+      `/appointments/appointments/${id}/cancel/`,
+      { reason }
+    );
+    return response.data;
   }
 
+  /**
+   * Rate appointment (after completed)
+   */
+  async rateAppointment(
+    id: number,
+    rating: number,
+    feedback?: string
+  ): Promise<any> {
+    const response = await apiClient.post(
+      `/appointments/appointments/${id}/rate/`,
+      { rating, feedback }
+    );
+    return response.data;
+  }
+
+  /* ---------------------------------------------
+   * ⚠️ LEGACY – OLD APPOINTMENT FLOW
+   * DO NOT USE IN NEW CODE
+   * -------------------------------------------*/
+
+  /**
+   * Legacy: get appointments
+   */
+  async getAppointmentsLegacy(params?: any): Promise<any> {
+    const response = await apiClient.get(
+      '/appointments/appointments/',
+      { params }
+    );
+    return response.data;
+  }
+
+  /**
+   * Legacy: create appointment (OLD PAGES)
+   */
+  async createAppointmentLegacy(
+    data: CreateAppointmentPayload
+  ): Promise<any> {
+    const response = await apiClient.post(
+      '/appointments/appointments/',
+      data
+    );
+    return response.data;
+  }
+
+  /**
+   * ❗ Legacy alias – DO NOT REMOVE YET
+   * This exists ONLY to keep old pages working.
+   */
+  async createAppointment(
+    data: CreateAppointmentPayload
+  ): Promise<any> {
+    return this.createAppointmentLegacy(data);
+  }
 }
 
-// Export filters type (unchanged)
-export type { AppointmentFilters } from '../../types';
-
-// Deprecated legacy interface (keep for safety)
-export interface AppointmentFiltersOld {
-  status?: string;
-  dateFrom?: string;
-  dateTo?: string;
-  mentor?: number;
-}
+/* =====================================================
+ * Export singleton
+ * ===================================================== */
 
 const appointmentService = new AppointmentService();
 export default appointmentService;

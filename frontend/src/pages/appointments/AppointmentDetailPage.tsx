@@ -1,0 +1,345 @@
+import React, { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import {
+  Container,
+  Card,
+  CardContent,
+  Typography,
+  Box,
+  Button,
+  Grid,
+  Chip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Alert,
+} from '@mui/material';
+import { ArrowBack as ArrowBackIcon, Edit as EditIcon, Cancel as CancelIcon } from '@mui/icons-material';
+import { format } from 'date-fns';
+
+import PageHeader from '../../components/common/PageHeader';
+import LoadingSpinner from '../../components/common/LoadingSpinner';
+import ErrorAlert from '../../components/common/ErrorAlert';
+import { useNotification } from '../../components/common/NotificationProvider';
+import appointmentService from '../../services/api/appointmentService';
+
+const getStatusLabel = (status: string): string => {
+  const statusMap: { [key: string]: string } = {
+    pending: 'Pending Payment',
+    confirmed: 'Confirmed',
+    expired: 'Expired',
+    cancelled: 'Cancelled',
+    completed: 'Completed',
+  };
+  return statusMap[status] || status.charAt(0).toUpperCase() + status.slice(1);
+};
+
+const getStatusColor = (status: string): 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning' => {
+  switch (status) {
+    case 'pending':
+      return 'warning';
+    case 'confirmed':
+      return 'success';
+    case 'expired':
+    case 'cancelled':
+      return 'error';
+    case 'completed':
+      return 'info';
+    default:
+      return 'default';
+  }
+};
+
+const AppointmentDetailPage: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const { showSuccess, showError } = useNotification();
+  const [appointment, setAppointment] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelling, setCancelling] = useState(false);
+
+  useEffect(() => {
+    if (id) {
+      fetchAppointment();
+    }
+  }, [id]);
+
+  const fetchAppointment = async () => {
+    if (!id) return;
+    
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await appointmentService.getAppointmentById(parseInt(id));
+      setAppointment(data);
+    } catch (err: any) {
+      setError(err?.response?.data?.error || 'Failed to load appointment');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCompletePayment = () => {
+    if (appointment?.id) {
+      navigate(`/student/appointments/${appointment.id}`);
+    }
+  };
+
+  const handleCancel = async () => {
+    if (!appointment?.id) return;
+    
+    try {
+      setCancelling(true);
+      await appointmentService.lockSlot({
+        appointment_id: appointment.id,
+        action: 'cancel',
+        cancel_reason: cancelReason,
+      });
+      showSuccess('Appointment cancelled successfully');
+      setCancelDialogOpen(false);
+      setCancelReason('');
+      fetchAppointment();
+    } catch (err: any) {
+      showError(err?.response?.data?.error || 'Failed to cancel appointment');
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  const handleReschedule = () => {
+    if (appointment?.id) {
+      navigate(`/student/appointments/${appointment.id}/reschedule`);
+    }
+  };
+
+  const isFuture = appointment?.scheduled_start 
+    ? new Date(appointment.scheduled_start) > new Date()
+    : false;
+  
+  const canCancel = (appointment?.status === 'pending' || appointment?.status === 'confirmed') && isFuture;
+  const canReschedule = appointment?.status === 'confirmed' && isFuture;
+
+  if (loading) {
+    return <LoadingSpinner />;
+  }
+
+  if (error) {
+    return <ErrorAlert message={error} />;
+  }
+
+  if (!appointment) {
+    return <ErrorAlert message="Appointment not found" />;
+  }
+
+  const scheduledStart = new Date(appointment.scheduled_start);
+  const scheduledEnd = new Date(appointment.scheduled_end);
+  const durationMinutes = Math.round((scheduledEnd.getTime() - scheduledStart.getTime()) / (1000 * 60));
+  
+  const mentorName = appointment.mentor?.user
+    ? `${appointment.mentor.user.first_name || ''} ${appointment.mentor.user.last_name || ''}`.trim() || appointment.mentor.user.username
+    : 'Mentor';
+
+  const priceDisplay = appointment.price
+    ? `$${parseFloat(appointment.price).toFixed(2)} ${appointment.currency || 'USD'}`
+    : 'N/A';
+
+  return (
+    <>
+      <PageHeader
+        title="Appointment Details"
+        breadcrumbs={[
+          { label: 'Appointments', path: '/student/appointments' },
+          { label: 'Details', path: `/student/appointments/${id}` }
+        ]}
+        action={
+          <Button
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate('/student/appointments')}
+          >
+            Back to Appointments
+          </Button>
+        }
+      />
+
+      <Container maxWidth="md">
+        <Card>
+          <CardContent>
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="h6" gutterBottom>
+                Appointment Summary
+              </Typography>
+            </Box>
+            {appointment.status === 'pending' && appointment.is_paid === false && (
+              <Alert severity="warning" sx={{ mb: 3 }}>
+                Payment is pending. Please complete payment to confirm your appointment.
+              </Alert>
+            )}
+            {appointment.status === 'pending' && appointment.is_paid === true && (
+              <Alert severity="info" sx={{ mb: 3 }}>
+                Payment received. Your appointment is awaiting confirmation.
+              </Alert>
+            )}
+
+            <Grid container spacing={3}>
+              <Grid item xs={12} sm={6}>
+                <Typography variant="subtitle2" color="text.secondary">
+                  Mentor
+                </Typography>
+                <Typography variant="body1">
+                  {mentorName}
+                </Typography>
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <Typography variant="subtitle2" color="text.secondary">
+                  Status
+                </Typography>
+                <Chip
+                  label={getStatusLabel(appointment.status)}
+                  color={getStatusColor(appointment.status)}
+                  size="small"
+                  sx={{ mt: 0.5 }}
+                />
+              </Grid>
+
+              {appointment.title && (
+                <Grid item xs={12}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Service
+                  </Typography>
+                  <Typography variant="body1">
+                    {appointment.title}
+                  </Typography>
+                </Grid>
+              )}
+
+              <Grid item xs={12} sm={6}>
+                <Typography variant="subtitle2" color="text.secondary">
+                  Date
+                </Typography>
+                <Typography variant="body1">
+                  {format(scheduledStart, 'EEEE, MMMM dd, yyyy')}
+                </Typography>
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <Typography variant="subtitle2" color="text.secondary">
+                  Time
+                </Typography>
+                <Typography variant="body1">
+                  {format(scheduledStart, 'HH:mm')} – {format(scheduledEnd, 'HH:mm')}
+                </Typography>
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <Typography variant="subtitle2" color="text.secondary">
+                  Duration
+                </Typography>
+                <Typography variant="body1">
+                  {durationMinutes} minutes
+                </Typography>
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <Typography variant="subtitle2" color="text.secondary">
+                  Price
+                </Typography>
+                <Typography variant="body1" color="primary" fontWeight="bold">
+                  {priceDisplay}
+                </Typography>
+              </Grid>
+            </Grid>
+
+            <Box sx={{ mt: 4, display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
+              {appointment.status === 'pending' && appointment.is_paid === false && (
+                <Button
+                  variant="contained"
+                  color="primary"
+                  size="large"
+                  onClick={handleCompletePayment}
+                >
+                  Complete Payment
+                </Button>
+              )}
+              
+              {canReschedule && (
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  size="large"
+                  startIcon={<EditIcon />}
+                  onClick={handleReschedule}
+                >
+                  Reschedule
+                </Button>
+              )}
+              
+              {canCancel && (
+                <Button
+                  variant="outlined"
+                  color="error"
+                  size="large"
+                  startIcon={<CancelIcon />}
+                  onClick={() => setCancelDialogOpen(true)}
+                >
+                  Cancel Appointment
+                </Button>
+              )}
+            </Box>
+          </CardContent>
+        </Card>
+      </Container>
+
+      {/* Cancel Confirmation Dialog */}
+      <Dialog
+        open={cancelDialogOpen}
+        onClose={() => !cancelling && setCancelDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Cancel Appointment</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" gutterBottom>
+            Are you sure you want to cancel this appointment? This action cannot be undone.
+          </Typography>
+          <TextField
+            fullWidth
+            multiline
+            rows={3}
+            label="Reason (Optional)"
+            value={cancelReason}
+            onChange={(e) => setCancelReason(e.target.value)}
+            placeholder="Please let us know why you're cancelling..."
+            sx={{ mt: 2 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => {
+              setCancelDialogOpen(false);
+              setCancelReason('');
+            }}
+            disabled={cancelling}
+          >
+            Keep Appointment
+          </Button>
+          <Button
+            onClick={handleCancel}
+            color="error"
+            variant="contained"
+            disabled={cancelling}
+          >
+            {cancelling ? 'Cancelling...' : 'Cancel Appointment'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
+  );
+};
+
+export default AppointmentDetailPage;

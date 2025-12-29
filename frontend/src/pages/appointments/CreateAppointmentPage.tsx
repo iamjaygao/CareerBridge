@@ -34,14 +34,20 @@ import ErrorAlert from '../../components/common/ErrorAlert';
 import { useNotification } from '../../components/common/NotificationProvider';
 import mentorService from '../../services/api/mentorService';
 import appointmentService from '../../services/api/appointmentService';
+import apiClient from '../../services/api/client';
 import { MentorDetail } from '../../types';
 
 interface CreateAppointmentForm {
   mentor_id: number;
   service_id: number;
   scheduled_date: Date | null;
-  scheduled_time: string;
   user_notes: string;
+}
+
+interface TimeSlot {
+  id: number;
+  start_time: string;
+  end_time: string;
 }
 
 const steps = ['Select Mentor & Service', 'Choose Date & Time', 'Review & Confirm'];
@@ -52,18 +58,22 @@ const CreateAppointmentPage: React.FC = () => {
   const { showSuccess, showError } = useNotification();
   
   const [activeStep, setActiveStep] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [pageLoading, setPageLoading] = useState(false);
+  const [submitLoading, setSubmitLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mentors, setMentors] = useState<any[]>([]);
   const [selectedMentor, setSelectedMentor] = useState<MentorDetail | null>(null);
-  const [availableSlots, setAvailableSlots] = useState<string[]>([]);
+  const [availableSlots, setAvailableSlots] = useState<TimeSlot[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
+  const [selectedSlotId, setSelectedSlotId] = useState<number | null>(null);
+  const selectedSlot = availableSlots.find(s => s.id === selectedSlotId);
+
+  
   
   const [form, setForm] = useState<CreateAppointmentForm>({
     mentor_id: 0,
     service_id: 0,
     scheduled_date: null,
-    scheduled_time: '',
     user_notes: '',
   });
 
@@ -83,23 +93,31 @@ const CreateAppointmentPage: React.FC = () => {
 
   const fetchMentors = async () => {
     try {
-      setLoading(true);
+      setPageLoading(true);
       const mentorsData = await mentorService.getMentors();
       setMentors(mentorsData);
     } catch (err) {
       setError('Failed to load mentors');
       console.error('Mentors fetch error:', err);
     } finally {
-      setLoading(false);
+      setPageLoading(false);
     }
   };
 
-  const fetchAvailableSlots = async (mentorId: number, date: Date) => {
+  const fetchAvailableSlots = async (mentorId: number, date: Date, serviceId?: number) => {
     try {
       setLoadingSlots(true);
       const formattedDate = format(date, 'yyyy-MM-dd');
-      const slots = await mentorService.getMentorAvailability(mentorId, formattedDate);
-      setAvailableSlots(slots.map((slot: any) => slot.start_time));
+      const params: any = {
+        mentor_id: mentorId,
+        date: formattedDate,
+      };
+      if (serviceId) {
+        params.service_id = serviceId;
+      }
+      const response = await apiClient.get('/appointments/time-slots/', { params });
+      const slots = response.data || [];
+      setAvailableSlots(slots);
     } catch (err) {
       console.error('Failed to fetch available slots:', err);
       setAvailableSlots([]);
@@ -116,19 +134,29 @@ const CreateAppointmentPage: React.FC = () => {
       mentor_id: mentorId, 
       service_id: 0,
       scheduled_date: null,
-      scheduled_time: ''
     }));
+    setAvailableSlots([]);
+    setSelectedSlotId(null);
     setActiveStep(0);
   };
 
   const handleServiceChange = (serviceId: number) => {
-    setForm(prev => ({ ...prev, service_id: serviceId }));
+    setForm(prev => {
+      const newForm = { ...prev, service_id: serviceId };
+      setSelectedSlotId(null);
+      if (newForm.scheduled_date && newForm.mentor_id) {
+        fetchAvailableSlots(newForm.mentor_id, newForm.scheduled_date, serviceId);
+      }
+      return newForm;
+    });
   };
 
   const handleDateChange = (date: Date | null) => {
-    setForm(prev => ({ ...prev, scheduled_date: date, scheduled_time: '' }));
+    setForm(prev => ({ ...prev, scheduled_date: date }));
+    setSelectedSlotId(null);
+    setAvailableSlots([]);
     if (date && form.mentor_id) {
-      fetchAvailableSlots(form.mentor_id, date);
+      fetchAvailableSlots(form.mentor_id, date, form.service_id || undefined);
     }
   };
 
@@ -137,7 +165,7 @@ const CreateAppointmentPage: React.FC = () => {
       showError('Please select a mentor and service');
       return;
     }
-    if (activeStep === 1 && (!form.scheduled_date || !form.scheduled_time)) {
+    if (activeStep === 1 && (!form.scheduled_date || !selectedSlotId)) {
       showError('Please select a date and time');
       return;
     }
@@ -149,29 +177,45 @@ const CreateAppointmentPage: React.FC = () => {
   };
 
   const handleSubmit = async () => {
-    if (!form.scheduled_date) return;
-
+    if (!selectedSlotId) {
+      showError('Please select a time slot');
+      return;
+    }
+    
+    if (!form.service_id) {
+      showError('Service is required to book a time slot');
+      return;
+    }
+  
     try {
-      setLoading(true);
-      const appointmentData = {
-        mentor: form.mentor_id,
-        date: format(form.scheduled_date, 'yyyy-MM-dd'),
-        time: form.scheduled_time,
-        notes: form.user_notes,
-      };
-
-      await appointmentService.createAppointment(appointmentData);
-      showSuccess('Appointment created successfully!');
-      navigate('/appointments');
-    } catch (err) {
-      showError('Failed to create appointment');
-      console.error('Appointment creation error:', err);
+      setSubmitLoading(true);
+  
+      const res = await appointmentService.lockSlot({
+        time_slot_id: selectedSlotId,
+        service_id: form.service_id,
+        title: selectedService?.title,
+        description: form.user_notes,
+      });
+  
+      showSuccess('Time slot reserved. Please complete payment.');
+  
+      // Next: go to appointment detail page
+      navigate(`/student/appointments/${res.appointment.id}`);
+    } catch (err: any) {
+      let errorMessage = 'Failed to reserve time slot. Please try again.';
+      if (err?.response?.status === 409) {
+        errorMessage = 'This time slot was just booked by someone else. Please choose another one.';
+      } else if (err?.response?.status === 400) {
+        errorMessage = 'This time slot is no longer available.';
+      }
+      showError(errorMessage);
+      console.error(err);
     } finally {
-      setLoading(false);
+      setSubmitLoading(false);
     }
   };
 
-  if (loading) {
+  if (pageLoading) {
     return <LoadingSpinner />;
   }
 
@@ -186,13 +230,13 @@ const CreateAppointmentPage: React.FC = () => {
       <PageHeader
         title="Create Appointment"
         breadcrumbs={[
-          { label: 'Appointments', path: '/appointments' },
-          { label: 'Create', path: '/appointments/create' }
+          { label: 'Appointments', path: '/student/appointments' },
+          { label: 'Create', path: '/student/appointments/create' }
         ]}
         action={
           <Button
             startIcon={<ArrowBackIcon />}
-            onClick={() => navigate('/appointments')}
+            onClick={() => navigate('/student/appointments')}
           >
             Back to Appointments
           </Button>
@@ -323,25 +367,31 @@ const CreateAppointmentPage: React.FC = () => {
                   <FormControl fullWidth sx={{ mb: 3 }}>
                     <InputLabel>Select Time</InputLabel>
                     <Select
-                      value={form.scheduled_time}
-                      onChange={(e) => setForm(prev => ({ ...prev, scheduled_time: e.target.value }))}
+                      value={selectedSlotId ?? ''}
+                      onChange={(e) => setSelectedSlotId(e.target.value as number)}
                       label="Select Time"
                       disabled={loadingSlots}
                     >
-                      {loadingSlots ? (
+                      {loadingSlots && (
                         <MenuItem disabled>
                           <CircularProgress size={20} sx={{ mr: 1 }} />
                           Loading available slots...
                         </MenuItem>
-                      ) : availableSlots.length === 0 ? (
-                        <MenuItem disabled>No available slots for this date</MenuItem>
-                      ) : (
-                        availableSlots.map((slot) => (
-                          <MenuItem key={slot} value={slot}>
-                            {slot}
-                          </MenuItem>
-                        ))
                       )}
+
+                      {!loadingSlots && availableSlots.length === 0 && (
+                        <MenuItem disabled>No available slots</MenuItem>
+                      )}
+
+                      {availableSlots.map((slot) => {
+                        const startTime = slot.start_time ? format(new Date(slot.start_time), 'HH:mm') : '';
+                        const endTime = slot.end_time ? format(new Date(slot.end_time), 'HH:mm') : '';
+                        return (
+                          <MenuItem key={slot.id} value={slot.id}>
+                            {startTime} – {endTime}
+                          </MenuItem>
+                        );
+                      })}
                     </Select>
                   </FormControl>
                 )}
@@ -376,7 +426,9 @@ const CreateAppointmentPage: React.FC = () => {
                         Mentor
                       </Typography>
                       <Typography variant="body1">
-                        {selectedMentor?.user.first_name} {selectedMentor?.user.last_name}
+                        {selectedMentor
+                          ? `${selectedMentor.user.first_name} ${selectedMentor.user.last_name}`
+                          : ''}
                       </Typography>
                     </Grid>
                     
@@ -402,8 +454,11 @@ const CreateAppointmentPage: React.FC = () => {
                       <Typography variant="subtitle2" color="text.secondary">
                         Time
                       </Typography>
+
                       <Typography variant="body1">
-                        {form.scheduled_time}
+                        {selectedSlot
+                          ? `${selectedSlot.start_time} – ${selectedSlot.end_time}`
+                          : ''}
                       </Typography>
                     </Grid>
                     
@@ -458,10 +513,10 @@ const CreateAppointmentPage: React.FC = () => {
                   <Button
                     variant="contained"
                     onClick={handleSubmit}
-                    disabled={loading}
-                    startIcon={loading ? <CircularProgress size={20} /> : undefined}
+                    disabled={submitLoading}
+                    startIcon={submitLoading ? <CircularProgress size={20} /> : undefined}
                   >
-                    {loading ? 'Creating...' : 'Create Appointment'}
+                    {submitLoading ? 'Reserving...' : 'Confirm & Pay'}
                   </Button>
                 ) : (
                   <Button

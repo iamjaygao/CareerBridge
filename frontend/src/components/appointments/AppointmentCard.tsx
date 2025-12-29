@@ -23,21 +23,20 @@ import {
   Edit as EditIcon,
   Cancel as CancelIcon,
 } from '@mui/icons-material';
-import { useDispatch } from 'react-redux';
-import { AppDispatch } from '../../store';
-import { cancelAppointment, submitFeedback } from '../../store/slices/appointmentSlice';
 import { Appointment } from '../../types';
+import appointmentService from '../../services/api/appointmentService';
 
 interface AppointmentCardProps {
   appointment: Appointment;
   onReschedule?: (appointmentId: number) => void;
+  onCompletePayment?: (appointmentId: number) => void;
 }
 
 const AppointmentCard: React.FC<AppointmentCardProps> = ({
   appointment,
   onReschedule,
+  onCompletePayment,
 }) => {
-  const dispatch = useDispatch<AppDispatch>();
   const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [rating, setRating] = useState<number | null>(null);
@@ -58,35 +57,51 @@ const AppointmentCard: React.FC<AppointmentCardProps> = ({
     }
   };
 
+  const getStatusLabel = (status: string) => {
+    const statusMap: { [key: string]: string } = {
+      'pending': 'Pending',
+      'confirmed': 'Confirmed',
+      'completed': 'Completed',
+      'cancelled': 'Cancelled',
+      'expired': 'Expired',
+      'no_show': 'No Show',
+    };
+    return statusMap[status] || status.charAt(0).toUpperCase() + status.slice(1);
+  };
+
   const handleCancelAppointment = async () => {
     try {
-      await dispatch(cancelAppointment(appointment.id)).unwrap();
+      await appointmentService.lockSlot({
+        appointment_id: appointment.id,
+        action: 'cancel',
+      });
       setCancelDialogOpen(false);
-    } catch (error) {
+      window.location.reload();
+    } catch (error: any) {
       console.error('Failed to cancel appointment:', error);
+      alert(error?.response?.data?.error || 'Failed to cancel appointment');
     }
   };
 
   const handleSubmitFeedback = async () => {
     if (rating) {
       try {
-        await dispatch(
-          submitFeedback({
-            appointmentId: appointment.id,
-            rating,
-            comment,
-          })
-        ).unwrap();
+        await appointmentService.rateAppointment(appointment.id, rating, comment);
         setFeedbackDialogOpen(false);
+        window.location.reload();
       } catch (error) {
-        console.error('Failed to submit feedback:', error);
+        // Error handling is done silently - could be enhanced with notifications
       }
     }
   };
 
+  const isFuture = appointment.scheduled_start 
+    ? new Date(appointment.scheduled_start) > new Date()
+    : false;
+  
   const canJoinMeeting = appointment.status === 'confirmed' && appointment.meeting_link;
-  const canCancel = appointment.status === 'pending' || appointment.status === 'confirmed';
-  const canReschedule = appointment.status === 'pending' || appointment.status === 'confirmed';
+  const canCancel = (appointment.status === 'pending' || appointment.status === 'confirmed') && isFuture;
+  const canReschedule = appointment.status === 'confirmed' && isFuture;
   const canLeaveFeedback = appointment.status === 'completed' && !appointment.user_feedback;
 
   return (
@@ -127,7 +142,7 @@ const AppointmentCard: React.FC<AppointmentCardProps> = ({
               </Typography>
             </Box>
             <Chip
-              label={appointment.status}
+              label={getStatusLabel(appointment.status)}
               color={getStatusColor(appointment.status)}
               size="small"
             />
@@ -137,18 +152,22 @@ const AppointmentCard: React.FC<AppointmentCardProps> = ({
             Appointment on {appointment.date} at {appointment.time}
           </Typography>
 
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-            <ScheduleIcon fontSize="small" sx={{ mr: 1, color: 'action.active' }} />
-            <Typography variant="body2" color="text.secondary">
-              {appointment.scheduled_start
-                ? new Date(appointment.scheduled_start).toLocaleString()
-                : ''}
-              {' - '}
-              {appointment.scheduled_end
-                ? new Date(appointment.scheduled_end).toLocaleTimeString()
-                : ''}
+          {appointment.title && (
+            <Typography variant="body2" color="text.secondary" gutterBottom>
+              {appointment.title}
             </Typography>
-          </Box>
+          )}
+
+          {appointment.scheduled_start && appointment.scheduled_end && (
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+              <ScheduleIcon fontSize="small" sx={{ mr: 1, color: 'action.active' }} />
+              <Typography variant="body2" color="text.secondary">
+                {new Date(appointment.scheduled_start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                {' – '}
+                {new Date(appointment.scheduled_end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </Typography>
+            </Box>
+          )}
 
           {appointment.meeting_platform && (
             <Typography variant="body2" color="text.secondary">
@@ -214,6 +233,17 @@ const AppointmentCard: React.FC<AppointmentCardProps> = ({
               onClick={() => setFeedbackDialogOpen(true)}
             >
               Leave Feedback
+            </Button>
+          )}
+
+          {appointment.status === 'pending' && onCompletePayment && (
+            <Button
+              size="small"
+              variant="contained"
+              color="primary"
+              onClick={() => onCompletePayment(appointment.id)}
+            >
+              Complete Payment
             </Button>
           )}
         </CardActions>

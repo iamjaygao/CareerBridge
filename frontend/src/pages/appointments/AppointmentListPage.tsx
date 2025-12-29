@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
+import { useSelector } from 'react-redux';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Grid,
   Box,
@@ -16,14 +16,16 @@ import {
   Paper,
 } from '@mui/material';
 import { Add as AddIcon, School as SchoolIcon, CheckCircle as CheckCircleIcon } from '@mui/icons-material';
-import { AppDispatch, RootState } from '../../store';
-import { fetchAppointments, setFilters } from '../../store/slices/appointmentSlice';
+import { RootState } from '../../store';
 import PageHeader from '../../components/common/PageHeader';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import ErrorAlert from '../../components/common/ErrorAlert';
 import RegistrationBanner from '../../components/common/RegistrationBanner';
 import AppointmentCard from '../../components/appointments/AppointmentCard';
-import { AppointmentFilters } from '../../types';
+import appointmentService from '../../services/api/appointmentService';
+import apiClient from '../../services/api/client';
+import { Appointment } from '../../types';
+import { format } from 'date-fns';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -45,10 +47,12 @@ const TabPanel: React.FC<TabPanelProps> = ({ children, value, index }) => {
 };
 
 const AppointmentListPage: React.FC = () => {
-  const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
-  const { appointments, loading, error, filters } = useSelector((state: RootState) => state.appointments);
+  const location = useLocation();
   const { isAuthenticated } = useSelector((state: RootState) => state.auth);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [tabValue, setTabValue] = useState(0);
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
@@ -60,26 +64,87 @@ const AppointmentListPage: React.FC = () => {
     severity: 'success',
   });
   const [page, setPage] = useState(1);
+  const [filters, setFilters] = useState<{ sort_by?: string; status?: string }>({});
 
   useEffect(() => {
-    // Only fetch appointments if user is authenticated
-    // For unauthenticated users, show the introduction content only
     if (isAuthenticated) {
-      const defaultFilters: AppointmentFilters = {
-        status: tabValue === 0 ? 'upcoming' : 'past',
-        page,
-      };
-      dispatch(setFilters(defaultFilters));
-      dispatch(fetchAppointments(defaultFilters));
+      fetchAppointments();
     }
-  }, [dispatch, tabValue, page, isAuthenticated]);
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      return;
+    }
+
+    const params = new URLSearchParams(location.search);
+    const paymentStatus = params.get('payment');
+    const sessionId = params.get('session_id');
+    const paymentIntentId = params.get('payment_intent') || params.get('payment_intent_id');
+
+    if (paymentStatus === 'success' && (sessionId || paymentIntentId)) {
+      (async () => {
+        try {
+          await apiClient.post('/payments/reconcile/', {
+            session_id: sessionId,
+            payment_intent_id: paymentIntentId,
+          });
+          await fetchAppointments();
+        } catch (err: any) {
+          console.error('Payment reconcile failed:', err);
+        } finally {
+          navigate('/student/appointments', { replace: true });
+        }
+      })();
+    }
+  }, [isAuthenticated, location.search, navigate]);
+
+  const fetchAppointments = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await appointmentService.getAppointments();
+      const data = Array.isArray(response) ? response : ((response as any).results || []);
+      
+      // Transform backend data to match Appointment interface
+      const transformedAppointments: Appointment[] = data.map((apt: any) => {
+        const scheduledStart = new Date(apt.scheduled_start);
+        const scheduledEnd = new Date(apt.scheduled_end);
+        
+        return {
+          id: apt.id,
+          mentor: apt.mentor,
+          user: apt.user,
+          date: format(scheduledStart, 'yyyy-MM-dd'),
+          time: format(scheduledStart, 'HH:mm'),
+          status: apt.status,
+          notes: apt.description,
+          meeting_link: apt.meeting_link,
+          meeting_platform: apt.meeting_platform,
+          user_feedback: apt.user_feedback,
+          mentor_feedback: apt.mentor_feedback,
+          user_rating: apt.user_rating,
+          scheduled_start: apt.scheduled_start,
+          scheduled_end: apt.scheduled_end,
+          title: apt.title,
+        };
+      });
+      
+      setAppointments(transformedAppointments);
+    } catch (err: any) {
+      setError(err?.response?.data?.error || 'Failed to load appointments');
+      console.error('Failed to fetch appointments:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
   };
 
   const handleReschedule = (appointmentId: number) => {
-    navigate(`/appointments/${appointmentId}/reschedule`);
+    navigate(`/student/appointments/${appointmentId}/reschedule`);
   };
 
   const handleNewAppointment = () => {
@@ -94,6 +159,10 @@ const AppointmentListPage: React.FC = () => {
     setSnackbar({ ...snackbar, open: false });
   };
 
+  const handleCompletePayment = (appointmentId: number) => {
+    navigate(`/appointments/${appointmentId}/pay`);
+  };
+
   const guidanceBenefits: string[] = [
     'Schedule one-on-one sessions with expert mentors',
     'Get personalized career advice tailored to your goals',
@@ -102,12 +171,23 @@ const AppointmentListPage: React.FC = () => {
     'Build a network of professional connections',
   ];
 
-  const upcomingAppointments = appointments.filter(
-    (apt) => apt.status === 'confirmed' || apt.status === 'pending'
-  );
-  const pastAppointments = appointments.filter(
-    (apt) => apt.status === 'completed' || apt.status === 'cancelled'
-  );
+  // Classify appointments based on status and scheduled_start time
+  const now = new Date();
+  const upcomingAppointments = appointments.filter((apt) => {
+    if (!apt.scheduled_start) return false;
+    const appointmentTime = new Date(apt.scheduled_start);
+    return (
+      (apt.status === 'pending' || apt.status === 'confirmed') &&
+      appointmentTime > now
+    );
+  });
+  
+  const pastAppointments = appointments.filter((apt) => {
+    if (!apt.scheduled_start) return false;
+    const appointmentTime = new Date(apt.scheduled_start);
+    const isUpcoming = (apt.status === 'pending' || apt.status === 'confirmed') && appointmentTime > now;
+    return !isUpcoming;
+  });
 
   // For unauthenticated users, don't show loading or error states
   // They should see the introduction content
@@ -190,7 +270,7 @@ const AppointmentListPage: React.FC = () => {
                 sx={{ width: 200 }}
                 value={filters.sort_by || 'date'}
                 onChange={(e) =>
-                  dispatch(setFilters({ ...filters, sort_by: e.target.value }))
+                  setFilters({ ...filters, sort_by: e.target.value })
                 }
               >
                 <MenuItem value="date">Date</MenuItem>
@@ -206,7 +286,7 @@ const AppointmentListPage: React.FC = () => {
                   sx={{ width: 200 }}
                   value={filters.status || 'all'}
                   onChange={(e) =>
-                    dispatch(setFilters({ ...filters, status: e.target.value }))
+                    setFilters({ ...filters, status: e.target.value })
                   }
                 >
                   <MenuItem value="all">All</MenuItem>
@@ -223,8 +303,9 @@ const AppointmentListPage: React.FC = () => {
                 upcomingAppointments.map((appointment) => (
                   <Grid item xs={12} md={6} key={appointment.id}>
                     <AppointmentCard
-                      appointment={appointment as any}
+                      appointment={appointment}
                       onReschedule={handleReschedule}
+                      onCompletePayment={handleCompletePayment}
                     />
                   </Grid>
                 ))
@@ -268,7 +349,7 @@ const AppointmentListPage: React.FC = () => {
               {pastAppointments.length > 0 ? (
                 pastAppointments.map((appointment) => (
                   <Grid item xs={12} md={6} key={appointment.id}>
-                    <AppointmentCard appointment={appointment as any} />
+                    <AppointmentCard appointment={appointment} />
                   </Grid>
                 ))
               ) : (

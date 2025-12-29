@@ -6,6 +6,8 @@ export interface Resume {
   file: string;
   status: string;
   created_at: string;
+  uploaded_at?: string;
+  updated_at?: string;
   analyzed_at?: string;
 }
 
@@ -74,7 +76,8 @@ class ResumeService {
    */
   async analyzeResume(id: number, industry?: string, jobTitle?: string): Promise<any> {
     try {
-      const response = await apiClient.post(`/resumes/${id}/analyze/`, {
+      const response = await apiClient.post('/resumes/analyze/', {
+        resume_id: id,
         industry,
         job_title: jobTitle,
       });
@@ -90,7 +93,7 @@ class ResumeService {
    */
   async getResumeAnalysis(id: number): Promise<any> {
     try {
-      const response = await apiClient.get(`/resumes/${id}/analysis/`);
+      const response = await apiClient.get(`/resumes/analysis/${id}/`);
       return response.data;
     } catch (error) {
       console.error('Failed to get resume analysis:', error);
@@ -110,10 +113,68 @@ class ResumeService {
    */
   async getFeedback(id: number): Promise<any> {
     try {
-      const response = await apiClient.get(`/resumes/${id}/feedback/`);
+      const response = await apiClient.get(`/resumes/feedback/${id}/`);
       return response.data;
     } catch (error) {
       console.error('Failed to get resume feedback:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get job recommendations for a resume
+   */
+  async getJobRecommendations(resumeId: number, limit = 3): Promise<any[]> {
+    try {
+      const response = await apiClient.get('/resumes/recommendations/', {
+        params: { resume_id: resumeId, limit },
+      });
+      return response.data.recommendations || response.data.results || response.data || [];
+    } catch (error) {
+      console.error('Failed to get job recommendations:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get trending jobs data
+   */
+  async getTrendingJobs(): Promise<any> {
+    try {
+      const response = await apiClient.get('/resumes/jobs/trending/');
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get trending jobs:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get salary market data
+   */
+  async getSalaryData(jobTitle: string, location?: string): Promise<any> {
+    try {
+      const response = await apiClient.get('/resumes/market/salary/', {
+        params: { job_title: jobTitle, location },
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get salary data:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get market skill demand data
+   */
+  async getSkillDemand(jobTitle: string, location?: string): Promise<any> {
+    try {
+      const response = await apiClient.get('/resumes/market/skills/', {
+        params: { job_title: jobTitle, location },
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get skill demand:', error);
       throw error;
     }
   }
@@ -136,4 +197,3 @@ class ResumeService {
 
 const resumeService = new ResumeService();
 export default resumeService;
-

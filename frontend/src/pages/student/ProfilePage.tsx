@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useSelector } from 'react-redux';
+import React, { useState, useEffect, useRef } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
 import {
   Box,
   Typography,
@@ -9,45 +9,147 @@ import {
   Button,
   Grid,
   Avatar,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Switch,
-  FormControlLabel,
   Divider,
+  Alert,
 } from '@mui/material';
 import {
   Save as SaveIcon,
   Upload as UploadIcon,
+  Lock as LockIcon,
+  VerifiedUser as VerifiedUserIcon,
 } from '@mui/icons-material';
 import { RootState } from '../../store';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import authService from '../../services/auth/authService';
+import { fetchUserProfile } from '../../store/slices/authSlice';
 
 const StudentProfilePage: React.FC = () => {
+  const dispatch = useDispatch();
   const { user } = useSelector((state: RootState) => state.auth);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [verifyingEmail, setVerifyingEmail] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [usernameStatus, setUsernameStatus] = useState<{ can_change: boolean; days_left: number } | null>(null);
   const [formData, setFormData] = useState({
-    firstName: user?.first_name || '',
-    lastName: user?.last_name || '',
+    username: user?.username || '',
     email: user?.email || '',
-    education: '',
-    careerGoal: '',
-    preferredIndustry: '',
-    timezone: 'America/New_York',
-    emailNotifications: true,
-    smsNotifications: false,
+    first_name: user?.first_name || '',
+    last_name: user?.last_name || '',
+    phone: user?.phone || '',
+    location: user?.location || '',
   });
+  const [passwordForm, setPasswordForm] = useState({
+    old_password: '',
+    new_password: '',
+    new_password_confirm: '',
+  });
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    setTimeout(() => {
-      setLoading(false);
-    }, 500);
+    const hydrate = async () => {
+      try {
+        const status = await authService.getUsernameChangeStatus();
+        setUsernameStatus(status);
+      } catch {
+        setUsernameStatus(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    hydrate();
   }, []);
 
-  const handleSave = () => {
-    // Placeholder for save functionality
-    alert('Profile saved successfully!');
+  useEffect(() => {
+    setFormData({
+      username: user?.username || '',
+      email: user?.email || '',
+      first_name: user?.first_name || '',
+      last_name: user?.last_name || '',
+      phone: user?.phone || '',
+      location: user?.location || '',
+    });
+  }, [user]);
+
+  const handleProfileSave = async () => {
+    if (!user) return;
+    if (usernameStatus && !usernameStatus.can_change && formData.username !== user.username) {
+      setErrorMessage(`Username can be changed in ${usernameStatus.days_left} days.`);
+      return;
+    }
+    setSaving(true);
+    setSuccessMessage(null);
+    setErrorMessage(null);
+    try {
+      await authService.updateProfile({
+        username: formData.username,
+        email: formData.email,
+        first_name: formData.first_name,
+        last_name: formData.last_name,
+        phone: formData.phone,
+        location: formData.location,
+      });
+      await dispatch(fetchUserProfile() as any);
+      setSuccessMessage('Profile updated.');
+    } catch (error: any) {
+      setErrorMessage(error?.response?.data?.detail || 'Failed to update profile.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setAvatarUploading(true);
+    setSuccessMessage(null);
+    setErrorMessage(null);
+    try {
+      await authService.uploadAvatar(file);
+      await dispatch(fetchUserProfile() as any);
+      setSuccessMessage('Avatar updated.');
+    } catch (error: any) {
+      setErrorMessage(error?.response?.data?.error || 'Failed to upload avatar.');
+    } finally {
+      setAvatarUploading(false);
+      if (avatarInputRef.current) {
+        avatarInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handlePasswordSave = async () => {
+    setPasswordSaving(true);
+    setSuccessMessage(null);
+    setErrorMessage(null);
+    try {
+      await authService.changePassword(passwordForm);
+      setPasswordForm({ old_password: '', new_password: '', new_password_confirm: '' });
+      setSuccessMessage('Password updated.');
+    } catch (error: any) {
+      setErrorMessage(error?.response?.data?.detail || error?.response?.data?.non_field_errors?.[0] || 'Failed to update password.');
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (!user?.email) return;
+    setVerifyingEmail(true);
+    setSuccessMessage(null);
+    setErrorMessage(null);
+    try {
+      await authService.resendVerification(user.email);
+      setSuccessMessage('Verification email sent. Please check your inbox.');
+    } catch (error: any) {
+      setErrorMessage(error?.response?.data?.email?.[0] || 'Failed to resend verification email.');
+    } finally {
+      setVerifyingEmail(false);
+    }
   };
 
   if (loading) {
@@ -59,16 +161,26 @@ const StudentProfilePage: React.FC = () => {
       {/* Page Header */}
       <Box sx={{ mb: 4 }}>
         <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
-          Profile Settings
+          Profile
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Manage your personal information and preferences
+          Manage your personal information, security, and payouts
         </Typography>
+        {successMessage && (
+          <Alert severity="success" sx={{ mt: 2 }}>
+            {successMessage}
+          </Alert>
+        )}
+        {errorMessage && (
+          <Alert severity="error" sx={{ mt: 2 }}>
+            {errorMessage}
+          </Alert>
+        )}
       </Box>
 
       <Grid container spacing={3}>
-        {/* Profile Picture */}
-        <Grid item xs={12} md={4}>
+        {/* Profile Overview */}
+        <Grid item xs={12} md={4} lg={3}>
           <Card>
             <CardContent sx={{ textAlign: 'center' }}>
               <Avatar
@@ -84,172 +196,210 @@ const StudentProfilePage: React.FC = () => {
               >
                 {user?.first_name?.[0] || user?.username?.[0] || 'U'}
               </Avatar>
+              <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                {user?.first_name || user?.last_name ? `${user?.first_name || ''} ${user?.last_name || ''}`.trim() : user?.username}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                {user?.role || 'member'}
+              </Typography>
               <Button
                 variant="outlined"
                 startIcon={<UploadIcon />}
                 fullWidth
+                onClick={() => avatarInputRef.current?.click()}
+                disabled={avatarUploading}
               >
-                Upload Photo
+                {avatarUploading ? 'Uploading...' : 'Upload Photo'}
               </Button>
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarUpload}
+                style={{ display: 'none' }}
+              />
             </CardContent>
           </Card>
         </Grid>
 
-        {/* Personal Information */}
-        <Grid item xs={12} md={8}>
+        {/* Account Details */}
+        <Grid item xs={12} md={8} lg={9}>
           <Card>
             <CardContent>
               <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>
-                Personal Information
+                Account Details
               </Typography>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
                   <TextField
                     fullWidth
-                    label="First Name"
-                    value={formData.firstName}
-                    onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                    label="Username"
+                    value={formData.username}
+                    onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                    helperText={
+                      usernameStatus && !usernameStatus.can_change
+                        ? `Username change available in ${usernameStatus.days_left} days`
+                        : 'Shown publicly'
+                    }
                   />
                 </Grid>
                 <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    label="Last Name"
-                    value={formData.lastName}
-                    onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                  />
-                </Grid>
-                <Grid item xs={12}>
                   <TextField
                     fullWidth
                     label="Email"
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  />
-                </Grid>
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    label="Education"
-                    placeholder="e.g., Bachelor's in Computer Science, MIT"
-                    value={formData.education}
-                    onChange={(e) => setFormData({ ...formData, education: e.target.value })}
-                  />
-                </Grid>
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    multiline
-                    rows={3}
-                    label="Career Goal"
-                    placeholder="Describe your career aspirations..."
-                    value={formData.careerGoal}
-                    onChange={(e) => setFormData({ ...formData, careerGoal: e.target.value })}
+                    helperText="Used for login and notifications"
                   />
                 </Grid>
                 <Grid item xs={12} sm={6}>
-                  <FormControl fullWidth>
-                    <InputLabel>Preferred Industry</InputLabel>
-                    <Select
-                      value={formData.preferredIndustry}
-                      label="Preferred Industry"
-                      onChange={(e) => setFormData({ ...formData, preferredIndustry: e.target.value })}
-                    >
-                      <MenuItem value="">Select Industry</MenuItem>
-                      <MenuItem value="software">Software Engineering</MenuItem>
-                      <MenuItem value="data">Data Science</MenuItem>
-                      <MenuItem value="product">Product Management</MenuItem>
-                      <MenuItem value="design">Design</MenuItem>
-                      <MenuItem value="marketing">Marketing</MenuItem>
-                      <MenuItem value="finance">Finance</MenuItem>
-                    </Select>
-                  </FormControl>
+                  <TextField
+                    fullWidth
+                    label="First Name"
+                    value={formData.first_name}
+                    onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+                  />
                 </Grid>
                 <Grid item xs={12} sm={6}>
-                  <FormControl fullWidth>
-                    <InputLabel>Timezone</InputLabel>
-                    <Select
-                      value={formData.timezone}
-                      label="Timezone"
-                      onChange={(e) => setFormData({ ...formData, timezone: e.target.value })}
-                    >
-                      <MenuItem value="America/New_York">Eastern Time (ET)</MenuItem>
-                      <MenuItem value="America/Chicago">Central Time (CT)</MenuItem>
-                      <MenuItem value="America/Denver">Mountain Time (MT)</MenuItem>
-                      <MenuItem value="America/Los_Angeles">Pacific Time (PT)</MenuItem>
-                      <MenuItem value="UTC">UTC</MenuItem>
-                    </Select>
-                  </FormControl>
+                  <TextField
+                    fullWidth
+                    label="Last Name"
+                    value={formData.last_name}
+                    onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+                  />
                 </Grid>
               </Grid>
             </CardContent>
           </Card>
         </Grid>
 
-        {/* Resume Upload */}
+        {/* Contact & Verification */}
         <Grid item xs={12}>
           <Card>
             <CardContent>
               <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
-                Resume
+                Contact & Verification
               </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Button
-                  variant="outlined"
-                  startIcon={<UploadIcon />}
-                >
-                  Upload Resume
-                </Button>
-                <Typography variant="body2" color="text.secondary">
-                  PDF, DOC, or DOCX (max 5MB)
-                </Typography>
-              </Box>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    label="Email Status"
+                    value={user?.email_verified ? 'Verified' : 'Unverified'}
+                    disabled
+                    helperText={user?.email_verified ? 'Your email is verified.' : 'Please verify your email.'}
+                  />
+                  {!user?.email_verified && (
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      sx={{ mt: 1 }}
+                      onClick={handleResendVerification}
+                      disabled={verifyingEmail}
+                    >
+                      {verifyingEmail ? 'Sending...' : 'Resend Verification Email'}
+                    </Button>
+                  )}
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    label="Phone Number"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    helperText="Add a number for account recovery"
+                  />
+                  <Button variant="outlined" size="small" sx={{ mt: 1 }} disabled>
+                    Verify Phone (coming soon)
+                  </Button>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    label="Location"
+                    value={formData.location}
+                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                    helperText="City, region, or timezone"
+                  />
+                </Grid>
+                <Grid item xs={12}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <VerifiedUserIcon color="action" />
+                    <Typography variant="body2" color="text.secondary">
+                      Email verification and identity checks will appear here.
+                    </Typography>
+                  </Box>
+                </Grid>
+              </Grid>
             </CardContent>
           </Card>
         </Grid>
 
-        {/* Notification Preferences */}
-        <Grid item xs={12}>
+        {/* Security */}
+        <Grid item xs={12} md={6}>
           <Card>
             <CardContent>
-              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
-                Notification Preferences
-              </Typography>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={formData.emailNotifications}
-                    onChange={(e) => setFormData({ ...formData, emailNotifications: e.target.checked })}
-                  />
-                }
-                label="Email Notifications"
-              />
-              <Box sx={{ mt: 1 }}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={formData.smsNotifications}
-                      onChange={(e) => setFormData({ ...formData, smsNotifications: e.target.checked })}
-                    />
-                  }
-                  label="SMS Notifications"
-                />
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                <LockIcon color="action" />
+                <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                  Security
+                </Typography>
               </Box>
+              <Grid container spacing={2}>
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    label="Current Password"
+                    type="password"
+                    value={passwordForm.old_password}
+                    onChange={(e) => setPasswordForm({ ...passwordForm, old_password: e.target.value })}
+                    helperText="Use at least 8 characters with a mix of letters and numbers."
+                  />
+                </Grid>
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    label="New Password"
+                    type="password"
+                    value={passwordForm.new_password}
+                    onChange={(e) => setPasswordForm({ ...passwordForm, new_password: e.target.value })}
+                    helperText="Avoid reusing old passwords."
+                  />
+                </Grid>
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    label="Confirm New Password"
+                    type="password"
+                    value={passwordForm.new_password_confirm}
+                    onChange={(e) => setPasswordForm({ ...passwordForm, new_password_confirm: e.target.value })}
+                  />
+                </Grid>
+                <Grid item xs={12}>
+                  <Button
+                    variant="outlined"
+                    fullWidth
+                    onClick={handlePasswordSave}
+                    disabled={passwordSaving}
+                  >
+                    {passwordSaving ? 'Saving...' : 'Update Password'}
+                  </Button>
+                </Grid>
+              </Grid>
             </CardContent>
           </Card>
         </Grid>
 
         {/* Save Button */}
         <Grid item xs={12}>
+          <Divider sx={{ mb: 2 }} />
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
-            <Button variant="outlined">
-              Cancel
-            </Button>
             <Button
               variant="contained"
               startIcon={<SaveIcon />}
-              onClick={handleSave}
+              onClick={handleProfileSave}
+              disabled={saving}
               sx={{
                 background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                 '&:hover': {
@@ -257,7 +407,7 @@ const StudentProfilePage: React.FC = () => {
                 },
               }}
             >
-              Save Changes
+              {saving ? 'Saving...' : 'Save Changes'}
             </Button>
           </Box>
         </Grid>
@@ -267,4 +417,3 @@ const StudentProfilePage: React.FC = () => {
 };
 
 export default StudentProfilePage;
-
