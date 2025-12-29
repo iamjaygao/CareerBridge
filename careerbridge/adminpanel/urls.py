@@ -29,6 +29,7 @@ urlpatterns = [
     
     # User management
     path('users/', views.UserManagementView.as_view(), name='user-management'),
+    path('users/search/', views.UserLookupView.as_view(), name='user-lookup'),
     
     # Mentor management
     path('mentors/', views.MentorManagementView.as_view(), name='mentor-management'),
@@ -38,6 +39,7 @@ urlpatterns = [
     
     # Appointments management
     path('appointments/', views.AppointmentManagementView.as_view(), name='appointment-management'),
+    path('appointments/<int:pk>/', views.AppointmentManagementDetailView.as_view(), name='appointment-management-detail'),
     
     # Jobs management
     path('jobs/stats/', views.JobStatsView.as_view(), name='job-stats'),
@@ -55,7 +57,12 @@ urlpatterns = [
     
     # Content management
     path('content/', views.ContentListView.as_view(), name='content-list'),
+    path('content/public/', views.ContentPublicListView.as_view(), name='content-public-list'),
     path('content/<int:content_id>/', views.ContentDetailView.as_view(), name='content-detail'),
+
+    # Support tickets
+    path('support/', views.SupportTicketListView.as_view(), name='support-ticket-list'),
+    path('support/<int:pk>/', views.SupportTicketDetailView.as_view(), name='support-ticket-detail'),
     
     # Promotions management
     path('promotions/', views.PromotionListView.as_view(), name='promotion-list'),

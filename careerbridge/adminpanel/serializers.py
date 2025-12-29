@@ -1,6 +1,13 @@
 from rest_framework import serializers
 from .models import (
-    SystemStats, AdminAction, SystemConfig, DataExport, ContentModeration, SystemSettings
+    SystemStats,
+    AdminAction,
+    SystemConfig,
+    DataExport,
+    ContentModeration,
+    SystemSettings,
+    SupportTicket,
+    ContentItem,
 )
 from django.utils import timezone
 
@@ -139,6 +146,61 @@ class ContentModerationUpdateSerializer(serializers.ModelSerializer):
         instance.reviewed_by = self.context['request'].user
         instance.reviewed_at = timezone.now()
         return super().update(instance, validated_data)
+
+
+class ContentItemSerializer(serializers.ModelSerializer):
+    """Content item serializer"""
+
+    author_name = serializers.CharField(source='author.username', read_only=True)
+
+    class Meta:
+        model = ContentItem
+        fields = [
+            'id',
+            'title',
+            'summary',
+            'body',
+            'cover_image_url',
+            'content_type',
+            'status',
+            'author',
+            'author_name',
+            'views',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at', 'author_name']
+
+
+class SupportTicketSerializer(serializers.ModelSerializer):
+    """Support ticket serializer"""
+
+    user_name = serializers.CharField(source='user.username', read_only=True)
+    user_email = serializers.EmailField(source='user.email', read_only=True)
+    assigned_staff_name = serializers.CharField(
+        source='assigned_staff.username',
+        read_only=True,
+        allow_null=True
+    )
+
+    class Meta:
+        model = SupportTicket
+        fields = [
+            'id',
+            'user',
+            'user_name',
+            'user_email',
+            'issue',
+            'description',
+            'staff_notes',
+            'priority',
+            'status',
+            'assigned_staff',
+            'assigned_staff_name',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at', 'user_name', 'user_email', 'assigned_staff_name']
 
 class DashboardStatsSerializer(serializers.Serializer):
     """Dashboard statistics serializer - aggregated metrics only, no user data"""

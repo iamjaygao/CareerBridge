@@ -16,7 +16,13 @@ from django.core.cache import cache
 from django.db import connection
 
 from .models import (
-    SystemStats, AdminAction, SystemConfig, DataExport, ContentModeration, SystemSettings
+    SystemStats,
+    AdminAction,
+    SystemConfig,
+    DataExport,
+    ContentModeration,
+    SystemSettings,
+    ContentItem,
 )
 from .serializers import (
     SystemStatsSerializer, AdminActionSerializer, SystemConfigSerializer,
@@ -24,8 +30,11 @@ from .serializers import (
     ContentModerationSerializer, ContentModerationUpdateSerializer,
     DashboardStatsSerializer, UserManagementSerializer, MentorApplicationsSerializer,
     MentorManagementSerializer, AppointmentManagementSerializer, SystemHealthSerializer,
+    SupportTicketSerializer,
+    ContentItemSerializer,
     SystemSettingsSerializer
 )
+from appointments.serializers import AppointmentUpdateSerializer
 from .permissions import IsAdminOrStaff, IsAdminUser, IsAdminOrSuperAdmin, user_has_role
 from .permissions_system import IsSuperAdminOnly
 
@@ -633,9 +642,7 @@ class AdminDashboardView(generics.GenericAPIView):
             'error_rate': stats['error_rate'],
             'uptime_percentage': stats['uptime_percentage'],
         }
-        
-        serializer = DashboardStatsSerializer(instance=data)
-        return Response(serializer.data)
+        return Response(data)
 
 class SystemStatsListView(generics.ListCreateAPIView):
     """System statistics list"""
@@ -1032,9 +1039,48 @@ class UserManagementView(generics.GenericAPIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
+
+class UserLookupView(generics.GenericAPIView):
+    """Staff-friendly user lookup for support workflows."""
+    permission_classes = [IsAdminOrStaff]
+
+    def get(self, request):
+        User = get_user_model()
+        search_term = (request.query_params.get('search') or '').strip()
+        limit_param = request.query_params.get('limit')
+
+        try:
+            limit = int(limit_param) if limit_param else 10
+        except ValueError:
+            limit = 10
+
+        limit = max(1, min(limit, 50))
+        users = User.objects.all()
+
+        if search_term:
+            users = users.filter(
+                Q(username__icontains=search_term) |
+                Q(email__icontains=search_term) |
+                Q(first_name__icontains=search_term) |
+                Q(last_name__icontains=search_term)
+            )
+
+        users = users.order_by('id')[:limit]
+        results = [
+            {
+                'id': user.id,
+                'username': user.username or '',
+                'email': user.email or '',
+                'role': user.role or 'student',
+                'name': user.get_full_name() or user.username or user.email or 'User',
+            }
+            for user in users
+        ]
+        return Response(results)
+
 class MentorApplicationsView(generics.GenericAPIView):
     """Mentor applications management"""
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAdminOrStaff]
     
     def get(self, request):
         """Get mentor applications list"""
@@ -1181,7 +1227,7 @@ class MentorApplicationsView(generics.GenericAPIView):
 
 class MentorApplicationApproveView(APIView):
     """Approve mentor application - separate endpoint"""
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAdminOrStaff]
     
     def post(self, request, application_id):
         """Approve mentor application"""
@@ -1227,7 +1273,7 @@ class MentorApplicationApproveView(APIView):
 
 class MentorApplicationRejectView(APIView):
     """Reject mentor application - separate endpoint"""
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAdminOrStaff]
     
     def post(self, request, application_id):
         """Reject mentor application"""
@@ -1442,7 +1488,7 @@ class PingView(generics.GenericAPIView):
 
 class AppointmentManagementView(generics.GenericAPIView):
     """Appointment management for admin"""
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAdminOrStaff]
     
     def get(self, request):
         """Get all appointments with filters"""
@@ -1469,12 +1515,93 @@ class AppointmentManagementView(generics.GenericAPIView):
         if date_to:
             queryset = queryset.filter(scheduled_start__lte=date_to)
         
-        appointments = queryset.values(
-            'id', 'user__username', 'mentor__user__username', 'title', 
-            'status', 'scheduled_start', 'price', 'is_paid'
-        )
-        
+        appointments = [
+            {
+                'appointment_id': appointment.id,
+                'user_username': appointment.user.username,
+                'mentor_name': appointment.mentor.user.get_full_name() or appointment.mentor.user.username,
+                'title': appointment.title,
+                'status': appointment.status,
+                'scheduled_start': appointment.scheduled_start,
+                'price': appointment.price,
+                'is_paid': appointment.is_paid,
+            }
+            for appointment in queryset
+        ]
+
         serializer = AppointmentManagementSerializer(instance=appointments, many=True)
+        return Response(serializer.data)
+
+
+class AppointmentManagementDetailView(generics.RetrieveUpdateAPIView):
+    """Update appointment details for staff/admin."""
+    permission_classes = [IsAdminOrStaff]
+    serializer_class = AppointmentUpdateSerializer
+
+    def get_queryset(self):
+        from appointments.models import Appointment
+
+        return Appointment.objects.select_related('user', 'mentor__user', 'time_slot').all()
+
+    def update(self, request, *args, **kwargs):
+        appointment = self.get_object()
+        old_status = appointment.status
+        data = request.data.copy()
+        cancel_reason = data.pop('cancellation_reason', '') or data.pop('cancel_reason', '')
+        serializer = self.get_serializer(appointment, data=data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        appointment.refresh_from_db()
+
+        if appointment.status == 'cancelled' and old_status != 'cancelled':
+            appointment.cancelled_by = 'staff'
+            if cancel_reason:
+                appointment.cancellation_reason = cancel_reason
+            appointment.save(update_fields=['cancelled_by', 'cancellation_reason'])
+
+        if appointment.time_slot:
+            from appointments.models import Appointment as AppointmentModel
+
+            slot = appointment.time_slot
+            booked_count = AppointmentModel.objects.filter(
+                time_slot=slot,
+                status__in=['confirmed', 'completed']
+            ).count()
+            if slot.current_bookings != booked_count:
+                slot.current_bookings = booked_count
+                slot.save(update_fields=['current_bookings'])
+
+        if appointment.status in ['confirmed', 'cancelled'] and appointment.status != old_status:
+            from notifications.services.dispatcher import notify
+            from notifications.services.rules import NotificationType
+
+            mentor_name = appointment.mentor.user.get_full_name() or appointment.mentor.user.username
+            student_name = appointment.user.get_full_name() or appointment.user.username
+            appointment_details = appointment.get_notification_details()
+            priority = 'high' if appointment.status == 'cancelled' else 'normal'
+            status_text = appointment.get_status_display()
+
+            event_type = (
+                NotificationType.APPOINTMENT_CANCELLED
+                if appointment.status == 'cancelled'
+                else NotificationType.APPOINTMENT_CONFIRMED
+            )
+            notify(
+                event_type,
+                context={
+                    'appointment_id': appointment.id,
+                    'student': appointment.user,
+                    'mentor': appointment.mentor.user,
+                },
+                title='Appointment status updated',
+                message=(
+                    f'Appointment ({appointment_details}) between {student_name} and {mentor_name} '
+                    f'is now {status_text}.'
+                ),
+                priority=priority,
+                related_appointment=appointment,
+            )
+
         return Response(serializer.data)
 
 
@@ -1590,17 +1717,21 @@ class PayoutListView(generics.GenericAPIView):
         """Get payouts list - calculated from completed payments"""
         from payments.models import Payment
         from mentors.models import MentorProfile
+        from payments.services import refresh_payout_status
         
         # Get completed payments grouped by mentor
-        payments = Payment.objects.filter(
-            status='completed'
-        ).select_related('appointment__mentor').values(
-            'appointment__mentor_id'
-        ).annotate(
+        completed_payments = Payment.objects.filter(status='completed').select_related('appointment__mentor')
+        for payment in completed_payments:
+            refresh_payout_status(payment)
+
+        payments = completed_payments.values('appointment__mentor_id').annotate(
             total_amount=Sum('amount'),
             mentor_earnings=Sum('mentor_earnings'),
             platform_fee=Sum('platform_fee'),
-            payment_count=Count('id')
+            payment_count=Count('id'),
+            pending_earnings=Sum('mentor_earnings', filter=Q(payout_status='pending')),
+            ready_earnings=Sum('mentor_earnings', filter=Q(payout_status='ready')),
+            failed_earnings=Sum('mentor_earnings', filter=Q(payout_status='failed')),
         )
         
         payouts = []
@@ -1609,6 +1740,9 @@ class PayoutListView(generics.GenericAPIView):
             if mentor_id:
                 try:
                     mentor = MentorProfile.objects.select_related('user').get(id=mentor_id)
+                    status = 'pending'
+                    if (p['ready_earnings'] or 0) > 0:
+                        status = 'ready'
                     payouts.append({
                         'id': mentor_id,  # Using mentor_id as payout id
                         'mentor': {
@@ -1619,8 +1753,12 @@ class PayoutListView(generics.GenericAPIView):
                         'total_amount': float(p['total_amount'] or 0),
                         'mentor_earnings': float(p['mentor_earnings'] or 0),
                         'platform_fee': float(p['platform_fee'] or 0),
+                        'pending_earnings': float(p['pending_earnings'] or 0),
+                        'ready_earnings': float(p['ready_earnings'] or 0),
+                        'failed_earnings': float(p['failed_earnings'] or 0),
                         'payment_count': p['payment_count'],
-                        'status': 'pending',  # All payouts start as pending
+                        'status': status,
+                        'payouts_enabled': bool(mentor.payouts_enabled),
                         'created_at': timezone.now().isoformat()
                     })
                 except MentorProfile.DoesNotExist:
@@ -1636,11 +1774,29 @@ class PayoutApproveView(APIView):
     def post(self, request, payout_id):
         """Approve payout"""
         notes = request.data.get('notes', '')
-        
-        # TODO: Implement actual payout approval logic
+        from payments.models import Payment
+        from payments.services import execute_payout
+
+        payments = Payment.objects.filter(
+            mentor_id=payout_id,
+            status='completed',
+            payout_status='ready'
+        ).select_related('mentor')
+
+        processed = 0
+        failed = 0
+        for payment in payments:
+            result = execute_payout(payment)
+            if result.payout_status == 'paid':
+                processed += 1
+            else:
+                failed += 1
+
         return Response({
-            'message': f'Payout {payout_id} approved successfully',
+            'message': f'Payout {payout_id} approved',
             'status': 'approved',
+            'processed': processed,
+            'failed': failed,
             'notes': notes
         })
 
@@ -1652,43 +1808,141 @@ class PayoutRejectView(APIView):
     def post(self, request, payout_id):
         """Reject payout"""
         notes = request.data.get('notes', '')
-        
-        # TODO: Implement actual payout rejection logic
+        from payments.models import Payment
+
+        updated = Payment.objects.filter(
+            mentor_id=payout_id,
+            status='completed',
+            payout_status__in=['pending', 'ready']
+        ).update(payout_status='on_hold', payout_failure_reason=notes or 'Payout rejected')
+
         return Response({
             'message': f'Payout {payout_id} rejected',
             'status': 'rejected',
+            'updated': updated,
             'notes': notes
         })
 
 
-class ContentListView(generics.GenericAPIView):
-    """Content management - placeholder for content items"""
-    permission_classes = [IsAdminUser]
-    
-    def get(self, request):
-        """Get content items - placeholder"""
-        # TODO: Implement actual content model
-        return Response([])
-    
-    def post(self, request):
-        """Create content item"""
-        # TODO: Implement actual content creation
-        return Response({'id': 1, 'message': 'Content created'}, status=status.HTTP_201_CREATED)
+class ContentListView(generics.ListCreateAPIView):
+    """Content management for staff/admin"""
+    serializer_class = ContentItemSerializer
+    permission_classes = [IsAdminOrStaff]
+
+    def get_queryset(self):
+        queryset = ContentItem.objects.select_related('author').all()
+        content_type = self.request.query_params.get('content_type')
+        if content_type:
+            queryset = queryset.filter(content_type=content_type)
+        status_filter = self.request.query_params.get('status')
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(author=self.request.user)
 
 
-class ContentDetailView(APIView):
+class ContentPublicListView(generics.ListAPIView):
+    """Public content list for authenticated users (published only)."""
+    serializer_class = ContentItemSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = ContentItem.objects.select_related('author').filter(status='published')
+        content_type = self.request.query_params.get('content_type')
+        if content_type:
+            queryset = queryset.filter(content_type=content_type)
+        return queryset
+
+
+class ContentDetailView(generics.RetrieveUpdateDestroyAPIView):
     """Content detail operations"""
-    permission_classes = [IsAdminUser]
-    
-    def put(self, request, content_id):
-        """Update content item"""
-        # TODO: Implement actual content update
-        return Response({'id': content_id, 'message': 'Content updated'})
-    
-    def delete(self, request, content_id):
-        """Delete content item"""
-        # TODO: Implement actual content deletion
-        return Response(status=status.HTTP_204_NO_CONTENT)
+    serializer_class = ContentItemSerializer
+    permission_classes = [IsAdminOrStaff]
+    lookup_url_kwarg = 'content_id'
+
+    def get_queryset(self):
+        return ContentItem.objects.select_related('author').all()
+
+
+class SupportTicketListView(generics.ListCreateAPIView):
+    """Support tickets list"""
+    serializer_class = SupportTicketSerializer
+    permission_classes = [IsAdminOrStaff]
+
+    def get_queryset(self):
+        from .models import SupportTicket
+
+        queryset = SupportTicket.objects.select_related('user', 'assigned_staff').all()
+        status_filter = self.request.query_params.get('status')
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        priority_filter = self.request.query_params.get('priority')
+        if priority_filter:
+            queryset = queryset.filter(priority=priority_filter)
+        return queryset
+
+    def perform_create(self, serializer):
+        ticket = serializer.save()
+        from django.contrib.auth import get_user_model
+        from notifications.services.dispatcher import notify
+        from notifications.services.rules import NotificationType
+
+        User = get_user_model()
+        staff_users = User.objects.filter(role="staff")
+        appointment_details = None
+        if getattr(ticket, "related_appointment", None):
+            appointment_details = ticket.related_appointment.get_notification_details()
+
+        priority = 'urgent' if ticket.priority == 'urgent' else 'high' if ticket.priority == 'high' else 'normal'
+        message = f'New ticket: {ticket.issue}. Priority: {ticket.get_priority_display()}.'
+        if appointment_details:
+            message = f'{message} {appointment_details}'
+
+        report_keywords = ("report", "complaint", "abuse", "harassment", "spam")
+        issue_text = f"{ticket.issue} {ticket.description}".lower()
+        is_report = any(keyword in issue_text for keyword in report_keywords)
+
+        for staff_user in staff_users:
+            notify(
+                NotificationType.SUPPORT_TICKET_CREATED,
+                context={
+                    'support_ticket_id': ticket.id,
+                    'staff': staff_user,
+                },
+                title='New support ticket',
+                message=message,
+                priority=priority,
+                payload={'support_ticket_id': ticket.id},
+            )
+            if is_report:
+                notify(
+                    NotificationType.STAFF_USER_REPORTED,
+                    context={
+                        'report_id': ticket.id,
+                        'staff': staff_user,
+                        'user_id': ticket.user_id,
+                    },
+                    title='User report received',
+                    message=f'User report flagged: {ticket.issue}.',
+                    priority='urgent',
+                    payload={'report_id': ticket.id},
+                )
+
+    def perform_create(self, serializer):
+        serializer.save()
+
+
+class SupportTicketDetailView(generics.RetrieveUpdateAPIView):
+    """Support ticket detail"""
+    serializer_class = SupportTicketSerializer
+    permission_classes = [IsAdminOrStaff]
+
+    def get_queryset(self):
+        from .models import SupportTicket
+
+        return SupportTicket.objects.select_related('user', 'assigned_staff').all()
 
 
 class PromotionListView(generics.GenericAPIView):

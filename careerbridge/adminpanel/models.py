@@ -262,6 +262,98 @@ class ContentModeration(models.Model):
         return f"{self.get_content_type_display()} - {self.content_id} - {self.get_status_display()}"
 
 
+class ContentItem(models.Model):
+    """Managed content for staff/admin publishing."""
+
+    CONTENT_TYPE_CHOICES = (
+        ('blog', 'Blog'),
+        ('resource', 'Resource'),
+        ('guide', 'Guide'),
+    )
+
+    STATUS_CHOICES = (
+        ('published', 'Published'),
+        ('draft', 'Draft'),
+        ('archived', 'Archived'),
+    )
+
+    title = models.CharField(max_length=255)
+    summary = models.TextField(blank=True)
+    body = models.TextField(blank=True)
+    cover_image_url = models.URLField(blank=True, default='')
+    content_type = models.CharField(max_length=20, choices=CONTENT_TYPE_CHOICES)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='content_items'
+    )
+    views = models.PositiveIntegerField(default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['content_type', 'status']),
+            models.Index(fields=['status', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.title} ({self.get_content_type_display()})"
+
+
+class SupportTicket(models.Model):
+    """Support ticket for staff operations"""
+
+    PRIORITY_CHOICES = (
+        ('low', 'Low'),
+        ('medium', 'Medium'),
+        ('high', 'High'),
+        ('urgent', 'Urgent'),
+    )
+
+    STATUS_CHOICES = (
+        ('open', 'Open'),
+        ('in_progress', 'In Progress'),
+        ('resolved', 'Resolved'),
+        ('closed', 'Closed'),
+    )
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='support_tickets'
+    )
+    issue = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    staff_notes = models.TextField(blank=True)
+    priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='medium')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='open')
+    assigned_staff = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='assigned_support_tickets'
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['status', 'priority']),
+            models.Index(fields=['created_at']),
+        ]
+
+    def __str__(self):
+        return f"Ticket #{self.id} - {self.issue}"
+
+
 class SystemSettings(models.Model):
     """System settings - singleton model for platform-wide configuration"""
     
