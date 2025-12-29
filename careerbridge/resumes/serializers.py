@@ -72,6 +72,16 @@ class ResumeCreateSerializer(serializers.ModelSerializer):
 
         return value
 
+    def create(self, validated_data):
+        """Create resume with file metadata"""
+        file = validated_data.get('file')
+        if file:
+            validated_data['file_size'] = file.size
+            validated_data['file_type'] = file.name.split('.')[-1].lower()
+
+        validated_data['user'] = self.context['request'].user
+        return super().create(validated_data)
+
 class ResumeAnalysisSerializer(serializers.ModelSerializer):
     """Serializer for ResumeAnalysis model"""
     resume = ResumeSerializer(read_only=True)

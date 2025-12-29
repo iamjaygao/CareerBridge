@@ -35,6 +35,8 @@ from .models import ExternalServiceIntegration
 import requests
 from .models import DataDeletionRequest, DataExportJob
 import secrets
+from notifications.services.dispatcher import notify
+from notifications.services.rules import NotificationType
 
 class ResumeListView(generics.ListCreateAPIView):
     """Resume List and Create View with tier support"""
@@ -52,6 +54,17 @@ class ResumeListView(generics.ListCreateAPIView):
         
         # Create resume
         resume = serializer.save(user=self.request.user)
+        notify(
+            NotificationType.RESUME_UPLOADED,
+            context={
+                "resume_id": resume.id,
+                "student": self.request.user,
+            },
+            title="Resume uploaded",
+            message="Your resume has been uploaded successfully.",
+            priority="normal",
+            related_resume=resume,
+        )
         
         # Increment usage
         tier_service.increment_upload_count()

@@ -70,7 +70,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ("id", "username", "email", "first_name", "last_name", "role")
+        fields = ("id", "username", "email", "first_name", "last_name", "role", "avatar", "phone", "location", "email_verified")
         read_only_fields = ("id",)
 
 
@@ -181,7 +181,7 @@ class ResendVerificationSerializer(serializers.Serializer):
 class UserUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ["username", "email", "avatar"]
+        fields = ["username", "email", "avatar", "first_name", "last_name", "phone", "location"]
 
     def validate_username(self, value):
         user = self.context["request"].user

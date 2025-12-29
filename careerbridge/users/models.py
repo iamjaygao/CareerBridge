@@ -23,6 +23,8 @@ class User(AbstractUser):
     # Password reset fields
     password_reset_token = models.UUIDField(null=True, blank=True, editable=False)
     password_reset_sent_at = models.DateTimeField(null=True, blank=True)
+    phone = models.CharField(max_length=32, null=True, blank=True)
+    location = models.CharField(max_length=128, null=True, blank=True)
 
     def __str__(self):
         return f"{self.username} ({self.role})"
