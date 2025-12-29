@@ -6,7 +6,9 @@ app_name = 'payments'
 urlpatterns = [
     # Payment endpoints
     path('create-intent/', views.create_payment_intent, name='create_payment_intent'),
+    path('create-checkout-session/', views.create_checkout_session, name='create_checkout_session'),
     path('confirm/', views.confirm_payment, name='confirm_payment'),
+    path('reconcile/', views.reconcile_payment, name='reconcile_payment'),
     path('list/', views.PaymentListView.as_view(), name='payment_list'),
     path('detail/<int:pk>/', views.PaymentDetailView.as_view(), name='payment_detail'),
     path('refund/<int:payment_id>/', views.process_refund, name='process_refund'),
@@ -22,6 +24,7 @@ urlpatterns = [
     
     # Statistics
     path('statistics/', views.payment_statistics, name='payment_statistics'),
+    path('payouts/summary/', views.MentorPayoutSummaryView.as_view(), name='mentor_payout_summary'),
     
     # Webhooks
     path('webhooks/stripe/', views.stripe_webhook, name='stripe_webhook'),

@@ -20,6 +20,14 @@ class PaymentSettings(models.Model):
         default=True,
         help_text="Use Stripe Connect transfers when mentor has stripe_account_id"
     )
+    payout_hold_days = models.PositiveSmallIntegerField(
+        default=2,
+        help_text="Hold period (days) after completion before payout is eligible"
+    )
+    payout_requires_admin_approval = models.BooleanField(
+        default=False,
+        help_text="Require admin approval before releasing payouts"
+    )
 
     updated_at = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -62,6 +70,14 @@ class Payment(models.Model):
         ('subscription', 'Subscription'),
         ('refund', 'Refund'),
     )
+    PAYOUT_STATUS_CHOICES = (
+        ('not_eligible', 'Not Eligible'),
+        ('pending', 'Pending Hold/Approval'),
+        ('ready', 'Ready to Pay Out'),
+        ('paid', 'Paid Out'),
+        ('failed', 'Payout Failed'),
+        ('on_hold', 'On Hold'),
+    )
     
     # Basic information
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='payments')
@@ -83,6 +99,17 @@ class Payment(models.Model):
     platform_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     mentor_earnings = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     tax_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    # Payout tracking
+    payout_status = models.CharField(
+        max_length=20,
+        choices=PAYOUT_STATUS_CHOICES,
+        default='not_eligible'
+    )
+    payout_available_at = models.DateTimeField(null=True, blank=True)
+    payout_paid_at = models.DateTimeField(null=True, blank=True)
+    payout_transfer_id = models.CharField(max_length=120, blank=True)
+    payout_failure_reason = models.TextField(blank=True)
     
     # Metadata
     description = models.TextField(blank=True)

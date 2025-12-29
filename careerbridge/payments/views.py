@@ -1,15 +1,18 @@
 from rest_framework import generics, status, permissions
+from rest_framework.views import APIView
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from django.views.decorators.csrf import csrf_exempt
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from django.db.models import Sum, Count
+from django.db.models import Sum, Count, Q
 from datetime import datetime, timedelta
 import uuid
 import stripe
 from django.conf import settings
+from django.db import transaction
+
 
 from .models import Payment, PaymentMethod, Refund, PaymentWebhook
 from .serializers import (
@@ -18,7 +21,9 @@ from .serializers import (
     PaymentIntentSerializer, PaymentConfirmationSerializer, PaymentStatisticsSerializer
 )
 from adminpanel.permissions import IsAdminUser, is_admin_level
-from notifications.models import Notification
+from notifications.services.dispatcher import notify
+from notifications.services.rules import NotificationType
+from payments.services import get_payout_settings, refresh_payout_status
 
 # Payment Views
 @api_view(['POST'])
@@ -41,13 +46,39 @@ def create_payment_intent(request):
             # Add mentor or appointment if provided
             if serializer.validated_data.get('appointment_id'):
                 from appointments.models import Appointment
-                appointment = get_object_or_404(Appointment, id=serializer.validated_data['appointment_id'])
+
+                appointment = get_object_or_404(
+                    Appointment,
+                    id=serializer.validated_data['appointment_id'],
+                    user=request.user,  
+                )
+
+                # If the appointment is expired, return an error
+                # The status must be pending
+                if appointment.status != 'pending':
+                    return Response(
+                        {'error': 'Appointment is no longer payable'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # If there is a related slot, it must still be within the lock period
+                slot = appointment.time_slot
+                if (
+                    slot
+                    and slot.reserved_until
+                    and timezone.now() > slot.reserved_until
+                ):
+                # Defensive repair: mark appointment as expired
+                    appointment.status = 'expired'
+                    appointment.save(update_fields=['status'])
+
+                    return Response(
+                        {'error': 'Appointment has expired, please rebook'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
                 payment_data['appointment'] = appointment
                 payment_data['mentor'] = appointment.mentor
-            elif serializer.validated_data.get('mentor_id'):
-                from mentors.models import MentorProfile
-                mentor = get_object_or_404(MentorProfile, id=serializer.validated_data['mentor_id'])
-                payment_data['mentor'] = mentor
             
             # Compute platform fee/mentor earnings using MentorService percentages when available
             from decimal import Decimal
@@ -74,14 +105,6 @@ def create_payment_intent(request):
                 if not stripe.api_key:
                     return Response({'error': 'Stripe not configured'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-                # Prepare Connect transfer data if mentor has a connected account
-                transfer_data = None
-                connect_enabled = True if not settings_obj else settings_obj.stripe_connect_enabled
-                if connect_enabled and payment.mentor and getattr(payment.mentor, 'stripe_account_id', ''):
-                    transfer_data = {
-                        'destination': payment.mentor.stripe_account_id
-                    }
-
                 intent = stripe.PaymentIntent.create(
                     amount=int(payment.amount * 100),
                     currency=payment.currency.lower(),
@@ -92,9 +115,7 @@ def create_payment_intent(request):
                     },
                     description=payment.description or 'CareerBridge payment',
                     automatic_payment_methods={'enabled': True},
-                    idempotency_key=f"pi_{payment.id}_{uuid.uuid4()}",
-                    application_fee_amount=int(payment.platform_fee * 100) if transfer_data else None,
-                    transfer_data=transfer_data
+                    idempotency_key=f"pi_{payment.id}_{uuid.uuid4()}"
                 )
 
                 payment.provider_payment_id = intent['id']
@@ -123,56 +144,302 @@ def create_payment_intent(request):
 
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
+def create_checkout_session(request):
+    """Create Stripe Checkout Session for appointment payment"""
+    appointment_id = request.data.get('appointment_id')
+    
+    if not appointment_id:
+        return Response(
+            {'error': 'appointment_id is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    try:
+        from appointments.models import Appointment
+        appointment = get_object_or_404(Appointment, id=appointment_id, user=request.user)
+
+        if appointment.time_slot:
+            slot = appointment.time_slot
+            if not slot.reserved_until or timezone.now() > slot.reserved_until:
+                appointment.status = 'expired'
+                appointment.save(update_fields=['status'])
+                return Response(
+                    {'error': 'Appointment expired, please rebook'},
+                    status=400
+                )
+
+        
+        # Check if appointment is in pending status
+        if appointment.status != 'pending':
+            return Response(
+                {'error': 'Appointment is not in pending status'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get or create Payment record
+        payment, created = Payment.objects.get_or_create(
+            appointment=appointment,
+            user=request.user,
+            defaults={
+                'payment_type': 'appointment',
+                'amount': appointment.price,
+                'currency': appointment.currency,
+                'provider': 'stripe',
+                'description': f"Payment for appointment: {appointment.title}",
+                'mentor': appointment.mentor,
+                'status': 'pending',
+            }
+        )
+        
+        # Calculate platform fee and mentor earnings
+        from decimal import Decimal
+        from payments.models import PaymentSettings
+        platform_fee_pct = Decimal('15.00')
+        settings_obj = PaymentSettings.objects.order_by('-updated_at').first()
+        if settings_obj:
+            platform_fee_pct = settings_obj.platform_fee_percentage
+        
+        platform_fee = Decimal(str(payment.amount)) * (platform_fee_pct / Decimal('100'))
+        mentor_earnings = Decimal(str(payment.amount)) - platform_fee
+        payment.platform_fee = platform_fee
+        payment.mentor_earnings = mentor_earnings
+        payment.save()
+        
+        # Initialize Stripe
+        stripe.api_key = getattr(settings, 'STRIPE_SECRET_KEY', None)
+        if not stripe.api_key:
+            return Response(
+                {'error': 'Stripe not configured'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+        # Create Stripe Checkout Session
+        success_url = 'http://localhost:3000/student/appointments?payment=success&session_id={CHECKOUT_SESSION_ID}'
+        cancel_url = 'http://localhost:3000/student/appointments?payment=cancel'
+        
+        session = stripe.checkout.Session.create(
+            mode='payment',
+            payment_method_types=['card'],
+            line_items=[{
+                'price_data': {
+                    'currency': payment.currency.lower(),
+                    'product_data': {
+                        'name': appointment.title,
+                        'description': appointment.description or f"Appointment with {appointment.mentor.user.get_full_name() or appointment.mentor.user.username}",
+                    },
+                    'unit_amount': int(payment.amount * 100),
+                },
+                'quantity': 1,
+            }],
+            metadata={
+                'payment_id': str(payment.id),
+                'appointment_id': str(appointment.id),
+                'user_id': str(request.user.id),
+            },
+            success_url=success_url,
+            cancel_url=cancel_url,
+        )
+        
+        # Store session ID in payment (payment_intent will be set when checkout completes)
+        payment.provider_payment_id = session.id
+        payment.metadata['checkout_session_id'] = session.id
+        payment.status = 'processing'
+        payment.save()
+        
+        return Response({
+            'checkout_url': session.url,
+        })
+        
+    except Exception as e:
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
 def confirm_payment(request):
     """Confirm payment completion"""
     serializer = PaymentConfirmationSerializer(data=request.data)
-    if serializer.is_valid():
-        payment_intent_id = serializer.validated_data['payment_intent_id']
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        try:
-            # Confirm via Stripe if Stripe provider
-            stripe.api_key = getattr(settings, 'STRIPE_SECRET_KEY', None)
-            payment = Payment.objects.filter(user=request.user, provider='stripe', provider_payment_id=payment_intent_id).first()
-            if not payment:
-                return Response({'error': 'Payment not found'}, status=status.HTTP_404_NOT_FOUND)
+    payment_intent_id = serializer.validated_data['payment_intent_id']
 
-            intent = stripe.PaymentIntent.retrieve(payment_intent_id)
-            if intent['status'] in ['succeeded', 'requires_capture']:
-                payment.status = 'completed'
-                payment.paid_at = timezone.now()
-                payment.save()
-                
-                if payment.appointment:
-                    appointment_datetime = payment.appointment.scheduled_start.strftime('%Y-%m-%d %H:%M')
-                    mentor_name = payment.appointment.mentor.user.get_full_name() or payment.appointment.mentor.user.username
-                    Notification.objects.create(
-                        user=payment.user,
-                        notification_type='payment_success',
-                        title='Payment successful',
-                        message=f'Payment of ${payment.amount} for appointment with {mentor_name} on {appointment_datetime} was successful',
-                        priority='normal',
-                        related_appointment=payment.appointment
-                    )
-                    Notification.objects.create(
-                        user=payment.appointment.mentor.user,
-                        notification_type='payment_success',
-                        title='Payment successful',
-                        message=f'Payment of ${payment.amount} received for appointment with {payment.user.get_full_name() or payment.user.username} on {appointment_datetime}',
-                        priority='normal',
-                        related_appointment=payment.appointment
-                    )
-                
-                return Response({'payment_id': payment.id, 'status': 'completed'})
-            else:
-                return Response({'payment_id': payment.id, 'status': intent['status']}, status=status.HTTP_202_ACCEPTED)
-            
-        except Exception as e:
+    try:
+        stripe.api_key = getattr(settings, 'STRIPE_SECRET_KEY', None)
+
+        payment = Payment.objects.select_for_update().filter(
+            user=request.user,
+            provider='stripe',
+            provider_payment_id=payment_intent_id
+        ).first()
+
+        if not payment:
+            return Response({'error': 'Payment not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        # ✅ Payment-level idempotency
+        if payment.status == 'completed':
+            return Response({'payment_id': payment.id, 'status': 'completed'})
+
+        intent = stripe.PaymentIntent.retrieve(payment_intent_id)
+        if intent['status'] not in ['succeeded', 'requires_capture']:
             return Response(
-                {'error': str(e)}, 
-                status=status.HTTP_400_BAD_REQUEST
+                {'payment_id': payment.id, 'status': intent['status']},
+                status=status.HTTP_202_ACCEPTED
             )
-    
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            payment.status = 'completed'
+            payment.paid_at = timezone.now()
+            payment.save(update_fields=['status', 'paid_at'])
+
+            appointment = payment.appointment
+            if appointment and appointment.status == 'pending':
+                appointment.status = 'confirmed'
+                appointment.is_paid = True
+                appointment.save(update_fields=['status', 'is_paid'])
+
+            if appointment:
+                appointment_details = appointment.get_notification_details()
+                mentor_name = (
+                    appointment.mentor.user.get_full_name()
+                    or appointment.mentor.user.username
+                )
+
+                notify(
+                    NotificationType.APPOINTMENT_PAYMENT_SUCCESS,
+                    context={
+                        'appointment_id': appointment.id,
+                        'student': payment.user,
+                    },
+                    title='Payment successful',
+                    message=f'Payment of ${payment.amount} for {appointment_details} with {mentor_name} was successful',
+                    priority='normal',
+                    related_appointment=appointment,
+                )
+                # Mentor should not receive payment status notifications.
+
+        return Response({'payment_id': payment.id, 'status': 'completed'})
+
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def reconcile_payment(request):
+    """
+    Fallback reconcile endpoint for frontend success redirects.
+    If payment is completed but appointment is still pending, confirm it.
+    """
+    session_id = request.data.get('session_id')
+    payment_intent_id = request.data.get('payment_intent_id')
+
+    if not session_id and not payment_intent_id:
+        return Response(
+            {'error': 'session_id or payment_intent_id is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        stripe.api_key = getattr(settings, 'STRIPE_SECRET_KEY', None)
+
+        payment = None
+        if session_id:
+            payment = Payment.objects.filter(
+                user=request.user,
+                provider='stripe'
+            ).filter(
+                Q(provider_payment_id=session_id) | Q(metadata__checkout_session_id=session_id)
+            ).first()
+
+        if not payment and payment_intent_id:
+            payment = Payment.objects.filter(
+                user=request.user,
+                provider='stripe',
+                provider_payment_id=payment_intent_id
+            ).first()
+
+        # Last-resort lookup via Stripe metadata if payment not found
+        if not payment and session_id and stripe.api_key:
+            session = stripe.checkout.Session.retrieve(session_id)
+            metadata = session.get('metadata') or {}
+            payment_id = metadata.get('payment_id')
+            if payment_id:
+                payment = Payment.objects.filter(
+                    id=payment_id,
+                    user=request.user,
+                    provider='stripe'
+                ).first()
+
+            if not payment and session.get('payment_intent'):
+                payment = Payment.objects.filter(
+                    user=request.user,
+                    provider='stripe',
+                    provider_payment_id=session.get('payment_intent')
+                ).first()
+
+        if not payment:
+            return Response({'error': 'Payment not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        with transaction.atomic():
+            payment = Payment.objects.select_for_update().get(id=payment.id)
+
+            # If payment not completed, try to verify with Stripe
+            if payment.status != 'completed' and stripe.api_key:
+                verified = False
+
+                if session_id:
+                    session = stripe.checkout.Session.retrieve(session_id)
+                    if session.get('payment_status') == 'paid':
+                        verified = True
+                        payment_intent = session.get('payment_intent')
+                        if payment_intent and payment.provider_payment_id != payment_intent:
+                            payment.provider_payment_id = payment_intent
+
+                if not verified and payment_intent_id:
+                    intent = stripe.PaymentIntent.retrieve(payment_intent_id)
+                    if intent.get('status') in ['succeeded', 'requires_capture']:
+                        verified = True
+
+                if verified:
+                    payment.status = 'completed'
+                    if not payment.paid_at:
+                        payment.paid_at = timezone.now()
+                    payment.save(update_fields=['status', 'paid_at', 'provider_payment_id'])
+
+            # Reconcile appointment if payment is completed
+            _reconcile_appointment_from_payment(payment)
+
+            # Send payment success notifications if appointment is confirmed
+            payment.refresh_from_db()
+            if payment.appointment:
+                payment.appointment.refresh_from_db()
+                if payment.status == 'completed' and payment.appointment.status == 'confirmed' and payment.appointment.is_paid:
+                    appointment_details = payment.appointment.get_notification_details()
+                    mentor_name = payment.appointment.mentor.user.get_full_name() or payment.appointment.mentor.user.username
+                    notify(
+                        NotificationType.APPOINTMENT_PAYMENT_SUCCESS,
+                        context={
+                            'appointment_id': payment.appointment.id,
+                            'student': payment.user,
+                        },
+                        title='Payment successful',
+                        message=f'Payment of ${payment.amount} for {appointment_details} with {mentor_name} was successful',
+                        priority='normal',
+                        related_appointment=payment.appointment,
+                    )
+
+        appointment = payment.appointment
+        return Response({
+            'payment_id': payment.id,
+            'payment_status': payment.status,
+            'appointment_id': appointment.id if appointment else None,
+            'appointment_status': appointment.status if appointment else None,
+        })
+
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 class PaymentListView(generics.ListAPIView):
     """List user's payments"""
@@ -190,6 +457,52 @@ class PaymentDetailView(generics.RetrieveAPIView):
     
     def get_queryset(self):
         return Payment.objects.filter(user=self.request.user).select_related('mentor', 'appointment')
+
+
+class MentorPayoutSummaryView(APIView):
+    """Get payout summary for the authenticated mentor"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        if not hasattr(request.user, 'mentor_profile'):
+            return Response({'error': 'Mentor profile required'}, status=status.HTTP_403_FORBIDDEN)
+
+        mentor = request.user.mentor_profile
+        payments = Payment.objects.filter(mentor=mentor, status='completed')
+
+        for payment in payments:
+            refresh_payout_status(payment)
+
+        pending_total = payments.filter(payout_status='pending').aggregate(
+            total=Sum('mentor_earnings')
+        )['total'] or 0
+        ready_total = payments.filter(payout_status='ready').aggregate(
+            total=Sum('mentor_earnings')
+        )['total'] or 0
+        paid_total = payments.filter(payout_status='paid').aggregate(
+            total=Sum('mentor_earnings')
+        )['total'] or 0
+        failed_total = payments.filter(payout_status='failed').aggregate(
+            total=Sum('mentor_earnings')
+        )['total'] or 0
+
+        next_payout = payments.filter(
+            payout_status='pending',
+            payout_available_at__isnull=False
+        ).order_by('payout_available_at').values_list('payout_available_at', flat=True).first()
+
+        payout_settings = get_payout_settings()
+
+        return Response({
+            'pending_total': float(pending_total),
+            'ready_total': float(ready_total),
+            'paid_total': float(paid_total),
+            'failed_total': float(failed_total),
+            'next_payout_at': next_payout.isoformat() if next_payout else None,
+            'payout_hold_days': payout_settings.hold_days,
+            'payout_requires_admin_approval': payout_settings.requires_admin_approval,
+            'payouts_enabled': bool(getattr(mentor, 'payouts_enabled', False)),
+        })
 
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
@@ -432,9 +745,12 @@ def payment_statistics(request):
             mentor_earnings = float(mentor_earnings_raw) if isinstance(mentor_earnings_raw, Decimal) else float(mentor_earnings_raw)
         logger.info(f">>> DEBUG: mentor_earnings: {mentor_earnings}, type: {type(mentor_earnings)}")
         
-        # Calculate pending payouts (sum of mentor_earnings for completed payments not yet paid out)
-        # This is a simplified calculation - in production, track actual payout status
-        pending_payouts = float(mentor_earnings)  # Simplified: all mentor earnings are pending until paid
+        # Calculate pending payouts (completed payments not yet paid out)
+        pending_payouts_result = Payment.objects.filter(
+            status='completed',
+            payout_status__in=['pending', 'ready', 'on_hold']
+        ).aggregate(total=Sum('mentor_earnings'))['total'] or Decimal('0')
+        pending_payouts = float(pending_payouts_result)
         
         # Ensure all values are JSON-serializable (no Decimal, no None)
         data = {
@@ -507,6 +823,168 @@ def payment_statistics(request):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
+# Reconciliation helper: derives appointment status from payment status
+def _reconcile_appointment_from_payment(payment: Payment):
+    """
+    Reconcile appointment status from payment status.
+    Payment is the source of truth.
+    
+    INTERNAL ONLY - idempotent, safe to call multiple times.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    payment_id = payment.id
+    
+    # If payment.status is NOT a paid/completed state → return immediately
+    if payment.status != 'completed':
+        return
+    
+    # Fetch payment.appointment
+    if not payment.appointment:
+        return
+    
+    appointment = payment.appointment
+    appointment_id = appointment.id
+    
+    # If appointment.status is already 'confirmed' → return (idempotent)
+    if appointment.status == 'confirmed' and appointment.is_paid:
+        return
+    
+    # Otherwise: set appointment.status = 'confirmed' and appointment.is_paid = True
+    appointment.status = 'confirmed'
+    appointment.is_paid = True
+    appointment.save(update_fields=['status', 'is_paid'])
+    from appointments.models import Appointment
+    slot = getattr(appointment, 'time_slot', None)
+    if slot:
+        slot.is_available = False
+        slot.reserved_until = None
+        slot.reserved_appointment = appointment
+        booked_count = Appointment.objects.filter(
+            time_slot=slot,
+            status__in=['confirmed', 'completed']
+        ).count()
+        if slot.current_bookings != booked_count:
+            slot.current_bookings = booked_count
+        slot.save(update_fields=[
+            'is_available',
+            'reserved_until',
+            'reserved_appointment',
+            'current_bookings',
+        ])
+
+    appointment_details = appointment.get_notification_details()
+    notify(
+        NotificationType.APPOINTMENT_CONFIRMED,
+        context={
+            'appointment_id': appointment.id,
+            'student': appointment.user,
+            'mentor': appointment.mentor.user,
+        },
+        title='Appointment confirmed',
+        message=(
+            f'Appointment ({appointment_details}) between {appointment.user.get_full_name() or appointment.user.username} '
+            f'and {appointment.mentor.user.get_full_name() or appointment.mentor.user.username} is confirmed.'
+        ),
+        priority='normal',
+        related_appointment=appointment,
+    )
+    
+    logger.info(f"Payment reconciliation: payment {payment_id}, appointment {appointment_id} reconciled to confirmed")
+
+# Helper function to finalize paid appointment
+def _finalize_paid_appointment(payment: Payment):
+    """
+    Finalize booking when payment is confirmed.
+    STRICTLY idempotent and irreversible: safe to call multiple times.
+    Atomically confirms appointment and finalizes slot.
+    ONLY called from checkout.session.completed webhook (authoritative event).
+    
+    Uses ONLY payment.appointment as the source of truth.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    from appointments.models import Appointment, TimeSlot
+
+    payment_id = payment.id
+
+    # MUST use ONLY payment.appointment to determine which Appointment to finalize
+    if not payment.appointment:
+        logger.warning(f"Payment finalization: payment {payment_id} has no appointment, cannot finalize")
+        return
+
+    appointment = payment.appointment
+    appointment_id = appointment.id
+
+    # MUST run inside transaction.atomic()
+    with transaction.atomic():
+        # MUST select_for_update() the Payment row
+        payment = Payment.objects.select_for_update().get(id=payment_id)
+        
+        # Refresh appointment reference after locking payment
+        appointment = payment.appointment
+        if not appointment:
+            logger.warning(f"Payment finalization: payment {payment_id} has no appointment after lock, cannot finalize")
+            return
+
+        # MUST be strictly idempotent
+        # If payment.status == 'completed' AND appointment.status == 'confirmed':
+        if payment.status == 'completed' and appointment.status == 'confirmed' and appointment.is_paid:
+            logger.info(f"Payment finalization: payment {payment_id}, appointment {appointment_id} already completed and confirmed (idempotent skip)")
+            return
+
+        # MUST set payment.status = 'completed' (using 'completed' as Payment model uses this, not 'paid')
+        if payment.status != 'completed':
+            payment.status = 'completed'
+            update_fields = ['status']
+            
+            # payment.paid_at = timezone.now() (only if not already set)
+            if not payment.paid_at:
+                payment.paid_at = timezone.now()
+                update_fields.append('paid_at')
+            
+            payment.save(update_fields=update_fields)
+
+        # Lock appointment row
+        appointment = Appointment.objects.select_for_update().get(id=appointment_id)
+        
+        # MUST NOT downgrade or reassign any confirmed appointment
+        if appointment.status == 'confirmed' and appointment.is_paid:
+            logger.info(f"Payment finalization: appointment {appointment_id} already confirmed and paid (idempotent skip)")
+            return
+
+        # Check if appointment is expired or cancelled (do not confirm these)
+        if appointment.status in ['expired', 'cancelled']:
+            logger.warning(f"Payment finalization: appointment {appointment_id} is {appointment.status}, cannot confirm")
+            return
+
+        # MUST set appointment.status = 'confirmed' and appointment.is_paid = True
+        appointment.status = 'confirmed'
+        appointment.is_paid = True
+        appointment.save(update_fields=['status', 'is_paid'])
+
+        # MUST finalize the slot consistently
+        slot = getattr(appointment, 'time_slot', None)
+        if slot:
+            # Lock slot row
+            slot = TimeSlot.objects.select_for_update().get(id=slot.id)
+            
+            # Finalize slot: mark unavailable, clear lock
+            slot.is_available = False
+            slot.reserved_until = None
+            booked_count = Appointment.objects.filter(
+                time_slot=slot,
+                status__in=['confirmed', 'completed']
+            ).count()
+            slot.current_bookings = booked_count
+            slot.save(update_fields=['is_available', 'reserved_until', 'current_bookings'])
+            
+            logger.info(f"Payment finalization: payment {payment_id}, appointment {appointment_id} confirmed and slot finalized successfully")
+        else:
+            logger.info(f"Payment finalization: payment {payment_id}, appointment {appointment_id} confirmed (no slot)")
+
+
 # Webhook Views
 @csrf_exempt
 def stripe_webhook(request):
@@ -540,34 +1018,128 @@ def stripe_webhook(request):
         processed_at=timezone.now()
     )
 
-    # Handle PaymentIntent succeeded
-    if event['type'] == 'payment_intent.succeeded':
-        intent = event['data']['object']
-        payment = Payment.objects.filter(provider='stripe', provider_payment_id=intent['id']).first()
-        if payment and payment.status != 'completed':
-            payment.status = 'completed'
-            payment.paid_at = timezone.now()
-            payment.save()
+    # Handle Checkout Session completed (AUTHORITATIVE EVENT - only this handler can finalize)
+    if event['type'] == 'checkout.session.completed':
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        session = event['data']['object']
+
+        payment_status = session.get('payment_status')
+        checkout_session_id = session.get('id')
+        payment_intent_id = session.get('payment_intent')
+
+        metadata = session.get('metadata') or {}
+        payment_id = metadata.get('payment_id')
+
+        logger.info(f"Payment webhook: checkout.session.completed (AUTHORITATIVE) - payment_id={payment_id}, payment_status={payment_status}")
+
+        # Resolve Payment using provider_payment_id or metadata
+        payment = None
+        if payment_id:
+            payment = Payment.objects.filter(
+                id=payment_id,
+                provider='stripe'
+            ).first()
+            logger.info(f"Payment webhook: payment {payment_id} resolved from metadata")
+
+        if not payment and checkout_session_id:
+            payment = Payment.objects.filter(
+                provider='stripe',
+                provider_payment_id=checkout_session_id
+            ).first()
+            if payment:
+                logger.info(f"Payment webhook: payment {payment.id} resolved from checkout_session_id")
+
+        # Sync provider_payment_id to payment_intent_id if needed
+        if payment and payment_intent_id and payment.provider_payment_id != payment_intent_id:
+            payment.provider_payment_id = payment_intent_id
+            payment.save(update_fields=['provider_payment_id'])
+
+        # Only finalize if payment_status is 'paid' and payment exists
+        if payment_status == 'paid' and payment:
+            # Update payment status to completed
+            if payment.status != 'completed':
+                payment.status = 'completed'
+                if not payment.paid_at:
+                    payment.paid_at = timezone.now()
+                payment.save(update_fields=['status', 'paid_at'])
+                logger.info(f"Payment webhook: payment {payment.id} status updated to completed")
             
+            # Reconcile appointment from payment (Payment is source of truth)
+            _reconcile_appointment_from_payment(payment)
+            
+            # Check if appointment was confirmed and send notifications
+            payment.refresh_from_db()
             if payment.appointment:
-                appointment_datetime = payment.appointment.scheduled_start.strftime('%Y-%m-%d %H:%M')
-                mentor_name = payment.appointment.mentor.user.get_full_name() or payment.appointment.mentor.user.username
-                Notification.objects.create(
-                    user=payment.user,
-                    notification_type='payment_success',
-                    title='Payment successful',
-                    message=f'Payment of ${payment.amount} for appointment with {mentor_name} on {appointment_datetime} was successful',
-                    priority='normal',
-                    related_appointment=payment.appointment
-                )
-                Notification.objects.create(
-                    user=payment.appointment.mentor.user,
-                    notification_type='payment_success',
-                    title='Payment successful',
-                    message=f'Payment of ${payment.amount} received for appointment with {payment.user.get_full_name() or payment.user.username} on {appointment_datetime}',
-                    priority='normal',
-                    related_appointment=payment.appointment
-                )
+                payment.appointment.refresh_from_db()
+                if payment.appointment.status == 'confirmed' and payment.appointment.is_paid:
+                    appointment_id = payment.appointment.id
+                    logger.info(f"Payment webhook: payment {payment.id}, appointment {appointment_id} confirmed successfully")
+                    
+                    # Send notifications only after successful reconciliation
+                    appointment_details = payment.appointment.get_notification_details()
+                    mentor_name = payment.appointment.mentor.user.get_full_name() or payment.appointment.mentor.user.username
+                    notify(
+                        NotificationType.APPOINTMENT_PAYMENT_SUCCESS,
+                        context={
+                            'appointment_id': payment.appointment.id,
+                            'student': payment.user,
+                        },
+                        title='Payment successful',
+                        message=f'Payment of ${payment.amount} for {appointment_details} with {mentor_name} was successful',
+                        priority='normal',
+                        related_appointment=payment.appointment,
+                    )
+                    # Mentor should not receive payment status notifications.
+
+        return HttpResponse(status=200)
+        
+    # Handle PaymentIntent succeeded (NON-AUTHORITATIVE - do NOT modify Appointment state)
+    if event['type'] == 'payment_intent.succeeded':
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        intent = event['data']['object']
+        payment_intent_id = intent['id']
+        
+        # Try to find payment by provider_payment_id
+        payment = Payment.objects.filter(provider='stripe', provider_payment_id=payment_intent_id).first()
+        
+        if payment and payment.appointment:
+            appointment_id = payment.appointment.id
+            logger.info(f"Payment webhook: payment_intent.succeeded (non-authoritative) - payment_intent_id={payment_intent_id}, appointment_id={appointment_id}, payment_id={payment.id} - IGNORED (only checkout.session.completed can finalize)")
+        else:
+            logger.info(f"Payment webhook: payment_intent.succeeded (non-authoritative) - payment_intent_id={payment_intent_id} - IGNORED (only checkout.session.completed can finalize)")
+        
+        # DO NOT modify Appointment or TimeSlot state
+        # Return immediately - finalization happens only via checkout.session.completed
+        return HttpResponse(status=200)
+    
+    # Handle Charge succeeded (NON-AUTHORITATIVE - do NOT modify Appointment state)
+    if event['type'] == 'charge.succeeded':
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        charge = event['data']['object']
+        charge_id = charge.get('id')
+        payment_intent_id = charge.get('payment_intent')
+        
+        # Try to find payment by payment_intent_id from charge
+        payment = None
+        if payment_intent_id:
+            payment = Payment.objects.filter(provider='stripe', provider_payment_id=payment_intent_id).first()
+        
+        if payment and payment.appointment:
+            appointment_id = payment.appointment.id
+            logger.info(f"Payment webhook: charge.succeeded (non-authoritative) - charge_id={charge_id}, payment_intent_id={payment_intent_id}, appointment_id={appointment_id}, payment_id={payment.id} - IGNORED (only checkout.session.completed can finalize)")
+        else:
+            logger.info(f"Payment webhook: charge.succeeded (non-authoritative) - charge_id={charge_id}, payment_intent_id={payment_intent_id} - IGNORED (only checkout.session.completed can finalize)")
+        
+        # DO NOT modify Appointment or TimeSlot state
+        # Return immediately - finalization happens only via checkout.session.completed
+        return HttpResponse(status=200)
+    
     elif event['type'] == 'payment_intent.payment_failed':
         intent = event['data']['object']
         payment = Payment.objects.filter(provider='stripe', provider_payment_id=intent['id']).first()
@@ -576,15 +1148,59 @@ def stripe_webhook(request):
             payment.save()
             
             if payment.appointment:
-                appointment_datetime = payment.appointment.scheduled_start.strftime('%Y-%m-%d %H:%M')
-                Notification.objects.create(
-                    user=payment.user,
-                    notification_type='payment_failed',
+                appointment_details = payment.appointment.get_notification_details()
+                notify(
+                    NotificationType.APPOINTMENT_PAYMENT_FAILED,
+                    context={
+                        'appointment_id': payment.appointment.id,
+                        'student': payment.user,
+                    },
                     title='Payment failed',
-                    message=f'Payment of ${payment.amount} for appointment on {appointment_datetime} failed. Please try again.',
+                    message=f'Payment of ${payment.amount} for {appointment_details} failed. Please try again.',
                     priority='high',
-                    related_appointment=payment.appointment
+                    related_appointment=payment.appointment,
                 )
+                from django.contrib.auth import get_user_model
+
+                User = get_user_model()
+                staff_users = User.objects.filter(role="staff")
+                failed_recent = Payment.objects.filter(
+                    user=payment.user,
+                    status='failed',
+                    created_at__gte=timezone.now() - timezone.timedelta(days=7),
+                ).count()
+                for staff_user in staff_users:
+                    notify(
+                        NotificationType.STAFF_PAYMENT_FAILED,
+                        context={
+                            'payment_id': payment.id,
+                            'appointment_id': payment.appointment.id,
+                            'staff': staff_user,
+                        },
+                        title='Payment failed - staff follow-up',
+                        message=(
+                            f'Payment of ${payment.amount} for {appointment_details} failed. '
+                            f'User: {payment.user.get_full_name() or payment.user.username}.'
+                        ),
+                        priority='urgent',
+                        related_appointment=payment.appointment,
+                        payload={'payment_id': payment.id},
+                    )
+                    if failed_recent >= 3:
+                        notify(
+                            NotificationType.STAFF_REPEAT_FAILURE,
+                            context={
+                                'user_id': payment.user.id,
+                                'staff': staff_user,
+                            },
+                            title='Repeated payment failures',
+                            message=(
+                                f'User {payment.user.get_full_name() or payment.user.username} '
+                                f'has {failed_recent} failed payments in the last 7 days.'
+                            ),
+                            priority='high',
+                            payload={'user_id': payment.user.id},
+                        )
     elif event['type'] in ['charge.refunded', 'refund.updated']:
         data_obj = event['data']['object']
         # Try to find by payment_intent on charge
@@ -595,6 +1211,31 @@ def stripe_webhook(request):
                 payment.status = 'refunded'
                 payment.refunded_at = timezone.now()
                 payment.save()
+                from django.contrib.auth import get_user_model
+
+                User = get_user_model()
+                admin_users = User.objects.filter(role="admin")
+                refund_count = Payment.objects.filter(
+                    user=payment.user,
+                    status='refunded',
+                    refunded_at__gte=timezone.now() - timezone.timedelta(days=30),
+                ).count()
+                if refund_count >= 3:
+                    for admin_user in admin_users:
+                        notify(
+                            NotificationType.ADMIN_REFUND_ALERT,
+                            context={
+                                'user_id': payment.user.id,
+                                'admin': admin_user,
+                            },
+                            title='Multiple refunds detected',
+                            message=(
+                                f'User {payment.user.get_full_name() or payment.user.username} '
+                                f'has {refund_count} refunds in the last 30 days.'
+                            ),
+                            priority='high',
+                            payload={'user_id': payment.user.id},
+                        )
     elif event['type'] == 'account.updated':
         acct = event['data']['object']
         account_id = acct.get('id')

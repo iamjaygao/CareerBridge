@@ -18,12 +18,14 @@ class PaymentSerializer(serializers.ModelSerializer):
             'amount', 'currency', 'status', 'status_display', 'provider', 'provider_display',
             'platform_fee', 'mentor_earnings', 'tax_amount', 'total_amount',
             'description', 'is_completed', 'is_refundable',
-            'created_at', 'paid_at', 'refunded_at'
+            'created_at', 'paid_at', 'refunded_at',
+            'payout_status', 'payout_available_at', 'payout_paid_at', 'payout_transfer_id'
         ]
         read_only_fields = [
             'id', 'user', 'mentor', 'appointment', 'platform_fee', 'mentor_earnings',
             'status', 'provider_payment_id', 'is_completed', 'is_refundable',
-            'created_at', 'paid_at', 'refunded_at'
+            'created_at', 'paid_at', 'refunded_at',
+            'payout_status', 'payout_available_at', 'payout_paid_at', 'payout_transfer_id'
         ]
 
 class PaymentCreateSerializer(serializers.ModelSerializer):
