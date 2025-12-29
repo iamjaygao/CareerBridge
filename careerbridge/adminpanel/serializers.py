@@ -279,6 +279,17 @@ class DashboardStatsSerializer(serializers.Serializer):
     platform_earnings = serializers.FloatField()
     pending_payouts = serializers.FloatField()
     revenue_trend = serializers.ListField()
+    payment_success_rate = serializers.FloatField()
+    payment_failure_rate = serializers.FloatField()
+    refund_rate = serializers.FloatField()
+    refund_amount_total = serializers.FloatField()
+    net_revenue = serializers.FloatField()
+    payout_pending_total = serializers.FloatField()
+    payout_ready_total = serializers.FloatField()
+    payout_paid_total = serializers.FloatField()
+    payout_failed_total = serializers.FloatField()
+    payout_on_hold_total = serializers.FloatField()
+    payout_exposure_total = serializers.FloatField()
 
 class UserManagementSerializer(serializers.Serializer):
     """User management serializer"""
@@ -348,6 +359,8 @@ class AppointmentManagementSerializer(serializers.Serializer):
     updated_at = serializers.DateTimeField()
     payment_status = serializers.CharField()
     amount = serializers.DecimalField(max_digits=8, decimal_places=2)
+    mentor_feedback = serializers.CharField(allow_blank=True, required=False)
+    user_feedback = serializers.CharField(allow_blank=True, required=False)
 
 class SystemHealthSerializer(serializers.Serializer):
     """System health status serializer"""

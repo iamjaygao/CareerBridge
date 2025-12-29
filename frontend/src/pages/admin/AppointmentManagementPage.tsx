@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   Card,
   CardContent,
@@ -85,10 +86,39 @@ const AppointmentManagementPage: React.FC = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogType, setDialogType] = useState<'view' | 'cancel'>('view');
   const [cancelReason, setCancelReason] = useState('');
+  const location = useLocation();
 
   useEffect(() => {
     fetchAppointments();
   }, [page, searchTerm, statusFilter, paymentFilter, dateFrom, dateTo]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const statusParam = params.get('status');
+    const paymentParam = params.get('payment_status');
+    const searchParam = params.get('search');
+    const dateFromParam = params.get('date_from');
+    const dateToParam = params.get('date_to');
+
+    if (statusParam) {
+      setStatusFilter(statusParam);
+    }
+    if (paymentParam) {
+      setPaymentFilter(paymentParam);
+    }
+    if (searchParam) {
+      setSearchTerm(searchParam);
+    }
+    if (dateFromParam) {
+      setDateFrom(dateFromParam);
+    }
+    if (dateToParam) {
+      setDateTo(dateToParam);
+    }
+    if (statusParam || paymentParam || searchParam || dateFromParam || dateToParam) {
+      setPage(1);
+    }
+  }, [location.search]);
 
   const fetchAppointments = async () => {
     try {

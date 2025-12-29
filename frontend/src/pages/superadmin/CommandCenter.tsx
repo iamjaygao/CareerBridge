@@ -27,6 +27,7 @@ import { useRole } from '../../contexts/RoleContext';
 import adminService from '../../services/api/adminService';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import { DashboardStats } from '../../types';
+import { getLandingPathByRole } from '../../utils/roleLanding';
 import { KPICard, AlertPanel, SparklineChart, QuickActions } from '../../components/dashboard';
 import type { AlertItem, QuickAction } from '../../components/dashboard';
 
@@ -41,7 +42,7 @@ const CommandCenter: React.FC = () => {
   // Redirect if not superadmin
   useEffect(() => {
     if (user && user.role !== 'superadmin') {
-      navigate('/dashboard');
+      navigate(getLandingPathByRole(user.role));
     }
   }, [user, navigate]);
 
@@ -125,8 +126,8 @@ const CommandCenter: React.FC = () => {
             description: `${dashboardData.pending_resume_reviews} resumes need review`,
             count: dashboardData.pending_resume_reviews,
             actionLabel: 'Review',
-            actionPath: '/staff/resumes',
-            onClick: () => navigate('/staff/resumes'),
+            actionPath: '/superadmin/assessment',
+            onClick: () => navigate('/superadmin/assessment'),
           },
         ]
       : []),
@@ -156,9 +157,9 @@ const CommandCenter: React.FC = () => {
     },
     {
       id: 'review-resume',
-      label: 'Review Resume',
+      label: 'Review Assessments',
       icon: <DescriptionIcon />,
-      onClick: () => navigate('/staff/resumes'),
+      onClick: () => navigate('/superadmin/assessment'),
       color: 'info',
     },
     {
@@ -179,7 +180,7 @@ const CommandCenter: React.FC = () => {
       id: 'open-analytics',
       label: 'Open Analytics',
       icon: <AnalyticsIcon />,
-      onClick: () => navigate('/analytics'),
+      onClick: () => navigate('/superadmin/analytics'),
       color: 'secondary',
       variant: 'contained',
     },
@@ -290,37 +291,37 @@ const CommandCenter: React.FC = () => {
             </Typography>
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6}>
-                <SparklineChart
-                  title="Users"
-                  data={dashboardData.users_7_day || []}
-                  color="#667eea"
-                  onClick={() => navigate('/analytics?section=users')}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <SparklineChart
-                  title="Mentors"
-                  data={dashboardData.mentors_7_day || []}
-                  color="#764ba2"
-                  onClick={() => navigate('/analytics?section=mentors')}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <SparklineChart
-                  title="Appointments"
-                  data={dashboardData.appointments_7_day || []}
-                  color="#f093fb"
-                  onClick={() => navigate('/analytics?section=appointments')}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <SparklineChart
-                  title="Resume Uploads"
-                  data={dashboardData.resumes_7_day || []}
-                  color="#4facfe"
-                  onClick={() => navigate('/analytics?section=resumes')}
-                />
-              </Grid>
+              <SparklineChart
+                title="Users"
+                data={dashboardData.users_7_day || []}
+                color="#667eea"
+                onClick={() => navigate('/superadmin/analytics?section=users')}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <SparklineChart
+                title="Mentors"
+                data={dashboardData.mentors_7_day || []}
+                color="#764ba2"
+                onClick={() => navigate('/superadmin/analytics?section=mentors')}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <SparklineChart
+                title="Appointments"
+                data={dashboardData.appointments_7_day || []}
+                color="#f093fb"
+                onClick={() => navigate('/superadmin/analytics?section=appointments')}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <SparklineChart
+                title="Resume Uploads"
+                data={dashboardData.resumes_7_day || []}
+                color="#4facfe"
+                onClick={() => navigate('/superadmin/analytics?section=resumes')}
+              />
+            </Grid>
             </Grid>
           </Paper>
         </Grid>
@@ -330,4 +331,3 @@ const CommandCenter: React.FC = () => {
 };
 
 export default CommandCenter;
-

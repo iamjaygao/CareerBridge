@@ -6,12 +6,11 @@
 export const getHomePath = (role?: string | null): string => {
   const roleMap: Record<string, string> = {
     superadmin: '/superadmin',
-    admin: '/admin/dashboard',
-    staff: '/staff/dashboard',
-    mentor: '/mentor/dashboard',
-    student: '/dashboard',
+    admin: '/admin',
+    staff: '/staff',
+    mentor: '/mentor',
+    student: '/student',
   };
 
   return roleMap[role || ''] || '/dashboard';
 };
-

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 
 import { RootState } from '../../store';
@@ -19,6 +19,7 @@ const AdminRoute: React.FC = () => {
     (state: RootState) => state.auth
   );
   const { activeRole } = useRole();
+  const location = useLocation();
 
   // Still loading auth state
   if (!authLoaded) {
@@ -27,6 +28,18 @@ const AdminRoute: React.FC = () => {
 
   // Not logged in
   if (!isAuthenticated) {
+    return <ForbiddenPage />;
+  }
+
+  if (user?.role === 'superadmin') {
+    if (location.pathname.startsWith('/analytics')) {
+      return (
+        <Navigate
+          to={`/superadmin/analytics${location.search}`}
+          replace
+        />
+      );
+    }
     return <ForbiddenPage />;
   }
 

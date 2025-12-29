@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -17,6 +18,7 @@ import {
   Upload as UploadIcon,
   Lock as LockIcon,
   VerifiedUser as VerifiedUserIcon,
+  ArrowBack as ArrowBackIcon,
 } from '@mui/icons-material';
 import { RootState } from '../../store';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
@@ -25,6 +27,7 @@ import { fetchUserProfile } from '../../store/slices/authSlice';
 
 const StudentProfilePage: React.FC = () => {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { user } = useSelector((state: RootState) => state.auth);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -160,9 +163,18 @@ const StudentProfilePage: React.FC = () => {
     <Box>
       {/* Page Header */}
       <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
-          Profile
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+          <Typography variant="h4" sx={{ fontWeight: 700 }}>
+            Profile
+          </Typography>
+          <Button
+            variant="text"
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate('/student')}
+          >
+            Back to Dashboard
+          </Button>
+        </Box>
         <Typography variant="body2" color="text.secondary">
           Manage your personal information, security, and payouts
         </Typography>

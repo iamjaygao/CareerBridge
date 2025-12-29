@@ -68,7 +68,7 @@ def _notify_staff_appointment_cancelled(appointment) -> None:
             message=message,
             priority='high',
             related_appointment=appointment,
-            payload={'appointment_id': appointment.id},
+            payload=appointment.get_notification_payload(),
         )
 
 
@@ -98,7 +98,7 @@ def _notify_staff_user_feedback(appointment) -> None:
             message=message,
             priority='normal',
             related_appointment=appointment,
-            payload={'feedback_id': appointment.id},
+            payload=appointment.get_notification_payload(),
         )
 
 class TimeSlotListView(generics.ListAPIView):
@@ -304,6 +304,7 @@ class AppointmentDetailView(generics.RetrieveUpdateDestroyAPIView):
             ),
             priority='high',
             related_appointment=appointment,
+            payload=appointment.get_notification_payload(),
         )
         _notify_staff_appointment_cancelled(appointment)
         
@@ -363,6 +364,7 @@ class AppointmentDetailView(generics.RetrieveUpdateDestroyAPIView):
             message=f'Thank you for rating your {appointment_details} with {mentor_name}.',
             priority='low',
             related_appointment=appointment,
+            payload=appointment.get_notification_payload(),
         )
         _notify_staff_user_feedback(appointment)
 
@@ -451,6 +453,7 @@ class MentorAppointmentStatusView(APIView):
                     ),
                     priority=priority,
                     related_appointment=appointment,
+                    payload=appointment.get_notification_payload(),
                 )
                 if appointment.status == 'cancelled':
                     _notify_staff_appointment_cancelled(appointment)
@@ -474,7 +477,10 @@ class MentorAppointmentStatusView(APIView):
                         message=f'Please share your feedback about your {appointment_details} with {mentor_name}.',
                         priority='normal',
                         related_appointment=appointment,
-                        payload={'action': 'review_appointment', 'appointment_id': appointment.id},
+                        payload={
+                            **appointment.get_notification_payload(),
+                            'action': 'review_appointment',
+                        },
                     )
                 schedule_payout_for_appointment(appointment)
 
@@ -520,6 +526,7 @@ class MentorAppointmentStatusView(APIView):
                     ),
                     priority=priority,
                     related_appointment=appointment,
+                    payload=appointment.get_notification_payload(),
                 )
                 if appointment.status == 'cancelled':
                     _notify_staff_appointment_cancelled(appointment)
@@ -546,7 +553,10 @@ class MentorAppointmentStatusView(APIView):
                         message=f'Please share your feedback about your {appointment_details} with {mentor_name}.',
                         priority='normal',
                         related_appointment=appointment,
-                        payload={'action': 'review_appointment', 'appointment_id': appointment.id},
+                        payload={
+                            **appointment.get_notification_payload(),
+                            'action': 'review_appointment',
+                        },
                     )
                 schedule_payout_for_appointment(appointment)
             
@@ -617,6 +627,14 @@ class AppointmentRequestDetailView(generics.RetrieveUpdateAPIView):
         
         mentor_name = appointment_request.mentor.user.get_full_name() or appointment_request.mentor.user.username
         request_details = _format_request_details(appointment_request)
+        request_payload = {
+            'appointment_details': request_details,
+            'request_id': appointment_request.id,
+            'mentor_id': appointment_request.mentor_id,
+            'mentor_name': mentor_name,
+            'student_id': appointment_request.user_id,
+            'student_name': appointment_request.user.get_full_name() or appointment_request.user.username,
+        }
         if status_action == 'accepted':
             notify(
                 NotificationType.APPOINTMENT_CONFIRMED,
@@ -632,6 +650,7 @@ class AppointmentRequestDetailView(generics.RetrieveUpdateAPIView):
                 ),
                 priority='normal',
                 related_mentor=appointment_request.mentor,
+                payload=request_payload,
             )
         else:
             notify(
@@ -644,6 +663,7 @@ class AppointmentRequestDetailView(generics.RetrieveUpdateAPIView):
                 message=f'{mentor_name} rejected your appointment request ({request_details}).',
                 priority='normal',
                 related_mentor=appointment_request.mentor,
+                payload=request_payload,
             )
         
         return Response({"message": "Response submitted successfully"})
@@ -682,6 +702,14 @@ def appointment_request_respond(request, pk):
 
     mentor_name = appointment_request.mentor.user.get_full_name() or appointment_request.mentor.user.username
     request_details = _format_request_details(appointment_request)
+    request_payload = {
+        'appointment_details': request_details,
+        'request_id': appointment_request.id,
+        'mentor_id': appointment_request.mentor_id,
+        'mentor_name': mentor_name,
+        'student_id': appointment_request.user_id,
+        'student_name': appointment_request.user.get_full_name() or appointment_request.user.username,
+    }
     if status_action == 'accepted':
         notify(
             NotificationType.APPOINTMENT_CONFIRMED,
@@ -697,6 +725,7 @@ def appointment_request_respond(request, pk):
             ),
             priority='normal',
             related_mentor=appointment_request.mentor,
+            payload=request_payload,
         )
     else:
         notify(
@@ -709,6 +738,7 @@ def appointment_request_respond(request, pk):
             message=f'{mentor_name} rejected your appointment request ({request_details}).',
             priority='normal',
             related_mentor=appointment_request.mentor,
+            payload=request_payload,
         )
 
     return Response({"message": "Response submitted successfully"})
@@ -823,6 +853,7 @@ def lock_slot(request):
                     ),
                     priority='high',
                     related_appointment=appointment,
+                    payload=appointment.get_notification_payload(),
                 )
                 _notify_staff_appointment_cancelled(appointment)
 
@@ -949,6 +980,7 @@ def lock_slot(request):
                     ),
                     priority='normal',
                     related_appointment=appointment,
+                    payload=appointment.get_notification_payload(),
                 )
                 
                 return Response({

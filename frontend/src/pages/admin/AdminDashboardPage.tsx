@@ -192,6 +192,7 @@ const AdminDashboardPage: React.FC = () => {
   const [dashboardStats, setDashboardStats] = useState<AdminDashboardStats | null>(null);
   const [systemHealth, setSystemHealth] = useState<AdminSystemHealth | null>(null);
   const [aiStats, setAiStats] = useState<any>(null);
+  const todayParam = new Date().toISOString().split('T')[0];
   
   // Check if user has admin access (admin or superadmin)
   const canAccessAdmin = hasAdminAccess(user);
@@ -396,6 +397,75 @@ const AdminDashboardPage: React.FC = () => {
                     <Typography variant="h5" fontWeight="bold">
                       {aiStats?.ai_usage || 0}
                     </Typography>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            {/* Action Items */}
+            <Grid item xs={12} md={6}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Action Items
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Box>
+                        <Typography variant="body2" fontWeight="medium">
+                          Pending mentor approvals
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Review new applications
+                        </Typography>
+                      </Box>
+                      <Chip label={dashboardStats?.pending_mentor_approvals || 0} color="warning" size="small" />
+                    </Box>
+                    <Button
+                      variant="outlined"
+                      onClick={() => navigate('/admin/mentors?status=pending')}
+                      sx={{ justifyContent: 'flex-start' }}
+                    >
+                      Review mentors
+                    </Button>
+
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 1 }}>
+                      <Box>
+                        <Typography variant="body2" fontWeight="medium">
+                          Pending resume reviews
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Assessments waiting for review
+                        </Typography>
+                      </Box>
+                      <Chip label={dashboardStats?.pending_resume_reviews || 0} color="info" size="small" />
+                    </Box>
+                    <Button
+                      variant="outlined"
+                      onClick={() => navigate('/admin/assessment')}
+                      sx={{ justifyContent: 'flex-start' }}
+                    >
+                      Review assessments
+                    </Button>
+
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 1 }}>
+                      <Box>
+                        <Typography variant="body2" fontWeight="medium">
+                          Appointments today
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Monitor session flow
+                        </Typography>
+                      </Box>
+                      <Chip label={dashboardStats?.appointments_today || 0} color="success" size="small" />
+                    </Box>
+                    <Button
+                      variant="outlined"
+                      onClick={() => navigate(`/admin/appointments?date_from=${todayParam}&date_to=${todayParam}`)}
+                      sx={{ justifyContent: 'flex-start' }}
+                    >
+                      View appointments
+                    </Button>
                   </Box>
                 </CardContent>
               </Card>

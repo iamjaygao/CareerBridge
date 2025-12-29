@@ -31,6 +31,14 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
+  // Prevent non-superadmin accounts from inheriting an override role
+  useEffect(() => {
+    if (overrideRole && user?.role !== 'superadmin') {
+      localStorage.removeItem(OVERRIDE_ROLE_KEY);
+      setOverrideRoleState(null);
+    }
+  }, [overrideRole, user?.role]);
+
   // Determine effective role: override_role OR real user role
   // effectiveRole = override_role ?? user.role
   const effectiveRole = overrideRole || user?.role || null;
@@ -42,6 +50,11 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const currentRole = effectiveRole;
 
   const setOverrideRole = (role: string | null) => {
+    if (user?.role !== 'superadmin') {
+      localStorage.removeItem(OVERRIDE_ROLE_KEY);
+      setOverrideRoleState(null);
+      return;
+    }
     if (role) {
       localStorage.setItem(OVERRIDE_ROLE_KEY, role);
       setOverrideRoleState(role);
@@ -87,4 +100,3 @@ export const useRole = (): RoleContextType => {
   }
   return context;
 };
-

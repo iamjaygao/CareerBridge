@@ -290,6 +290,9 @@ const SystemPage: React.FC = () => {
     return <ErrorIcon sx={{ color }} />;
   };
 
+  const formatServiceName = (name: string) =>
+    name.replace(/_/g, ' ').replace(/\b\w/g, (match) => match.toUpperCase());
+
   if (!isSuperAdmin) {
     return null;
   }
@@ -507,6 +510,116 @@ const SystemPage: React.FC = () => {
                 </Typography>
               </CardContent>
             </Card>
+          </Grid>
+        </Grid>
+      </Paper>
+
+      {/* SECTION 1.5: External Services & System Metrics */}
+      <Paper
+        sx={{
+          p: 3,
+          mb: 3,
+          borderRadius: 2,
+          boxShadow: '0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24)',
+        }}
+      >
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={6}>
+            <Typography
+              variant="h5"
+              gutterBottom
+              sx={{ fontWeight: 600, mb: 2, textAlign: 'left' }}
+            >
+              External Services
+            </Typography>
+            <Grid container spacing={2}>
+              {(systemHealth?.external_services || []).map((service) => (
+                <Grid item xs={12} sm={6} key={service.name}>
+                  <Card sx={{ borderRadius: 2, boxShadow: '0 1px 2px rgba(0,0,0,0.12)' }}>
+                    <CardContent>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                        {getHealthIcon(service.status)}
+                        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                          {formatServiceName(service.name)}
+                        </Typography>
+                      </Box>
+                      <Typography variant="body2" color="text.secondary">
+                        Status: {service.status}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Response: {service.response_time || 0}ms
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+              {(systemHealth?.external_services || []).length === 0 && (
+                <Grid item xs={12}>
+                  <Typography variant="body2" color="text.secondary">
+                    No external services data available.
+                  </Typography>
+                </Grid>
+              )}
+            </Grid>
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <Typography
+              variant="h5"
+              gutterBottom
+              sx={{ fontWeight: 600, mb: 2, textAlign: 'left' }}
+            >
+              System Metrics
+            </Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <Card sx={{ borderRadius: 2, boxShadow: '0 1px 2px rgba(0,0,0,0.12)' }}>
+                  <CardContent>
+                    <Typography variant="subtitle2" color="text.secondary">
+                      CPU Usage
+                    </Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                      {systemHealth?.system_metrics?.cpu_usage?.toFixed(1) || '0.0'}%
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Card sx={{ borderRadius: 2, boxShadow: '0 1px 2px rgba(0,0,0,0.12)' }}>
+                  <CardContent>
+                    <Typography variant="subtitle2" color="text.secondary">
+                      Memory Usage
+                    </Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                      {systemHealth?.system_metrics?.memory_usage?.toFixed(1) || '0.0'}%
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Card sx={{ borderRadius: 2, boxShadow: '0 1px 2px rgba(0,0,0,0.12)' }}>
+                  <CardContent>
+                    <Typography variant="subtitle2" color="text.secondary">
+                      Disk Usage
+                    </Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                      {systemHealth?.system_metrics?.disk_usage?.toFixed(1) || '0.0'}%
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Card sx={{ borderRadius: 2, boxShadow: '0 1px 2px rgba(0,0,0,0.12)' }}>
+                  <CardContent>
+                    <Typography variant="subtitle2" color="text.secondary">
+                      Active Connections
+                    </Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                      {systemHealth?.system_metrics?.active_connections ?? 0}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            </Grid>
           </Grid>
         </Grid>
       </Paper>

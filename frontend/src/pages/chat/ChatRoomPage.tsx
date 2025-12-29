@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import { Box, Paper, Typography, IconButton } from '@mui/material';
 import { ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import PageHeader from '../../components/common/PageHeader';
@@ -7,24 +8,27 @@ import LoadingSpinner from '../../components/common/LoadingSpinner';
 import ErrorAlert from '../../components/common/ErrorAlert';
 import ChatWindow from '../../components/chat/ChatWindow';
 import chatService, { ChatRoom } from '../../services/api/chatService';
+import { RootState } from '../../store';
 
 const ChatRoomPage: React.FC = () => {
-  const { roomId } = useParams<{ roomId: string }>();
+  const { roomId, id } = useParams<{ roomId?: string; id?: string }>();
+  const { user } = useSelector((state: RootState) => state.auth);
   const navigate = useNavigate();
   const [chatRoom, setChatRoom] = useState<ChatRoom | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const resolvedRoomId = roomId || id;
 
   useEffect(() => {
-    if (roomId) {
+    if (resolvedRoomId) {
       loadChatRoom();
     }
-  }, [roomId]);
+  }, [resolvedRoomId]);
 
   const loadChatRoom = async () => {
     try {
       setLoading(true);
-      const room = await chatService.getChatRoom(parseInt(roomId!));
+      const room = await chatService.getChatRoom(parseInt(resolvedRoomId!));
       setChatRoom(room);
     } catch (err) {
       setError('Failed to load chat room');
@@ -35,7 +39,8 @@ const ChatRoomPage: React.FC = () => {
   };
 
   const handleBack = () => {
-    navigate('/chat');
+    const basePath = user?.role === 'mentor' ? '/mentor/chat' : user?.role === 'student' ? '/student/chat' : '/chat';
+    navigate(basePath);
   };
 
   if (loading) {
@@ -55,8 +60,14 @@ const ChatRoomPage: React.FC = () => {
       <PageHeader
         title={`Chat with ${chatRoom.mentor_name}`}
         breadcrumbs={[
-          { label: 'Chats', path: '/chat' },
-          { label: chatRoom.mentor_name || 'Chat', path: `/chat/${roomId}` }
+          {
+            label: 'Chats',
+            path: user?.role === 'mentor' ? '/mentor/chat' : user?.role === 'student' ? '/student/chat' : '/chat',
+          },
+          {
+            label: chatRoom.mentor_name || 'Chat',
+            path: `${user?.role === 'mentor' ? '/mentor/chat' : user?.role === 'student' ? '/student/chat' : '/chat'}/${resolvedRoomId}`,
+          },
         ]}
         action={
           <IconButton onClick={handleBack}>
@@ -66,7 +77,7 @@ const ChatRoomPage: React.FC = () => {
       />
 
       <Box sx={{ mt: 3 }}>
-        <ChatWindow chatRoomId={parseInt(roomId!)} />
+        <ChatWindow chatRoomId={parseInt(resolvedRoomId!)} />
       </Box>
     </>
   );

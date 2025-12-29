@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -71,6 +72,7 @@ const UserSupportPage: React.FC = () => {
   const [userOptions, setUserOptions] = useState<UserOption[]>([]);
   const [userQuery, setUserQuery] = useState('');
   const [userLoading, setUserLoading] = useState(false);
+  const location = useLocation();
   const [createForm, setCreateForm] = useState({
     userId: '',
     issue: '',
@@ -108,6 +110,24 @@ const UserSupportPage: React.FC = () => {
 
     fetchTickets();
   }, [showError]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const statusParam = params.get('status');
+    const priorityParam = params.get('priority');
+
+    if (statusParam === 'open' || statusParam === 'in_progress') {
+      setStatusFilter(statusParam);
+    } else {
+      setStatusFilter(null);
+    }
+
+    if (priorityParam === 'urgent') {
+      setPriorityFilter('urgent');
+    } else {
+      setPriorityFilter(null);
+    }
+  }, [location.search]);
 
   useEffect(() => {
     if (!createDialogOpen) {

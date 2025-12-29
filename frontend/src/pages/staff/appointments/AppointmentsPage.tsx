@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -45,10 +46,12 @@ interface Appointment {
   duration: number;
   status: string;
   topic: string;
+  mentor_feedback?: string;
 }
 
 const AppointmentsPage: React.FC = () => {
   const { showSuccess, showError } = useNotification();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
@@ -56,6 +59,10 @@ const AppointmentsPage: React.FC = () => {
   const [actionType, setActionType] = useState<'view' | 'cancel' | 'no_show'>('view');
   const [cancelReason, setCancelReason] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [windowFilter, setWindowFilter] = useState<'24h' | null>(null);
+  const [missingFeedbackOnly, setMissingFeedbackOnly] = useState(false);
+  const location = useLocation();
 
   useEffect(() => {
     const fetchAppointments = async () => {
@@ -83,6 +90,7 @@ const AppointmentsPage: React.FC = () => {
             duration: apt.duration || 60,
             status: apt.status || 'pending',
             topic: apt.topic || apt.title || 'Session',
+            mentor_feedback: apt.mentor_feedback || '',
           };
         });
         setAppointments(mapped);
@@ -95,6 +103,17 @@ const AppointmentsPage: React.FC = () => {
 
     fetchAppointments();
   }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const statusParam = params.get('status');
+    const filterParam = params.get('filter');
+    const windowParam = params.get('window');
+
+    setStatusFilter(statusParam);
+    setWindowFilter(windowParam === '24h' ? '24h' : null);
+    setMissingFeedbackOnly(filterParam === 'missing_feedback');
+  }, [location.search]);
 
   const handleAction = (appointment: Appointment, type: 'view' | 'cancel' | 'no_show' = 'view') => {
     setSelectedAppointment(appointment);
@@ -139,6 +158,25 @@ const AppointmentsPage: React.FC = () => {
     }
   };
 
+  let filteredAppointments = appointments;
+  if (statusFilter) {
+    filteredAppointments = filteredAppointments.filter((appointment) => appointment.status === statusFilter);
+  }
+  if (windowFilter === '24h') {
+    const now = new Date();
+    const cutoff = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    filteredAppointments = filteredAppointments.filter((appointment) => {
+      if (!appointment.scheduled_at) return false;
+      const start = new Date(appointment.scheduled_at);
+      return start >= now && start <= cutoff;
+    });
+  }
+  if (missingFeedbackOnly) {
+    filteredAppointments = filteredAppointments.filter(
+      (appointment: any) => appointment.status === 'completed' && !appointment.mentor_feedback
+    );
+  }
+
   const getStatusChip = (status: string) => {
     const colors: Record<string, 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'> = {
       pending: 'warning',
@@ -174,6 +212,39 @@ const AppointmentsPage: React.FC = () => {
         </Typography>
       </Box>
 
+      {(statusFilter || windowFilter || missingFeedbackOnly) && (
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+              <Typography variant="body2" color="text.secondary">
+                Active filters:
+              </Typography>
+              {statusFilter && (
+                <Chip label={`Status: ${statusFilter}`} size="small" />
+              )}
+              {windowFilter && (
+                <Chip label="Next 24h" size="small" color="success" />
+              )}
+              {missingFeedbackOnly && (
+                <Chip label="Missing feedback" size="small" color="error" />
+              )}
+              <Button
+                size="small"
+                variant="text"
+                onClick={() => {
+                  setStatusFilter(null);
+                  setWindowFilter(null);
+                  setMissingFeedbackOnly(false);
+                  navigate('/staff/appointments', { replace: true });
+                }}
+              >
+                Clear
+              </Button>
+            </Box>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Appointments Table */}
       <Card>
         <CardContent>
@@ -191,7 +262,7 @@ const AppointmentsPage: React.FC = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {appointments.map((appointment) => (
+                {filteredAppointments.map((appointment) => (
                   <TableRow key={appointment.id} hover>
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>

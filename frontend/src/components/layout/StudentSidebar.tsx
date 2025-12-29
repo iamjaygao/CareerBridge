@@ -20,6 +20,8 @@ import {
   School,
   Event,
   Person,
+  Description,
+  Chat,
 } from '@mui/icons-material';
 
 const drawerWidth = 260;
@@ -40,6 +42,8 @@ const StudentSidebar: React.FC<StudentSidebarProps> = ({ mobileOpen, onMobileClo
     { text: 'Market Intelligence', icon: <Search />, path: '/student/intelligence' },
     { text: 'Mentors', icon: <School />, path: '/student/mentors' },
     { text: 'Appointments', icon: <Event />, path: '/student/appointments' },
+    { text: 'Resumes', icon: <Description />, path: '/student/resumes' },
+    { text: 'Chat', icon: <Chat />, path: '/student/chat' },
     { text: 'Profile', icon: <Person />, path: '/student/profile' },
   ];
 
@@ -162,4 +166,3 @@ const StudentSidebar: React.FC<StudentSidebarProps> = ({ mobileOpen, onMobileClo
 };
 
 export default StudentSidebar;
-

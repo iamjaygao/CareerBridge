@@ -22,13 +22,16 @@ import {
   Add as AddIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import PageHeader from '../../components/common/PageHeader';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import ErrorAlert from '../../components/common/ErrorAlert';
 import chatService, { ChatRoom } from '../../services/api/chatService';
+import { RootState } from '../../store';
 
 const ChatListPage: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useSelector((state: RootState) => state.auth);
   const [chatRooms, setChatRooms] = useState<ChatRoom[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -50,8 +53,11 @@ const ChatListPage: React.FC = () => {
     }
   };
 
+  const chatBasePath = user?.role === 'mentor' ? '/mentor/chat' : user?.role === 'student' ? '/student/chat' : '/chat';
+  const mentorsBasePath = user?.role === 'student' ? '/student/mentors' : '/mentors';
+
   const handleChatRoomClick = (roomId: number) => {
-    navigate(`/chat/${roomId}`);
+    navigate(`${chatBasePath}/${roomId}`);
   };
 
   const formatLastMessage = (lastMessage: ChatRoom['last_message']) => {
@@ -87,7 +93,7 @@ const ChatListPage: React.FC = () => {
     <>
       <PageHeader
         title="Chats"
-        breadcrumbs={[{ label: 'Chats', path: '/chat' }]}
+        breadcrumbs={[{ label: 'Chats', path: chatBasePath }]}
       />
 
       <Paper sx={{ mt: 3 }}>
@@ -177,7 +183,7 @@ const ChatListPage: React.FC = () => {
         color="primary"
         aria-label="add"
         sx={{ position: 'fixed', bottom: 16, right: 16 }}
-        onClick={() => navigate('/mentors')}
+        onClick={() => navigate(mentorsBasePath)}
       >
         <AddIcon />
       </Fab>

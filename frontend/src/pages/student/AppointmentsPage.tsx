@@ -12,11 +12,11 @@ import {
   TableHead,
   TableRow,
   Paper,
-  Chip,
   IconButton,
   Button,
   Tabs,
   Tab,
+  Chip,
 } from '@mui/material';
 import {
   Visibility as ViewIcon,
@@ -35,6 +35,8 @@ const StudentAppointmentsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [tabValue, setTabValue] = useState(0);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [reviewFilter, setReviewFilter] = useState(false);
 
   useEffect(() => {
     fetchAppointments();
@@ -62,6 +64,32 @@ const StudentAppointmentsPage: React.FC = () => {
       })();
     }
   }, [location.search, navigate]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tabParam = params.get('tab');
+    const statusParam = params.get('status');
+    const filterParam = params.get('filter');
+
+    if (tabParam === 'past') {
+      setTabValue(1);
+    } else if (tabParam === 'upcoming') {
+      setTabValue(0);
+    }
+
+    if (statusParam) {
+      setStatusFilter(statusParam);
+    } else {
+      setStatusFilter('all');
+    }
+
+    if (filterParam === 'needs_review') {
+      setReviewFilter(true);
+      setTabValue(1);
+    } else {
+      setReviewFilter(false);
+    }
+  }, [location.search]);
 
   const fetchAppointments = async () => {
     try {
@@ -183,7 +211,15 @@ const StudentAppointmentsPage: React.FC = () => {
     return <ErrorAlert message={error} />;
   }
 
-  const displayedAppointments = tabValue === 0 ? upcomingAppointments : pastAppointments;
+  let displayedAppointments = tabValue === 0 ? upcomingAppointments : pastAppointments;
+  if (statusFilter !== 'all') {
+    displayedAppointments = displayedAppointments.filter((apt) => apt.status === statusFilter);
+  }
+  if (reviewFilter) {
+    displayedAppointments = displayedAppointments.filter(
+      (apt) => apt.status === 'completed' && !apt.user_rating && !apt.user_feedback
+    );
+  }
 
   return (
     <Box>
@@ -204,6 +240,30 @@ const StudentAppointmentsPage: React.FC = () => {
             <Tab label={`Upcoming (${upcomingAppointments.length})`} />
             <Tab label={`Past (${pastAppointments.length})`} />
           </Tabs>
+          {(statusFilter !== 'all' || reviewFilter) && (
+            <Box sx={{ display: 'flex', gap: 1, mt: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+              <Typography variant="body2" color="text.secondary">
+                Active filters:
+              </Typography>
+              {statusFilter !== 'all' && (
+                <Chip label={`Status: ${statusFilter}`} size="small" />
+              )}
+              {reviewFilter && (
+                <Chip label="Needs review" size="small" color="info" />
+              )}
+              <Button
+                size="small"
+                variant="text"
+                onClick={() => {
+                  setStatusFilter('all');
+                  setReviewFilter(false);
+                  navigate('/student/appointments', { replace: true });
+                }}
+              >
+                Clear
+              </Button>
+            </Box>
+          )}
         </CardContent>
       </Card>
 
@@ -228,6 +288,7 @@ const StudentAppointmentsPage: React.FC = () => {
                     const mentor = typeof appointment.mentor === 'object' ? appointment.mentor : null;
                     const mentorName = getMentorName(appointment.mentor);
                     const mentorInitial = mentorName.charAt(0).toUpperCase();
+                    const needsReview = appointment.status === 'completed' && !appointment.user_rating && !appointment.user_feedback;
                     
                     return (
                       <TableRow key={appointment.id} hover>
@@ -272,11 +333,29 @@ const StudentAppointmentsPage: React.FC = () => {
                         </TableCell>
                         <TableCell>
                           {getStatusChip(appointment.status, appointment.is_paid)}
+                          {needsReview && (
+                            <Chip
+                              label="Needs review"
+                              color="info"
+                              size="small"
+                              sx={{ ml: 1 }}
+                            />
+                          )}
                         </TableCell>
                         <TableCell align="right">
+                          {needsReview && (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => navigate(`/student/appointments/${appointment.id}?review=true`)}
+                              sx={{ mr: 1 }}
+                            >
+                              Review
+                            </Button>
+                          )}
                           <IconButton
                             size="small"
-                            onClick={() => navigate(`/student/appointments/${appointment.id}`)}
+                            onClick={() => navigate(`/student/appointments/${appointment.id}${needsReview ? '?review=true' : ''}`)}
                             color="primary"
                           >
                             <ViewIcon />

@@ -43,6 +43,8 @@ const ExportsPage: React.FC = () => {
   const [exports, setExports] = useState<ExportItem[]>([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [retryingId, setRetryingId] = useState<number | null>(null);
 
   const fetchExports = async (targetPage = page) => {
     try {
@@ -72,6 +74,14 @@ const ExportsPage: React.FC = () => {
     fetchExports();
   }, [page]);
 
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const interval = setInterval(() => {
+      fetchExports();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [autoRefresh, page]);
+
   const getStatusChip = (status: string) => {
     const colors: Record<string, 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'> = {
       pending: 'warning',
@@ -80,6 +90,19 @@ const ExportsPage: React.FC = () => {
       failed: 'error',
     };
     return <Chip label={status} color={colors[status] || 'default'} size="small" />;
+  };
+
+  const handleRetry = async (exportId: number) => {
+    try {
+      setRetryingId(exportId);
+      setError(null);
+      await adminService.retryDataExport(exportId);
+      await fetchExports();
+    } catch (err: any) {
+      setError(err?.response?.data?.error || 'Failed to retry export.');
+    } finally {
+      setRetryingId(null);
+    }
   };
 
   if (loading && exports.length === 0) {
@@ -97,9 +120,17 @@ const ExportsPage: React.FC = () => {
             Track export requests and download completed files
           </Typography>
         </Box>
-        <Button variant="outlined" startIcon={<RefreshIcon />} onClick={() => fetchExports(1)}>
-          Refresh
-        </Button>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button
+            variant="outlined"
+            onClick={() => setAutoRefresh((prev) => !prev)}
+          >
+            {autoRefresh ? 'Auto Refresh: On' : 'Auto Refresh: Off'}
+          </Button>
+          <Button variant="outlined" startIcon={<RefreshIcon />} onClick={() => fetchExports(1)}>
+            Refresh
+          </Button>
+        </Box>
       </Box>
 
       {error && (
@@ -121,12 +152,13 @@ const ExportsPage: React.FC = () => {
                   <TableCell>Records</TableCell>
                   <TableCell>Requested</TableCell>
                   <TableCell>File</TableCell>
+                  <TableCell>Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {exports.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} align="center">
+                    <TableCell colSpan={8} align="center">
                       <Typography variant="body2" color="text.secondary">
                         No export requests yet.
                       </Typography>
@@ -138,7 +170,16 @@ const ExportsPage: React.FC = () => {
                       <TableCell>{item.name}</TableCell>
                       <TableCell>{item.export_type_display || item.export_type}</TableCell>
                       <TableCell>{item.format_display || item.format}</TableCell>
-                      <TableCell>{getStatusChip(item.status)}</TableCell>
+                      <TableCell>
+                        <Box>
+                          {getStatusChip(item.status)}
+                          {item.status === 'failed' && item.error_message && (
+                            <Typography variant="caption" color="error" display="block">
+                              {item.error_message}
+                            </Typography>
+                          )}
+                        </Box>
+                      </TableCell>
                       <TableCell>{item.record_count ?? '-'}</TableCell>
                       <TableCell>
                         {item.created_at ? new Date(item.created_at).toLocaleString() : 'N/A'}
@@ -152,7 +193,27 @@ const ExportsPage: React.FC = () => {
                           >
                             Download
                           </Button>
-                        ) : 'Not ready'}
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">
+                            Not ready
+                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {['failed', 'pending'].includes(item.status) ? (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={() => handleRetry(item.id)}
+                            disabled={retryingId === item.id}
+                          >
+                            {retryingId === item.id ? 'Retrying...' : 'Retry'}
+                          </Button>
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">
+                            —
+                          </Typography>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))

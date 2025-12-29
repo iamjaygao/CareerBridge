@@ -23,6 +23,15 @@ import {
   Event as EventIcon,
   AdminPanelSettings as AdminIcon,
   Badge as StaffIcon,
+  AccountBalanceWallet as WalletIcon,
+  MonetizationOn as RevenueIcon,
+  Payment as PaymentIcon,
+  ReportProblem as RiskIcon,
+  HourglassEmpty as PendingIcon,
+  CheckCircle as PaidIcon,
+  PauseCircle as HoldIcon,
+  ErrorOutline as FailedIcon,
+  Schedule as ReadyIcon,
   ArrowUpward,
   ArrowDownward,
   Remove,
@@ -96,6 +105,19 @@ const SuperAdminDashboard: React.FC = () => {
     if (value === null || value === undefined) return 'N/A';
     const sign = value >= 0 ? '+' : '';
     return `${sign}${value.toFixed(1)}%`;
+  };
+
+  const formatMoney = (value?: number | null) => {
+    const normalized = typeof value === 'number' ? value : 0;
+    return `$${normalized.toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
+  };
+
+  const formatPercentValue = (value?: number | null) => {
+    const normalized = typeof value === 'number' ? value : 0;
+    return `${normalized.toFixed(1)}%`;
   };
 
   // Helper function to render metric card with growth
@@ -541,6 +563,114 @@ const SuperAdminDashboard: React.FC = () => {
         </Box>
       )}
 
+      {dashboardData && (
+        <Paper sx={{ p: 3, mb: 4 }}>
+          <Typography variant="h5" component="h2" gutterBottom sx={{ fontWeight: 600, mb: 3 }}>
+            Financial Risk & Cash
+          </Typography>
+          <Divider sx={{ mb: 3 }} />
+          <Grid container spacing={3}>
+            <Grid item xs={12} sm={6} md={3}>
+              {renderMetricCard(
+                'Payment Success Rate',
+                formatPercentValue(dashboardData.payment_success_rate),
+                <PaymentIcon sx={{ fontSize: 40 }} />,
+                'success.main',
+                undefined,
+                undefined,
+                `Failures: ${formatPercentValue(dashboardData.payment_failure_rate)}`
+              )}
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              {renderMetricCard(
+                'Refunds (Total)',
+                formatMoney(dashboardData.refund_amount_total),
+                <RiskIcon sx={{ fontSize: 40 }} />,
+                'warning.main',
+                undefined,
+                undefined,
+                `Refund rate: ${formatPercentValue(dashboardData.refund_rate)}`
+              )}
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              {renderMetricCard(
+                'Net Revenue',
+                formatMoney(dashboardData.net_revenue),
+                <RevenueIcon sx={{ fontSize: 40 }} />,
+                'success.main',
+                undefined,
+                undefined,
+                `Gross: ${formatMoney(
+                  (dashboardData.total_revenue || 0) + (dashboardData.refund_amount_total || 0)
+                )}`
+              )}
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              {renderMetricCard(
+                'Payout Exposure',
+                formatMoney(dashboardData.payout_exposure_total),
+                <WalletIcon sx={{ fontSize: 40 }} />,
+                'error.main',
+                undefined,
+                undefined,
+                `Pending: ${formatMoney(dashboardData.payout_pending_total)}`
+              )}
+            </Grid>
+          </Grid>
+        </Paper>
+      )}
+
+      {dashboardData && (
+        <Paper sx={{ p: 3, mb: 4 }}>
+          <Typography variant="h5" component="h2" gutterBottom sx={{ fontWeight: 600, mb: 3 }}>
+            Payout Status Breakdown
+          </Typography>
+          <Divider sx={{ mb: 3 }} />
+          <Grid container spacing={3}>
+            <Grid item xs={12} sm={6} md={2.4}>
+              {renderMetricCard(
+                'Pending',
+                formatMoney(dashboardData.payout_pending_total),
+                <PendingIcon sx={{ fontSize: 40 }} />,
+                'warning.main'
+              )}
+            </Grid>
+            <Grid item xs={12} sm={6} md={2.4}>
+              {renderMetricCard(
+                'Ready',
+                formatMoney(dashboardData.payout_ready_total),
+                <ReadyIcon sx={{ fontSize: 40 }} />,
+                'info.main'
+              )}
+            </Grid>
+            <Grid item xs={12} sm={6} md={2.4}>
+              {renderMetricCard(
+                'On Hold',
+                formatMoney(dashboardData.payout_on_hold_total),
+                <HoldIcon sx={{ fontSize: 40 }} />,
+                'warning.main'
+              )}
+            </Grid>
+            <Grid item xs={12} sm={6} md={2.4}>
+              {renderMetricCard(
+                'Failed',
+                formatMoney(dashboardData.payout_failed_total),
+                <FailedIcon sx={{ fontSize: 40 }} />,
+                'error.main'
+              )}
+            </Grid>
+            <Grid item xs={12} sm={6} md={2.4}>
+              {renderMetricCard(
+                'Paid',
+                formatMoney(dashboardData.payout_paid_total),
+                <PaidIcon sx={{ fontSize: 40 }} />,
+                'success.main'
+              )}
+            </Grid>
+          </Grid>
+        </Paper>
+      )}
+
       {/* Quick Actions */}
       <Paper sx={{ p: 3, mb: 4 }}>
         <Typography variant="h5" component="h2" gutterBottom sx={{ fontWeight: 600, mb: 3 }}>
@@ -593,17 +723,6 @@ const SuperAdminDashboard: React.FC = () => {
         </Grid>
       </Paper>
 
-      {/* Role Impersonation Info */}
-      <Paper sx={{ p: 3, bgcolor: 'info.light', color: 'info.contrastText' }}>
-        <Typography variant="h6" gutterBottom>
-          Role Impersonation
-        </Typography>
-        <Typography variant="body2">
-          Use the "Switch Role" menu in your profile dropdown to view the platform from different
-          user perspectives. This allows you to test and verify the experience for students, mentors,
-          staff, and admins.
-        </Typography>
-      </Paper>
     </Container>
   );
 };

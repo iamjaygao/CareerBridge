@@ -6,12 +6,12 @@
 export type UserRole = 'admin' | 'staff' | 'mentor' | 'student' | 'superadmin';
 
 /**
- * Check if role has admin access (admin or superadmin)
+ * Check if role has admin access (admin only)
  */
 export const hasAdminAccess = (role: string | null | undefined): boolean => {
   if (!role) return false;
   const normalizedRole = typeof role === 'string' ? role.toLowerCase() : role;
-  return normalizedRole === 'admin' || normalizedRole === 'superadmin';
+  return normalizedRole === 'admin';
 };
 
 /**
@@ -41,4 +41,3 @@ export const isAdmin = (role: string | null | undefined): boolean => {
   const normalizedRole = typeof role === 'string' ? role.toLowerCase() : role;
   return normalizedRole === 'admin';
 };
-

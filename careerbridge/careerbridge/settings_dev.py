@@ -6,6 +6,11 @@ This file contains settings specific to the development environment.
 
 from .settings_base import *
 
+# Ensure local .env values override any shell defaults in development.
+load_dotenv(BASE_DIR / '.env', override=True)
+CELERY_BROKER_URL = os.environ.get('REDIS_URL', CELERY_BROKER_URL)
+CELERY_RESULT_BACKEND = os.environ.get('REDIS_URL', CELERY_RESULT_BACKEND)
+
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-k@p%&#5aru7wivstcjgrnd1fhlm=qvvn-e5apz$o^h-ux-4nxw')
 

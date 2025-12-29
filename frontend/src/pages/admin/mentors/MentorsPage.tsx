@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -57,6 +58,7 @@ const MentorsPage: React.FC = () => {
   const [mentors, setMentors] = useState<Mentor[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const location = useLocation();
 
   useEffect(() => {
     const fetchMentors = async () => {
@@ -112,6 +114,14 @@ const MentorsPage: React.FC = () => {
 
     fetchMentors();
   }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const statusParam = params.get('status');
+    if (statusParam) {
+      setStatusFilter(statusParam);
+    }
+  }, [location.search]);
 
   const filteredMentors = mentors.filter(mentor => {
     const matchesSearch = mentor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||

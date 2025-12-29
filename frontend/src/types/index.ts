@@ -405,6 +405,17 @@ export interface DashboardStats {
   platform_earnings?: number;
   pending_payouts?: number;
   revenue_trend?: Array<{ date: string; value: number }>;
+  payment_success_rate?: number;
+  payment_failure_rate?: number;
+  refund_rate?: number;
+  refund_amount_total?: number;
+  net_revenue?: number;
+  payout_pending_total?: number;
+  payout_ready_total?: number;
+  payout_paid_total?: number;
+  payout_failed_total?: number;
+  payout_on_hold_total?: number;
+  payout_exposure_total?: number;
   
   // Additional legacy fields (for backward compatibility with other dashboards)
   upcomingAppointments?: number;

@@ -7,6 +7,8 @@ import {
   Route,
   Navigate,
   Outlet,
+  useLocation,
+  useParams,
 } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
@@ -41,6 +43,7 @@ import StudentRoute from './components/student/StudentRoute';
 import MentorRoute from './components/mentor/MentorRoute';
 import StaffRoute from './components/staff/StaffRoute';
 import AdminRoute from './components/admin/AdminRoute';
+import SuperAdminRoute from './components/superadmin/SuperAdminRoute';
 import { getLandingPathByRole } from './utils/roleLanding';
 
 /* ===========================
@@ -51,6 +54,16 @@ const LandingPage = lazy(() => import('./pages/home/LandingPage'));
 const LoginPage = lazy(() => import('./pages/auth/LoginPage'));
 const RegisterPage = lazy(() => import('./pages/auth/RegisterPage'));
 const EmailVerificationPage = lazy(() => import('./pages/auth/EmailVerificationPage'));
+const AboutPage = lazy(() => import('./pages/about/AboutPage'));
+const ContactPage = lazy(() => import('./pages/contact/ContactPage'));
+const BecomeMentorPage = lazy(() => import('./pages/become-mentor/BecomeMentorPage'));
+const PublicAssessmentPage = lazy(() => import('./pages/assessment/AssessmentPage'));
+const PublicIntelligencePage = lazy(() => import('./pages/intelligence/IntelligencePage'));
+const PricingPage = lazy(() => import('./pages/pricing/PricingPage'));
+const ResourcesPage = lazy(() => import('./pages/resources/ResourcesPage'));
+const ResumeTipsPage = lazy(() => import('./pages/resources/ResumeTipsPage'));
+const InterviewGuidePage = lazy(() => import('./pages/resources/InterviewGuidePage'));
+const CareerRoadmapsPage = lazy(() => import('./pages/resources/CareerRoadmapsPage'));
 
 // Student
 const StudentDashboardPage = lazy(() => import('./pages/student/DashboardPage'));
@@ -78,6 +91,7 @@ const MentorResourcesPage = lazy(() => import('./pages/mentor/ResourcesPage'));
 const StaffDashboardPage = lazy(() => import('./pages/staff/DashboardPage'));
 const StaffMentorApprovalsPage = lazy(() => import('./pages/staff/mentors/MentorApprovalsPage'));
 const StaffAppointmentsPage = lazy(() => import('./pages/staff/appointments/AppointmentsPage'));
+const StaffResumesPage = lazy(() => import('./pages/staff/ResumesPage'));
 const StaffContentManagementPage = lazy(() => import('./pages/staff/content/ContentManagementPage'));
 const StaffUserSupportPage = lazy(() => import('./pages/staff/support/UserSupportPage'));
 const StaffReportsPage = lazy(() => import('./pages/staff/reports/ReportsPage'));
@@ -90,6 +104,10 @@ const AdminAppointmentsPage = lazy(() => import('./pages/admin/AppointmentManage
 const AdminAssessmentPage = lazy(() => import('./pages/admin/AssessmentPage'));
 const AdminJobsPage = lazy(() => import('./pages/admin/JobsPage'));
 const AdminExportsPage = lazy(() => import('./pages/admin/ExportsPage'));
+const AdminContentPage = lazy(() => import('./pages/admin/content/ContentPage'));
+const AdminPromotionsPage = lazy(() => import('./pages/admin/promotions/PromotionsPage'));
+const AdminPayoutsPage = lazy(() => import('./pages/admin/payouts/PayoutsPage'));
+const AnalyticsPage = lazy(() => import('./pages/analytics/AnalyticsPage'));
 
 // SuperAdmin
 const CommandCenter = lazy(() => import('./pages/superadmin/CommandCenter'));
@@ -103,6 +121,15 @@ const SuperAdminSystemPage = lazy(() => import('./pages/superadmin/SystemPage'))
 
 // Notifications (shared)
 const NotificationsPage = lazy(() => import('./pages/notifications/NotificationsPage'));
+
+// Shared flows (authenticated)
+const ProfilePage = lazy(() => import('./pages/profile/ProfilePage'));
+const SettingsPage = lazy(() => import('./pages/settings/SettingsPage'));
+const ChatListPage = lazy(() => import('./pages/chat/ChatListPage'));
+const ChatRoomPage = lazy(() => import('./pages/chat/ChatRoomPage'));
+const ResumeListPage = lazy(() => import('./pages/resumes/ResumeListPage'));
+const UploadResumePage = lazy(() => import('./pages/resumes/UploadResumePage'));
+const ResumeAnalysisPage = lazy(() => import('./pages/resumes/ResumeAnalysisPage'));
 
 // Appointments (student)
 const AppointmentDetailPage = lazy(() => import('./pages/appointments/AppointmentDetailPage'));
@@ -129,6 +156,51 @@ const ProtectedGate: React.FC = () => {
 const DashboardRedirect: React.FC = () => {
   const role = useSelector((state: RootState) => state.auth.user?.role);
   if (!role) return <Navigate to="/login" replace />;
+  return <Navigate to={getLandingPathByRole(role)} replace />;
+};
+
+const RoleRedirect: React.FC<{ targetByRole: Record<string, string> }> = ({ targetByRole }) => {
+  const role = useSelector((state: RootState) => state.auth.user?.role);
+  const location = useLocation();
+  if (!role) return <Navigate to="/login" replace />;
+  const target = targetByRole[role] || getLandingPathByRole(role);
+  return <Navigate to={`${target}${location.search}`} replace />;
+};
+
+const AppointmentDetailRedirect: React.FC<{ action?: 'reschedule' }> = ({ action }) => {
+  const role = useSelector((state: RootState) => state.auth.user?.role);
+  const location = useLocation();
+  const { id } = useParams();
+  if (!role) return <Navigate to="/login" replace />;
+  if (role === 'student' && id) {
+    const suffix = action === 'reschedule' ? `/reschedule` : '';
+    return (
+      <Navigate to={`/student/appointments/${id}${suffix}${location.search}`} replace />
+    );
+  }
+  return <Navigate to={getLandingPathByRole(role)} replace />;
+};
+
+const ResumeDetailRedirect: React.FC = () => {
+  const role = useSelector((state: RootState) => state.auth.user?.role);
+  const location = useLocation();
+  const { id } = useParams();
+  if (!role) return <Navigate to="/login" replace />;
+  if (role === 'student' && id) {
+    return <Navigate to={`/student/resumes/${id}/analysis${location.search}`} replace />;
+  }
+  return <Navigate to={getLandingPathByRole(role)} replace />;
+};
+
+const ChatRoomRedirect: React.FC = () => {
+  const role = useSelector((state: RootState) => state.auth.user?.role);
+  const location = useLocation();
+  const { id } = useParams();
+  if (!role) return <Navigate to="/login" replace />;
+  if (id && (role === 'student' || role === 'mentor')) {
+    const base = role === 'mentor' ? '/mentor/chat' : '/student/chat';
+    return <Navigate to={`${base}/${id}${location.search}`} replace />;
+  }
   return <Navigate to={getLandingPathByRole(role)} replace />;
 };
 
@@ -171,6 +243,80 @@ const AppInner: React.FC = () => {
               path="/email-verification"
               element={<EmailVerificationPage />}
             />
+            <Route path="/assessment" element={<PublicAssessmentPage />} />
+            <Route path="/intelligence" element={<PublicIntelligencePage />} />
+            <Route path="/mentors" element={<MentorListPage />} />
+            <Route path="/mentors/:id" element={<MentorDetailPage />} />
+            <Route path="/pricing" element={<PricingPage />} />
+            <Route path="/resources" element={<ResourcesPage />} />
+            <Route path="/resources/resume-tips" element={<ResumeTipsPage />} />
+            <Route path="/resources/interview-guide" element={<InterviewGuidePage />} />
+            <Route path="/resources/career-roadmaps" element={<CareerRoadmapsPage />} />
+            <Route path="/about" element={<AboutPage />} />
+            <Route path="/contact" element={<ContactPage />} />
+            <Route path="/become-a-mentor" element={<BecomeMentorPage />} />
+          </Route>
+
+          {/* ================= Shared (Authenticated) ================= */}
+          <Route element={<ProtectedGate />}>
+            <Route
+              path="/dashboard"
+              element={<RoleRedirect targetByRole={{ student: '/student' }} />}
+            />
+            <Route
+              path="/dashboard/assessment"
+              element={<RoleRedirect targetByRole={{ student: '/student/assessment' }} />}
+            />
+            <Route
+              path="/dashboard/intelligence"
+              element={<RoleRedirect targetByRole={{ student: '/student/intelligence' }} />}
+            />
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route
+              path="/appointments"
+              element={
+                <RoleRedirect
+                  targetByRole={{
+                    student: '/student/appointments',
+                    mentor: '/mentor/appointments',
+                    staff: '/staff/appointments',
+                    admin: '/admin/appointments',
+                    superadmin: '/superadmin/appointments',
+                  }}
+                />
+              }
+            />
+            <Route
+              path="/appointments/create"
+              element={<RoleRedirect targetByRole={{ student: '/student/appointments/create' }} />}
+            />
+            <Route path="/appointments/:id" element={<AppointmentDetailRedirect />} />
+            <Route
+              path="/appointments/:id/reschedule"
+              element={<AppointmentDetailRedirect action="reschedule" />}
+            />
+            <Route
+              path="/resumes"
+              element={<RoleRedirect targetByRole={{ student: '/student/resumes' }} />}
+            />
+            <Route
+              path="/resumes/upload"
+              element={<RoleRedirect targetByRole={{ student: '/student/resumes/upload' }} />}
+            />
+            <Route path="/resumes/:id/analysis" element={<ResumeDetailRedirect />} />
+            <Route
+              path="/chat"
+              element={
+                <RoleRedirect
+                  targetByRole={{
+                    student: '/student/chat',
+                    mentor: '/mentor/chat',
+                  }}
+                />
+              }
+            />
+            <Route path="/chat/:id" element={<ChatRoomRedirect />} />
           </Route>
 
           {/* ================= Student ================= */}
@@ -188,6 +334,11 @@ const AppInner: React.FC = () => {
                 <Route path="/student/appointments/create" element={<CreateAppointmentPage />} />
                 <Route path="/student/appointments/:id" element={<AppointmentDetailPage />} />
                 <Route path="/student/appointments/:id/reschedule" element={<RescheduleAppointmentPage />} />
+                <Route path="/student/resumes" element={<ResumeListPage />} />
+                <Route path="/student/resumes/upload" element={<UploadResumePage />} />
+                <Route path="/student/resumes/:id/analysis" element={<ResumeAnalysisPage />} />
+                <Route path="/student/chat" element={<ChatListPage />} />
+                <Route path="/student/chat/:id" element={<ChatRoomPage />} />
                 <Route path="/student/notifications" element={<NotificationsPage />} />
                 <Route path="/student/profile" element={<StudentProfilePage />} />
               </Route>
@@ -205,6 +356,8 @@ const AppInner: React.FC = () => {
                 <Route path="/mentor/earnings" element={<MentorEarningsPage />} />
                 <Route path="/mentor/feedback" element={<MentorFeedbackPage />} />
                 <Route path="/mentor/resources" element={<MentorResourcesPage />} />
+                <Route path="/mentor/chat" element={<ChatListPage />} />
+                <Route path="/mentor/chat/:id" element={<ChatRoomPage />} />
                 <Route path="/mentor/notifications" element={<NotificationsPage />} />
               </Route>
             </Route>
@@ -217,6 +370,7 @@ const AppInner: React.FC = () => {
                 <Route path="/staff" element={<StaffDashboardPage />} />
                 <Route path="/staff/mentors" element={<StaffMentorApprovalsPage />} />
                 <Route path="/staff/appointments" element={<StaffAppointmentsPage />} />
+                <Route path="/staff/resumes" element={<StaffResumesPage />} />
                 <Route path="/staff/content" element={<StaffContentManagementPage />} />
                 <Route path="/staff/support" element={<StaffUserSupportPage />} />
                 <Route path="/staff/reports" element={<StaffReportsPage />} />
@@ -236,6 +390,10 @@ const AppInner: React.FC = () => {
                 <Route path="/admin/assessment" element={<AdminAssessmentPage />} />
                 <Route path="/admin/jobs" element={<AdminJobsPage />} />
                 <Route path="/admin/exports" element={<AdminExportsPage />} />
+                <Route path="/admin/content" element={<AdminContentPage />} />
+                <Route path="/admin/promotions" element={<AdminPromotionsPage />} />
+                <Route path="/admin/payouts" element={<AdminPayoutsPage />} />
+                <Route path="/analytics" element={<AnalyticsPage />} />
                 <Route path="/admin/notifications" element={<NotificationsPage />} />
               </Route>
             </Route>
@@ -243,16 +401,19 @@ const AppInner: React.FC = () => {
 
           {/* ================= SuperAdmin ================= */}
           <Route element={<ProtectedGate />}>
-            <Route element={<SuperAdminLayout />}>
-              <Route path="/superadmin" element={<CommandCenter />} />
-              <Route path="/superadmin/users" element={<SuperAdminUsersPage />} />
-              <Route path="/superadmin/mentors" element={<SuperAdminMentorsPage />} />
-              <Route path="/superadmin/appointments" element={<SuperAdminAppointmentsPage />} />
-              <Route path="/superadmin/assessment" element={<SuperAdminAssessmentPage />} />
-              <Route path="/superadmin/jobs" element={<SuperAdminJobsPage />} />
-              <Route path="/superadmin/system-console" element={<SuperAdminSystemPage />} />
-              <Route path="/superadmin/system" element={<SuperAdminSystemSettingsPage />} />
-              <Route path="/superadmin/notifications" element={<NotificationsPage />} />
+            <Route element={<SuperAdminRoute />}>
+              <Route element={<SuperAdminLayout />}>
+                <Route path="/superadmin" element={<CommandCenter />} />
+                <Route path="/superadmin/users" element={<SuperAdminUsersPage />} />
+                <Route path="/superadmin/mentors" element={<SuperAdminMentorsPage />} />
+                <Route path="/superadmin/appointments" element={<SuperAdminAppointmentsPage />} />
+                <Route path="/superadmin/assessment" element={<SuperAdminAssessmentPage />} />
+                <Route path="/superadmin/jobs" element={<SuperAdminJobsPage />} />
+                <Route path="/superadmin/system-console" element={<SuperAdminSystemPage />} />
+                <Route path="/superadmin/system" element={<SuperAdminSystemSettingsPage />} />
+                <Route path="/superadmin/analytics" element={<AnalyticsPage />} />
+                <Route path="/superadmin/notifications" element={<NotificationsPage />} />
+              </Route>
             </Route>
           </Route>
 

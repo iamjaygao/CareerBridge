@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import {
   Container,
   Typography,
@@ -32,6 +33,8 @@ import PageHeader from '../../components/common/PageHeader';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import ErrorAlert from '../../components/common/ErrorAlert';
 import resumeService from '../../services/api/resumeService';
+import { RootState } from '../../store';
+import { getLandingPathByRole } from '../../utils/roleLanding';
 
 interface AnalysisResult {
   id: number;
@@ -84,10 +87,16 @@ interface FeedbackResult {
 const ResumeAnalysisPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useSelector((state: RootState) => state.auth);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [feedback, setFeedback] = useState<FeedbackResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const isStudent = user?.role === 'student';
+  const basePath = isStudent ? '/student/resumes' : '/resumes';
+  const dashboardPath = getLandingPathByRole(user?.role);
+  const mentorsPath = isStudent ? '/student/mentors' : '/mentors';
 
   useEffect(() => {
     const fetchAnalysis = async () => {
@@ -122,6 +131,24 @@ const ResumeAnalysisPage: React.FC = () => {
     return 'error';
   };
 
+  const handleDownload = async () => {
+    if (!analysis) return;
+    try {
+      setDownloadError(null);
+      const blob = await resumeService.downloadResume(analysis.resume.id);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${analysis.resume.title || 'resume'}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      setDownloadError('Failed to download resume');
+    }
+  };
+
   const getScoreLabel = (score: number) => {
     if (score >= 90) return 'Excellent';
     if (score >= 80) return 'Very Good';
@@ -143,10 +170,9 @@ const ResumeAnalysisPage: React.FC = () => {
       <PageHeader
         title={`Analysis: ${analysis.resume.title}`}
         breadcrumbs={[
-          { label: 'Dashboard', path: '/dashboard' },
-          { label: 'Resumes', path: '/resumes' },
-          { label: analysis.resume.title, path: `/resumes/${analysis.resume.id}` },
-          { label: 'Analysis', path: `/resumes/${analysis.resume.id}/analysis` }
+          { label: 'Dashboard', path: dashboardPath },
+          { label: 'Resumes', path: basePath },
+          { label: 'Analysis', path: `${basePath}/${analysis.resume.id}/analysis` },
         ]}
       />
 
@@ -154,11 +180,12 @@ const ResumeAnalysisPage: React.FC = () => {
         <Box sx={{ mb: 3 }}>
           <Button
             startIcon={<ArrowBackIcon />}
-            onClick={() => navigate('/resumes')}
+            onClick={() => navigate(basePath)}
             sx={{ mb: 2 }}
           >
             Back to Resumes
           </Button>
+          {downloadError && <ErrorAlert message={downloadError} />}
         </Box>
 
         {/* Overall Score Card */}
@@ -444,20 +471,20 @@ const ResumeAnalysisPage: React.FC = () => {
           <Button
             variant="contained"
             startIcon={<DownloadIcon />}
-            onClick={() => navigate(`/resumes/${analysis.resume.id}`)}
+            onClick={handleDownload}
           >
             Download Resume
           </Button>
           <Button
             variant="outlined"
             startIcon={<ShareIcon />}
-            onClick={() => navigate('/mentors')}
+            onClick={() => navigate(mentorsPath)}
           >
             Get Mentor Help
           </Button>
           <Button
             variant="outlined"
-            onClick={() => navigate('/resumes')}
+            onClick={() => navigate(basePath)}
           >
             Back to Resumes
           </Button>

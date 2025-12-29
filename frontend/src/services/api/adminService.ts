@@ -647,6 +647,19 @@ class AdminService {
   }
 
   /**
+   * Retry a data export request
+   */
+  async retryDataExport(exportId: number): Promise<any> {
+    try {
+      const response = await apiClient.post(`/adminpanel/exports/${exportId}/retry/`);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to retry data export:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Reset rate limits
    */
   async resetRateLimits(): Promise<any> {

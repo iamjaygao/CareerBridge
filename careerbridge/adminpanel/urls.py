@@ -23,6 +23,7 @@ urlpatterns = [
     path('exports/', views.DataExportListView.as_view(), name='data-export-list'),
     path('exports/<int:pk>/', views.DataExportDetailView.as_view(), name='data-export-detail'),
     path('exports/<int:pk>/download/', views.DataExportDownloadView.as_view(), name='data-export-download'),
+    path('exports/<int:pk>/retry/', views.DataExportRetryView.as_view(), name='data-export-retry'),
     
     # Content moderation
     path('moderation/', views.ContentModerationListView.as_view(), name='content-moderation-list'),

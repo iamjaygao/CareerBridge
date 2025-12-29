@@ -18,17 +18,21 @@ import { AppDispatch, RootState } from '../../store';
 import { uploadResume } from '../../store/slices/resumeSlice';
 import PageHeader from '../../components/common/PageHeader';
 import { useNotification } from '../../components/common/NotificationProvider';
+import { getLandingPathByRole } from '../../utils/roleLanding';
 
 const UploadResumePage: React.FC = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
   const { showSuccess, showError } = useNotification();
   
+  const { user } = useSelector((state: RootState) => state.auth);
   const uploadProgress = useSelector((state: RootState) => state.resumes.uploadProgress);
   const [title, setTitle] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const basePath = user?.role === 'student' ? '/student/resumes' : '/resumes';
+  const dashboardPath = getLandingPathByRole(user?.role);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
@@ -64,7 +68,7 @@ const UploadResumePage: React.FC = () => {
       setIsUploading(true);
       await dispatch(uploadResume({ file, title: title.trim() })).unwrap();
       showSuccess('Resume uploaded successfully!');
-      navigate('/resumes');
+      navigate(basePath);
     } catch (error) {
       showError('Failed to upload resume. Please try again.');
       console.error('Upload failed:', error);
@@ -104,9 +108,9 @@ const UploadResumePage: React.FC = () => {
       <PageHeader
         title="Upload Resume"
         breadcrumbs={[
-          { label: 'Dashboard', path: '/dashboard' },
-          { label: 'Resumes', path: '/resumes' },
-          { label: 'Upload Resume', path: '/resumes/upload' }
+          { label: 'Dashboard', path: dashboardPath },
+          { label: 'Resumes', path: basePath },
+          { label: 'Upload Resume', path: `${basePath}/upload` },
         ]}
       />
 
@@ -115,7 +119,7 @@ const UploadResumePage: React.FC = () => {
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
             <Button
               startIcon={<ArrowBack />}
-              onClick={() => navigate('/resumes')}
+              onClick={() => navigate(basePath)}
               sx={{ mr: 2 }}
             >
               Back to Resumes
@@ -217,7 +221,7 @@ const UploadResumePage: React.FC = () => {
           <Box sx={{ display: 'flex', gap: 2, mt: 4 }}>
             <Button
               variant="outlined"
-              onClick={() => navigate('/resumes')}
+              onClick={() => navigate(basePath)}
               disabled={isUploading}
             >
               Cancel

@@ -1,6 +1,7 @@
 from celery import shared_task
 from django.utils import timezone
 from django.db.models import Count
+import os
 
 from payments.models import Payment
 from appointments.models import Appointment
@@ -8,6 +9,8 @@ from notifications.services.dispatcher import notify
 from notifications.services.rules import NotificationType
 from django.contrib.auth import get_user_model
 from adminpanel.views import get_unified_system_health
+from .models import DataExport
+from .export_utils import build_export_rows, write_export_file
 
 
 @shared_task
@@ -175,3 +178,33 @@ def notify_superadmin_system_alerts() -> int:
         )
         notified += 1
     return notified
+
+
+@shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=5, retry_kwargs={'max_retries': 2})
+def process_data_export(self, export_id):
+    export = DataExport.objects.filter(id=export_id).first()
+    if not export:
+        return 0
+
+    export.status = 'processing'
+    export.started_at = timezone.now()
+    export.save(update_fields=['status', 'started_at'])
+
+    try:
+        filters = export.filters or {}
+        rows = build_export_rows(export.export_type, filters, export.date_from, export.date_to)
+        file_path, file_size = write_export_file(export.export_type, rows, export.id)
+        export.file_path = f"exports/{os.path.basename(file_path)}"
+        export.file_size = file_size
+        export.record_count = len(rows)
+        export.status = 'completed'
+        export.completed_at = timezone.now()
+        export.save()
+    except Exception as exc:
+        export.status = 'failed'
+        export.error_message = str(exc)
+        export.completed_at = timezone.now()
+        export.save()
+        raise
+
+    return export.id

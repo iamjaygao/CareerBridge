@@ -45,6 +45,7 @@ def release_expired_slot_holds():
                         ),
                         priority='high',
                         related_appointment=appointment,
+                        payload=appointment.get_notification_payload(),
                     )
                 except Exception:
                     pass
@@ -90,7 +91,7 @@ def notify_staff_upcoming_appointments(hours_ahead: int = 24) -> int:
                 message=f'Upcoming appointment: {appointment_details}.',
                 priority='normal',
                 related_appointment=appointment,
-                payload={'appointment_id': appointment.id},
+                payload=appointment.get_notification_payload(),
             )
             notified += 1
     return notified
@@ -127,7 +128,7 @@ def notify_staff_unconfirmed_appointments(hours_old: int = 12, hours_until_start
                 message=f'Mentor has not confirmed appointment: {appointment_details}.',
                 priority='high',
                 related_appointment=appointment,
-                payload={'appointment_id': appointment.id},
+                payload=appointment.get_notification_payload(),
             )
             notified += 1
     return notified
@@ -162,7 +163,7 @@ def notify_staff_missing_mentor_feedback(hours_after: int = 48) -> int:
                 message=f'Mentor feedback missing for {appointment_details}.',
                 priority='high',
                 related_appointment=appointment,
-                payload={'appointment_id': appointment.id},
+                payload=appointment.get_notification_payload(),
             )
             notified += 1
     return notified

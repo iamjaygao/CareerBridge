@@ -19,17 +19,10 @@ import {
   Person,
   Settings,
   Logout,
-  SwapHoriz as SwapIcon,
-  School as StudentIcon,
-  Work as MentorIcon,
-  Badge as StaffIcon,
-  AdminPanelSettings as AdminIcon,
 } from '@mui/icons-material';
 import { RootState } from '../../store';
 import { logout } from '../../store/slices/authSlice';
-import { useRole } from '../../contexts/RoleContext';
 import NotificationBell from '../common/NotificationBell';
-import ViewingAsChip from '../common/ViewingAsChip';
 import { getHomePath } from '../../utils/getHomePath';
 
 interface SuperAdminTopbarProps {
@@ -40,7 +33,6 @@ const SuperAdminTopbar: React.FC<SuperAdminTopbarProps> = ({ onMenuClick }) => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const { user } = useSelector((state: RootState) => state.auth);
-  const { setOverrideRole, isSuperAdmin } = useRole();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -56,34 +48,6 @@ const SuperAdminTopbar: React.FC<SuperAdminTopbarProps> = ({ onMenuClick }) => {
     dispatch(logout());
     handleProfileMenuClose();
     navigate('/');
-  };
-
-  const handleRoleSwitch = (role: string) => {
-    setOverrideRole(role);
-    handleProfileMenuClose();
-    // Navigate to the appropriate dashboard
-    switch (role) {
-      case 'student':
-        navigate('/student');
-        break;
-      case 'mentor':
-        navigate('/mentor');
-        break;
-      case 'staff':
-        navigate('/staff');
-        break;
-      case 'admin':
-        navigate('/admin');
-        break;
-      default:
-        navigate('/superadmin');
-    }
-  };
-
-  const handleResetOverride = () => {
-    setOverrideRole(null);
-    handleProfileMenuClose();
-    navigate('/superadmin');
   };
 
   const getUserInitials = () => {
@@ -198,7 +162,6 @@ const SuperAdminTopbar: React.FC<SuperAdminTopbarProps> = ({ onMenuClick }) => {
                 {getUserInitials()}
               </Avatar>
             </IconButton>
-            <ViewingAsChip />
           </Box>
 
           {/* Profile menu */}
@@ -231,36 +194,6 @@ const SuperAdminTopbar: React.FC<SuperAdminTopbarProps> = ({ onMenuClick }) => {
               Settings
             </MenuItem>
             <Divider />
-            {/* Role Switching (Superadmin only) */}
-            {isSuperAdmin && (
-              <>
-                <MenuItem disabled sx={{ opacity: 1, fontWeight: 600 }}>
-                  <SwapIcon sx={{ mr: 2, fontSize: 20 }} />
-                  View As Role
-                </MenuItem>
-                <MenuItem onClick={() => handleRoleSwitch('student')}>
-                  <StudentIcon sx={{ mr: 2, fontSize: 20 }} />
-                  View as Student
-                </MenuItem>
-                <MenuItem onClick={() => handleRoleSwitch('mentor')}>
-                  <MentorIcon sx={{ mr: 2, fontSize: 20 }} />
-                  View as Mentor
-                </MenuItem>
-                <MenuItem onClick={() => handleRoleSwitch('staff')}>
-                  <StaffIcon sx={{ mr: 2, fontSize: 20 }} />
-                  View as Staff
-                </MenuItem>
-                <MenuItem onClick={() => handleRoleSwitch('admin')}>
-                  <AdminIcon sx={{ mr: 2, fontSize: 20 }} />
-                  View as Admin
-                </MenuItem>
-                <MenuItem onClick={handleResetOverride}>
-                  <SwapIcon sx={{ mr: 2, fontSize: 20 }} />
-                  Reset to Superadmin
-                </MenuItem>
-                <Divider />
-              </>
-            )}
             <MenuItem onClick={handleLogout}>
               <Logout sx={{ mr: 2, fontSize: 20 }} />
               Logout

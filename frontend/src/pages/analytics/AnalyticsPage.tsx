@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import {
   Box,
   Container,
@@ -50,6 +50,7 @@ function TabPanel(props: TabPanelProps) {
 
 const AnalyticsPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const { user } = useSelector((state: RootState) => state.auth);
   const { isSuperAdmin } = useRole();
@@ -72,6 +73,12 @@ const AnalyticsPage: React.FC = () => {
       setActiveTab(tabMap[section]);
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    if (isSuperAdmin && location.pathname === '/analytics') {
+      navigate('/superadmin/analytics', { replace: true });
+    }
+  }, [isSuperAdmin, location.pathname, navigate]);
 
   // Fetch dashboard stats
   useEffect(() => {
@@ -581,4 +588,3 @@ const AnalyticsPage: React.FC = () => {
 };
 
 export default AnalyticsPage;
-

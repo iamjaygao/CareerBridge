@@ -56,9 +56,15 @@ const MentorDashboardPage: React.FC = () => {
     nextTwoWeeks: 0,
     monthlyEarnings: 0,
     averageRating: 0,
+    reviewCount: 0,
   });
   const [upcomingAppointments, setUpcomingAppointments] = useState<UpcomingAppointment[]>([]);
   const [reminders, setReminders] = useState<Notification[]>([]);
+  const [actionItems, setActionItems] = useState({
+    pendingConfirmations: 0,
+    upcoming24h: 0,
+    missingFeedback: 0,
+  });
 
   useEffect(() => {
     const fetchDashboard = async () => {
@@ -109,7 +115,10 @@ const MentorDashboardPage: React.FC = () => {
         }, 0);
 
         const averageRating = profileResult.status === 'fulfilled'
-          ? (profileResult.value?.rating ?? 0)
+          ? (profileResult.value?.rating ?? profileResult.value?.average_rating ?? 0)
+          : 0;
+        const reviewCount = profileResult.status === 'fulfilled'
+          ? (profileResult.value?.review_count ?? profileResult.value?.total_reviews ?? 0)
           : 0;
 
         const notificationList = notificationsResult.status === 'fulfilled'
@@ -139,15 +148,31 @@ const MentorDashboardPage: React.FC = () => {
             };
           });
 
+        const pendingConfirmations = appointments.filter((apt: any) => apt.status === 'pending').length;
+        const missingFeedback = appointments.filter(
+          (apt: any) => apt.status === 'completed' && !apt.mentor_feedback
+        ).length;
+        const upcoming24h = appointments.filter((apt: any) => {
+          if (!apt.scheduled_start || apt.status !== 'confirmed') return false;
+          const start = new Date(apt.scheduled_start);
+          return start >= now && start <= new Date(now.getTime() + 24 * 60 * 60 * 1000);
+        }).length;
+
         setStats({
           upcomingToday,
           upcomingThisWeek,
           nextTwoWeeks,
           monthlyEarnings: Number(monthlyEarnings.toFixed(2)),
           averageRating,
+          reviewCount,
         });
         setUpcomingAppointments(upcomingCards);
         setReminders(reminderItems);
+        setActionItems({
+          pendingConfirmations,
+          upcoming24h,
+          missingFeedback,
+        });
       } catch {
         setError('Failed to load mentor dashboard data.');
       } finally {
@@ -268,7 +293,7 @@ const MentorDashboardPage: React.FC = () => {
                 {stats.averageRating}
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                From 45 reviews
+                From {stats.reviewCount} reviews
               </Typography>
             </CardContent>
           </Card>
@@ -415,6 +440,79 @@ const MentorDashboardPage: React.FC = () => {
                   </TableBody>
                 </Table>
               </TableContainer>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Action Items */}
+        <Grid item xs={12}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
+                Action Items
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={4}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                    <Box>
+                      <Typography variant="body2" fontWeight="medium">
+                        Pending confirmations
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Approve or decline new requests
+                      </Typography>
+                    </Box>
+                    <Chip label={actionItems.pendingConfirmations} color="warning" size="small" />
+                  </Box>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => navigate('/mentor/appointments?tab=requests&status=pending')}
+                  >
+                    Review requests
+                  </Button>
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                    <Box>
+                      <Typography variant="body2" fontWeight="medium">
+                        Upcoming in 24h
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Confirm meeting links and prep
+                      </Typography>
+                    </Box>
+                    <Chip label={actionItems.upcoming24h} color="success" size="small" />
+                  </Box>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => navigate('/mentor/appointments?tab=upcoming&status=confirmed&window=24h')}
+                  >
+                    View schedule
+                  </Button>
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                    <Box>
+                      <Typography variant="body2" fontWeight="medium">
+                        Missing feedback
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Completed sessions without notes
+                      </Typography>
+                    </Box>
+                    <Chip label={actionItems.missingFeedback} color="error" size="small" />
+                  </Box>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => navigate('/mentor/appointments?tab=past&filter=missing_feedback')}
+                  >
+                    Add feedback
+                  </Button>
+                </Grid>
+              </Grid>
             </CardContent>
           </Card>
         </Grid>

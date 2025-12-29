@@ -40,7 +40,8 @@ const SuperAdminSidebar: React.FC<SuperAdminSidebarProps> = ({ mobileOpen, onMob
     { text: 'Appointments', icon: <Event />, path: '/superadmin/appointments' },
     { text: 'Assessment Engine', icon: <Assessment />, path: '/superadmin/assessment' },
     { text: 'Market Intelligence', icon: <Work />, path: '/superadmin/jobs' },
-    { text: 'System Console', icon: <Settings />, path: '/superadmin/system' },
+    { text: 'System Console', icon: <Settings />, path: '/superadmin/system-console' },
+    { text: 'System Settings', icon: <Settings />, path: '/superadmin/system' },
   ];
 
   const drawer = (
@@ -162,4 +163,3 @@ const SuperAdminSidebar: React.FC<SuperAdminSidebarProps> = ({ mobileOpen, onMob
 };
 
 export default SuperAdminSidebar;
-

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -50,21 +51,26 @@ interface AppointmentRow {
   duration: number;
   status: string;
   isRequest?: boolean;
+  mentor_feedback?: string;
 }
 
 const MentorAppointmentsPage: React.FC = () => {
   const { showSuccess, showError } = useNotification();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tabValue, setTabValue] = useState(0);
   const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
   const [requests, setRequests] = useState<AppointmentRow[]>([]);
   const [statusFilter, setStatusFilter] = useState('all');
+  const [windowFilter, setWindowFilter] = useState<'24h' | null>(null);
+  const [missingFeedbackOnly, setMissingFeedbackOnly] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<AppointmentRow | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [actionType, setActionType] = useState<'view' | 'approve' | 'decline' | 'reschedule'>('view');
   const [newDate, setNewDate] = useState('');
   const [newTime, setNewTime] = useState('');
+  const location = useLocation();
 
   useEffect(() => {
     const fetchAppointments = async () => {
@@ -96,6 +102,7 @@ const MentorAppointmentsPage: React.FC = () => {
               scheduled_at: apt.scheduled_start,
               duration,
               status: apt.status,
+              mentor_feedback: apt.mentor_feedback || '',
             } as AppointmentRow;
           });
           setAppointments(rows);
@@ -139,6 +146,31 @@ const MentorAppointmentsPage: React.FC = () => {
 
     fetchAppointments();
   }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tabParam = params.get('tab');
+    const statusParam = params.get('status');
+    const filterParam = params.get('filter');
+    const windowParam = params.get('window');
+
+    if (tabParam === 'past') {
+      setTabValue(1);
+    } else if (tabParam === 'requests') {
+      setTabValue(2);
+    } else if (tabParam === 'upcoming') {
+      setTabValue(0);
+    }
+
+    if (statusParam) {
+      setStatusFilter(statusParam);
+    } else {
+      setStatusFilter('all');
+    }
+
+    setWindowFilter(windowParam === '24h' ? '24h' : null);
+    setMissingFeedbackOnly(filterParam === 'missing_feedback');
+  }, [location.search]);
 
   const handleAction = (appointment: AppointmentRow, type: 'view' | 'approve' | 'decline' | 'reschedule') => {
     setSelectedAppointment(appointment);
@@ -203,11 +235,27 @@ const MentorAppointmentsPage: React.FC = () => {
   const pastAppointments = appointments.filter(a => a.status === 'completed' || a.status === 'cancelled' || a.status === 'expired');
   const pendingRequests = requests.filter(a => a.status === 'pending');
 
-  const filteredAppointments = tabValue === 0
+  let filteredAppointments = tabValue === 0
     ? upcomingAppointments.filter(a => statusFilter === 'all' || a.status === statusFilter)
     : tabValue === 1
     ? pastAppointments.filter(a => statusFilter === 'all' || a.status === statusFilter)
     : pendingRequests;
+
+  if (tabValue === 0 && windowFilter === '24h') {
+    const now = new Date();
+    const cutoff = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    filteredAppointments = filteredAppointments.filter((apt) => {
+      if (!apt.scheduled_at) return false;
+      const start = new Date(apt.scheduled_at);
+      return start >= now && start <= cutoff;
+    });
+  }
+
+  if (tabValue === 1 && missingFeedbackOnly) {
+    filteredAppointments = filteredAppointments.filter(
+      (apt) => apt.status === 'completed' && !apt.mentor_feedback
+    );
+  }
 
   if (loading) {
     return <LoadingSpinner message="Loading appointments..." />;
@@ -251,6 +299,34 @@ const MentorAppointmentsPage: React.FC = () => {
               <MenuItem value="cancelled">Cancelled</MenuItem>
             </Select>
           </FormControl>
+          {(statusFilter !== 'all' || windowFilter || missingFeedbackOnly) && (
+            <Box sx={{ display: 'flex', gap: 1, mt: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+              <Typography variant="body2" color="text.secondary">
+                Active filters:
+              </Typography>
+              {statusFilter !== 'all' && (
+                <Chip label={`Status: ${statusFilter}`} size="small" />
+              )}
+              {windowFilter && (
+                <Chip label="Next 24h" size="small" color="success" />
+              )}
+              {missingFeedbackOnly && (
+                <Chip label="Missing feedback" size="small" color="error" />
+              )}
+              <Button
+                size="small"
+                variant="text"
+                onClick={() => {
+                  setStatusFilter('all');
+                  setWindowFilter(null);
+                  setMissingFeedbackOnly(false);
+                  navigate('/mentor/appointments', { replace: true });
+                }}
+              >
+                Clear
+              </Button>
+            </Box>
+          )}
         </CardContent>
       </Card>
 

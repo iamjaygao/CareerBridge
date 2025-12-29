@@ -50,11 +50,6 @@ export const isSuperAdmin = (user: UserForPermissions | null | undefined): boole
  * Supports role impersonation for superadmin
  */
 export const isAdmin = (user: UserForPermissions | null | undefined, impersonatedRole?: string | null): boolean => {
-  // Superadmin can impersonate any role
-  if (isSuperAdmin(user)) {
-    const currentRole = getCurrentRole(user, impersonatedRole);
-    return currentRole === 'admin';
-  }
   if (!user || !user.role) return false;
   const role = typeof user.role === 'string' ? user.role.toLowerCase() : user.role;
   return role === 'admin';
@@ -84,19 +79,9 @@ export const hasAdminAccess = (user: UserForPermissions | null | undefined, impe
   if (!user || !user.role) return false;
   const role = typeof user.role === 'string' ? user.role.toLowerCase() : user.role;
   
-  // Superadmin always has admin access
-  if (role === 'superadmin') {
-    return true;
-  }
-  
   // Admin has admin access
   if (role === 'admin') {
     return true;
-  }
-  
-  // If impersonating, check impersonated role
-  if (impersonatedRole) {
-    return impersonatedRole === 'admin' || impersonatedRole === 'superadmin';
   }
   
   return false;
@@ -232,4 +217,3 @@ export const hasFinancialAccess = (user: UserForPermissions | null | undefined, 
   
   return false;
 };
-

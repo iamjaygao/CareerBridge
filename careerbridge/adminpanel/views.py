@@ -14,10 +14,11 @@ from typing import Dict, Tuple, Optional, Union
 from dateutil.relativedelta import relativedelta
 import time
 import logging
-import csv
 import os
+import shutil
 from django.core.cache import cache
 from django.db import connection
+from django.db import connections
 
 from .models import (
     SystemStats,
@@ -41,6 +42,7 @@ from .serializers import (
 from appointments.serializers import AppointmentUpdateSerializer
 from .permissions import IsAdminOrStaff, IsAdminUser, IsAdminOrSuperAdmin, user_has_role
 from .permissions_system import IsSuperAdminOnly
+from .export_utils import build_export_rows, write_export_file
 
 User = get_user_model()
 
@@ -195,6 +197,86 @@ def get_unified_system_health(use_cache: bool = True) -> Dict:
         cache.set(_HEALTH_CHECK_CACHE_KEY, result, _HEALTH_CHECK_CACHE_TIMEOUT)
     
     return result
+
+
+def _get_external_services_status() -> list:
+    email_backend = getattr(settings, 'EMAIL_BACKEND', '')
+    email_host = getattr(settings, 'EMAIL_HOST', '') or os.environ.get('EMAIL_HOST', '')
+    stripe_key = getattr(settings, 'STRIPE_SECRET_KEY', '') or os.environ.get('STRIPE_SECRET_KEY', '')
+    paypal_key = getattr(settings, 'PAYPAL_CLIENT_ID', '') or os.environ.get('PAYPAL_CLIENT_ID', '')
+    openai_key = os.environ.get('OPENAI_API_KEY', '') or getattr(settings, 'OPENAI_API_KEY', '')
+
+    def build_service(name: str, configured: bool, response_time: float = 0.0):
+        status = 'healthy' if configured else 'degraded'
+        return {
+            'name': name,
+            'status': status,
+            'response_time': response_time,
+            'last_check': timezone.now().isoformat(),
+        }
+
+    email_configured = bool(email_backend) and (
+        email_backend.endswith('console.EmailBackend') or email_backend.endswith('dummy.EmailBackend') or bool(email_host)
+    )
+    payment_configured = bool(stripe_key) or bool(paypal_key)
+    ai_configured = bool(openai_key)
+
+    return [
+        build_service('email_service', email_configured),
+        build_service('payment_service', payment_configured),
+        build_service('ai_service', ai_configured),
+    ]
+
+
+def _get_system_metrics() -> dict:
+    cpu_usage = None
+    memory_usage = None
+    disk_usage = None
+
+    try:
+        import psutil  # type: ignore
+        cpu_usage = psutil.cpu_percent(interval=0.1)
+        memory_usage = psutil.virtual_memory().percent
+        disk_usage = psutil.disk_usage(str(settings.BASE_DIR)).percent
+    except Exception:
+        try:
+            load_avg = os.getloadavg()[0]
+            cpu_count = os.cpu_count() or 1
+            cpu_usage = min(100.0, (load_avg / cpu_count) * 100.0)
+        except Exception:
+            cpu_usage = 0.0
+
+        try:
+            if hasattr(os, 'sysconf'):
+                page_size = os.sysconf('SC_PAGE_SIZE')
+                total_pages = os.sysconf('SC_PHYS_PAGES')
+                available_pages = os.sysconf('SC_AVPHYS_PAGES')
+                total = page_size * total_pages
+                available = page_size * available_pages
+                if total > 0:
+                    memory_usage = ((total - available) / total) * 100.0
+                else:
+                    memory_usage = 0.0
+        except Exception:
+            memory_usage = 0.0
+
+        try:
+            disk = shutil.disk_usage(str(settings.BASE_DIR))
+            if disk.total > 0:
+                disk_usage = ((disk.total - disk.free) / disk.total) * 100.0
+            else:
+                disk_usage = 0.0
+        except Exception:
+            disk_usage = 0.0
+
+    active_connections = sum(1 for conn in connections.all() if conn.connection is not None)
+
+    return {
+        'cpu_usage': float(cpu_usage or 0.0),
+        'memory_usage': float(memory_usage or 0.0),
+        'disk_usage': float(disk_usage or 0.0),
+        'active_connections': active_connections,
+    }
 
 
 # Alias for backward compatibility
@@ -487,32 +569,70 @@ def get_dashboard_metrics():
     error_rate = system_health_data['error_rate']
     uptime_percentage = system_health_data['uptime_percentage']
     
-    # Revenue statistics
-    revenue_today_result = Payment.objects.filter(
-        status='completed',
+    # Revenue statistics (appointments only to avoid mixing with refunds/subscriptions)
+    appointment_payments = Payment.objects.filter(payment_type='appointment')
+    completed_appointments = appointment_payments.filter(status='completed')
+
+    revenue_today_result = completed_appointments.filter(
         created_at__gte=today_start
     ).aggregate(total=Sum('amount'))['total'] or Decimal('0')
     revenue_today = float(revenue_today_result)
-    
-    total_revenue_result = Payment.objects.filter(
-        status='completed'
-    ).aggregate(total=Sum('amount'))['total'] or Decimal('0')
+
+    total_revenue_result = completed_appointments.aggregate(
+        total=Sum('amount')
+    )['total'] or Decimal('0')
     total_revenue = float(total_revenue_result)
-    
-    mentor_earnings_result = Payment.objects.filter(
-        status='completed'
-    ).aggregate(total=Sum('mentor_earnings'))['total'] or Decimal('0')
+
+    mentor_earnings_result = completed_appointments.aggregate(
+        total=Sum('mentor_earnings')
+    )['total'] or Decimal('0')
     mentor_earnings = float(mentor_earnings_result)
-    
-    platform_earnings_result = Payment.objects.filter(
-        status='completed'
-    ).aggregate(total=Sum('platform_fee'))['total'] or Decimal('0')
+
+    platform_earnings_result = completed_appointments.aggregate(
+        total=Sum('platform_fee')
+    )['total'] or Decimal('0')
     platform_earnings = float(platform_earnings_result)
-    
-    pending_payouts_result = Payment.objects.filter(
-        status='completed'
+
+    # Financial risk + payout visibility
+    payments_total = appointment_payments.count()
+    payments_completed = appointment_payments.filter(status='completed').count()
+    payments_failed = appointment_payments.filter(status__in=['failed', 'cancelled']).count()
+    payments_refunded = appointment_payments.filter(status='refunded').count()
+
+    payment_success_rate = (payments_completed / payments_total * 100) if payments_total > 0 else 0.0
+    payment_failure_rate = (payments_failed / payments_total * 100) if payments_total > 0 else 0.0
+    refund_rate = (payments_refunded / payments_total * 100) if payments_total > 0 else 0.0
+
+    refund_amount_result = appointment_payments.filter(
+        status='refunded'
+    ).aggregate(total=Sum('amount'))['total'] or Decimal('0')
+    refund_amount_total = float(refund_amount_result)
+
+    net_revenue = max(total_revenue, 0.0)
+
+    payout_pending_result = completed_appointments.filter(
+        payout_status='pending'
     ).aggregate(total=Sum('mentor_earnings'))['total'] or Decimal('0')
-    pending_payouts = float(pending_payouts_result)
+    payout_ready_result = completed_appointments.filter(
+        payout_status='ready'
+    ).aggregate(total=Sum('mentor_earnings'))['total'] or Decimal('0')
+    payout_paid_result = completed_appointments.filter(
+        payout_status='paid'
+    ).aggregate(total=Sum('mentor_earnings'))['total'] or Decimal('0')
+    payout_failed_result = completed_appointments.filter(
+        payout_status='failed'
+    ).aggregate(total=Sum('mentor_earnings'))['total'] or Decimal('0')
+    payout_on_hold_result = completed_appointments.filter(
+        payout_status='on_hold'
+    ).aggregate(total=Sum('mentor_earnings'))['total'] or Decimal('0')
+
+    payout_pending_total = float(payout_pending_result)
+    payout_ready_total = float(payout_ready_result)
+    payout_paid_total = float(payout_paid_result)
+    payout_failed_total = float(payout_failed_result)
+    payout_on_hold_total = float(payout_on_hold_result)
+    payout_exposure_total = payout_pending_total + payout_ready_total + payout_failed_total + payout_on_hold_total
+    pending_payouts = payout_pending_total + payout_ready_total
     
     # Revenue trend - last 30 days
     revenue_trend = []
@@ -522,6 +642,7 @@ def get_dashboard_metrics():
         date_end = date_start + timedelta(days=1)
         
         day_revenue = Payment.objects.filter(
+            payment_type='appointment',
             status='completed',
             created_at__gte=date_start,
             created_at__lt=date_end
@@ -601,6 +722,17 @@ def get_dashboard_metrics():
         'platform_earnings': platform_earnings,
         'pending_payouts': pending_payouts,
         'revenue_trend': revenue_trend,
+        'payment_success_rate': payment_success_rate,
+        'payment_failure_rate': payment_failure_rate,
+        'refund_rate': refund_rate,
+        'refund_amount_total': refund_amount_total,
+        'net_revenue': net_revenue,
+        'payout_pending_total': payout_pending_total,
+        'payout_ready_total': payout_ready_total,
+        'payout_paid_total': payout_paid_total,
+        'payout_failed_total': payout_failed_total,
+        'payout_on_hold_total': payout_on_hold_total,
+        'payout_exposure_total': payout_exposure_total,
     }
 
 class DashboardStatsView(APIView):
@@ -702,116 +834,6 @@ class SystemConfigDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = SystemConfig.objects.all()
 
 
-def build_export_rows(export_type, filters, date_from=None, date_to=None):
-    if export_type == 'users':
-        User = get_user_model()
-        queryset = User.objects.all()
-        if filters.get('search'):
-            search_term = filters['search']
-            queryset = queryset.filter(
-                Q(username__icontains=search_term) |
-                Q(email__icontains=search_term) |
-                Q(first_name__icontains=search_term) |
-                Q(last_name__icontains=search_term)
-            )
-        if 'is_active' in filters:
-            queryset = queryset.filter(is_active=bool(filters['is_active']))
-        if filters.get('role'):
-            queryset = queryset.filter(role=filters['role'])
-        if 'is_staff' in filters:
-            queryset = queryset.filter(is_staff=bool(filters['is_staff']))
-        if filters.get('exclude_admin'):
-            queryset = queryset.exclude(role='admin').exclude(role='staff')
-
-        rows = [
-            {
-                'id': user.id,
-                'username': user.username,
-                'email': user.email,
-                'role': getattr(user, 'role', '') or 'student',
-                'is_active': user.is_active,
-                'is_staff': user.is_staff,
-                'date_joined': user.date_joined.isoformat() if user.date_joined else '',
-                'last_login': user.last_login.isoformat() if user.last_login else '',
-            }
-            for user in queryset.order_by('id')
-        ]
-        return rows
-
-    if export_type == 'mentors':
-        from mentors.models import MentorProfile
-
-        queryset = MentorProfile.objects.select_related('user').all()
-        if filters.get('status'):
-            queryset = queryset.filter(status=filters['status'])
-        rows = [
-            {
-                'mentor_id': mentor.id,
-                'user_id': mentor.user.id if mentor.user else '',
-                'username': mentor.user.username if mentor.user else '',
-                'email': mentor.user.email if mentor.user else '',
-                'status': mentor.status,
-                'average_rating': mentor.average_rating,
-                'total_reviews': mentor.total_reviews,
-                'total_sessions': mentor.total_sessions,
-                'total_earnings': mentor.total_earnings,
-            }
-            for mentor in queryset.order_by('id')
-        ]
-        return rows
-
-    if export_type == 'appointments':
-        from appointments.models import Appointment
-
-        queryset = Appointment.objects.select_related('user', 'mentor__user').all()
-        if date_from:
-            queryset = queryset.filter(scheduled_start__date__gte=date_from)
-        if date_to:
-            queryset = queryset.filter(scheduled_start__date__lte=date_to)
-        if filters.get('status'):
-            queryset = queryset.filter(status=filters['status'])
-        if 'is_paid' in filters:
-            queryset = queryset.filter(is_paid=bool(filters['is_paid']))
-
-        rows = [
-            {
-                'appointment_id': appointment.id,
-                'student_username': appointment.user.username if appointment.user else '',
-                'student_email': appointment.user.email if appointment.user else '',
-                'mentor_username': appointment.mentor.user.username if appointment.mentor else '',
-                'mentor_email': appointment.mentor.user.email if appointment.mentor else '',
-                'status': appointment.status,
-                'scheduled_start': appointment.scheduled_start.isoformat() if appointment.scheduled_start else '',
-                'price': appointment.price,
-                'is_paid': appointment.is_paid,
-            }
-            for appointment in queryset.order_by('id')
-        ]
-        return rows
-
-    return []
-
-
-def write_export_file(export_type, rows, export_id):
-    export_dir = os.path.join(settings.MEDIA_ROOT, 'exports')
-    os.makedirs(export_dir, exist_ok=True)
-    filename = f"export_{export_id}_{export_type}.csv"
-    file_path = os.path.join(export_dir, filename)
-
-    if rows:
-        headers = list(rows[0].keys())
-    else:
-        headers = []
-
-    with open(file_path, 'w', newline='', encoding='utf-8') as handle:
-        writer = csv.writer(handle)
-        if headers:
-            writer.writerow(headers)
-            for row in rows:
-                writer.writerow([row.get(key, '') for key in headers])
-
-    return file_path, os.path.getsize(file_path)
-
 class DataExportListView(generics.ListCreateAPIView):
     """Data export list"""
     serializer_class = DataExportSerializer
@@ -827,25 +849,18 @@ class DataExportListView(generics.ListCreateAPIView):
     
     def perform_create(self, serializer):
         export = serializer.save()
-        export.status = 'processing'
-        export.started_at = timezone.now()
-        export.save(update_fields=['status', 'started_at'])
-
-        try:
-            filters = export.filters or {}
-            rows = build_export_rows(export.export_type, filters, export.date_from, export.date_to)
-            file_path, file_size = write_export_file(export.export_type, rows, export.id)
-            export.file_path = f"exports/{os.path.basename(file_path)}"
-            export.file_size = file_size
-            export.record_count = len(rows)
-            export.status = 'completed'
-            export.completed_at = timezone.now()
-            export.save()
-        except Exception as exc:
-            export.status = 'failed'
-            export.error_message = str(exc)
-            export.completed_at = timezone.now()
-            export.save()
+        AdminAction.objects.create(
+            admin_user=self.request.user,
+            action_type='data_export',
+            action_description=f'Created export request {export.name}',
+            target_model='DataExport',
+            target_id=export.id,
+            action_data={'export_type': export.export_type, 'format': export.format},
+            ip_address=self.request.META.get('REMOTE_ADDR'),
+            user_agent=self.request.META.get('HTTP_USER_AGENT', '')
+        )
+        from .tasks import process_data_export
+        process_data_export.delay(export.id)
 
 class DataExportDetailView(generics.RetrieveAPIView):
     """Data export details"""
@@ -871,9 +886,56 @@ class DataExportDownloadView(APIView):
         if not os.path.exists(file_path):
             return Response({'error': 'Export file missing'}, status=status.HTTP_404_NOT_FOUND)
 
+        AdminAction.objects.create(
+            admin_user=request.user,
+            action_type='data_export',
+            action_description=f'Downloaded export {export.name}',
+            target_model='DataExport',
+            target_id=export.id,
+            action_data={'file_path': export.file_path},
+            ip_address=request.META.get('REMOTE_ADDR'),
+            user_agent=request.META.get('HTTP_USER_AGENT', '')
+        )
+
         response = FileResponse(open(file_path, 'rb'), content_type='text/csv')
         response['Content-Disposition'] = f'attachment; filename="{os.path.basename(file_path)}"'
         return response
+
+
+class DataExportRetryView(APIView):
+    """Retry a data export"""
+    permission_classes = [IsAdminUser]
+
+    def post(self, request, pk):
+        export = get_object_or_404(DataExport, pk=pk)
+
+        if not user_has_role(request.user, 'superadmin') and export.requested_by_id != request.user.id:
+            return Response({'error': 'Not allowed to retry this export'}, status=status.HTTP_403_FORBIDDEN)
+
+        export.status = 'pending'
+        export.error_message = ''
+        export.file_path = ''
+        export.file_size = 0
+        export.record_count = 0
+        export.started_at = None
+        export.completed_at = None
+        export.save()
+
+        AdminAction.objects.create(
+            admin_user=request.user,
+            action_type='data_export',
+            action_description=f'Retried export {export.name}',
+            target_model='DataExport',
+            target_id=export.id,
+            action_data={'export_type': export.export_type, 'format': export.format},
+            ip_address=request.META.get('REMOTE_ADDR'),
+            user_agent=request.META.get('HTTP_USER_AGENT', '')
+        )
+
+        from .tasks import process_data_export
+        process_data_export.delay(export.id)
+
+        return Response(DataExportSerializer(export).data)
 
 class ContentModerationListView(generics.ListAPIView):
     """Content moderation list"""
@@ -1649,32 +1711,8 @@ class SystemHealthView(generics.GenericAPIView):
             'uptime_percentage': health_data['uptime_percentage'],
             'last_updated': health_data['last_updated'],
             # Extended fields for System Console UI
-            'external_services': [
-                {
-                    'name': 'email_service',
-                    'status': 'healthy',  # TODO: Implement real external service checks
-                    'response_time': 150,
-                    'last_check': timezone.now().isoformat()
-                },
-                {
-                    'name': 'payment_service',
-                    'status': 'healthy',  # TODO: Implement real external service checks
-                    'response_time': 200,
-                    'last_check': timezone.now().isoformat()
-                },
-                {
-                    'name': 'ai_service',
-                    'status': 'healthy',  # TODO: Implement real external service checks
-                    'response_time': 300,
-                    'last_check': timezone.now().isoformat()
-                }
-            ],
-            'system_metrics': {
-                'cpu_usage': 0.0,  # TODO: Implement real CPU monitoring (requires psutil)
-                'memory_usage': 0.0,  # TODO: Implement real memory monitoring
-                'disk_usage': 0.0,  # TODO: Implement real disk monitoring
-                'active_connections': 0  # TODO: Implement real connection tracking
-            }
+            'external_services': _get_external_services_status(),
+            'system_metrics': _get_system_metrics(),
         }
         
         return Response(data)
@@ -1731,6 +1769,8 @@ def build_admin_appointment_payload(appointment):
         'updated_at': appointment.updated_at,
         'payment_status': 'completed' if appointment.is_paid else 'pending',
         'amount': appointment.price,
+        'mentor_feedback': appointment.mentor_feedback or '',
+        'user_feedback': appointment.user_feedback or '',
     }
 
 class AppointmentManagementView(generics.GenericAPIView):
@@ -2071,7 +2111,7 @@ class JobCleanExpiredView(APIView):
 
 class AssessmentStatsView(APIView):
     """Assessment statistics"""
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAdminOrStaff]
     
     def get(self, request):
         """Get assessment statistics"""
@@ -2093,7 +2133,7 @@ class AssessmentStatsView(APIView):
 
 class AssessmentListView(generics.GenericAPIView):
     """Assessment list"""
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAdminOrStaff]
     
     def get(self, request):
         """Get assessments list"""

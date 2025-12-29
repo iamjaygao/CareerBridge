@@ -44,7 +44,7 @@ const ResumeListPage: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
   const { resumes, loading, error } = useSelector((state: RootState) => state.resumes);
-  const { isAuthenticated } = useSelector((state: RootState) => state.auth);
+  const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedResumeId, setSelectedResumeId] = useState<number | null>(null);
@@ -72,9 +72,11 @@ const ResumeListPage: React.FC = () => {
     }
   }, [dispatch, isAuthenticated]);
 
+  const basePath = user?.role === 'student' ? '/student/resumes' : '/resumes';
+
   const handleUpload = () => {
     if (!isAuthenticated) {
-      navigate('/login', { state: { redirectTo: '/resumes' } });
+      navigate('/login', { state: { redirectTo: basePath } });
       return;
     }
     setUploadDialogOpen(true);
@@ -179,7 +181,7 @@ const ResumeListPage: React.FC = () => {
     <>
       <PageHeader
         title="AI Resume Analysis"
-        breadcrumbs={[{ label: 'Resumes', path: '/resumes' }]}
+        breadcrumbs={[{ label: 'Resumes', path: basePath }]}
         action={
           isAuthenticated && (
             <Button
@@ -292,7 +294,7 @@ const ResumeListPage: React.FC = () => {
                 {resume.status === 'analyzed' && (
                   <IconButton
                     size="small"
-                    onClick={() => navigate(`/resumes/${resume.id}/analysis`)}
+                    onClick={() => navigate(`${basePath}/${resume.id}/analysis`)}
                     title="View Analysis"
                     color="primary"
                   >

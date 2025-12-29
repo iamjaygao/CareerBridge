@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Card,
   CardContent,
@@ -35,6 +36,7 @@ import {
   LocationOn as LocationIcon,
   Phone as PhoneIcon,
   Language as LanguageIcon,
+  ArrowBack as ArrowBackIcon,
 } from '@mui/icons-material';
 import axios from 'axios';
 import { useDispatch } from 'react-redux';
@@ -46,12 +48,14 @@ import PageHeader from '../../components/common/PageHeader';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import ResponsiveContainer from '../../components/common/ResponsiveContainer';
 import FileUpload from '../../components/common/FileUpload';
+import { getLandingPathByRole } from '../../utils/roleLanding';
 
 const API_BASE_URL =
   process.env.REACT_APP_API_URL || 'http://localhost:8001/api/v1';
 
 const ProfilePage: React.FC = () => {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { user, loading } = useAuth();
   const { showSuccess, showError } = useNotification();
 
@@ -145,7 +149,19 @@ const ProfilePage: React.FC = () => {
 
   return (
     <ResponsiveContainer>
-      <PageHeader title="Profile" breadcrumbs={[{ label: 'Profile', path: '/profile' }]} />
+      <PageHeader
+        title="Profile"
+        breadcrumbs={[{ label: 'Profile', path: '/profile' }]}
+        action={
+          <Button
+            variant="text"
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate(getLandingPathByRole(user?.role))}
+          >
+            Back to Dashboard
+          </Button>
+        }
+      />
 
       <Grid container spacing={3}>
         {/* Left card */}

@@ -317,6 +317,7 @@ def confirm_payment(request):
                     message=f'Payment of ${payment.amount} for {appointment_details} with {mentor_name} was successful',
                     priority='normal',
                     related_appointment=appointment,
+                    payload=appointment.get_notification_payload(),
                 )
                 # Mentor should not receive payment status notifications.
 
@@ -428,6 +429,7 @@ def reconcile_payment(request):
                         message=f'Payment of ${payment.amount} for {appointment_details} with {mentor_name} was successful',
                         priority='normal',
                         related_appointment=payment.appointment,
+                        payload=payment.appointment.get_notification_payload(),
                     )
 
         appointment = payment.appointment
@@ -889,6 +891,7 @@ def _reconcile_appointment_from_payment(payment: Payment):
         ),
         priority='normal',
         related_appointment=appointment,
+        payload=appointment.get_notification_payload(),
     )
     
     logger.info(f"Payment reconciliation: payment {payment_id}, appointment {appointment_id} reconciled to confirmed")
@@ -1090,6 +1093,7 @@ def stripe_webhook(request):
                         message=f'Payment of ${payment.amount} for {appointment_details} with {mentor_name} was successful',
                         priority='normal',
                         related_appointment=payment.appointment,
+                        payload=payment.appointment.get_notification_payload(),
                     )
                     # Mentor should not receive payment status notifications.
 
@@ -1159,6 +1163,7 @@ def stripe_webhook(request):
                     message=f'Payment of ${payment.amount} for {appointment_details} failed. Please try again.',
                     priority='high',
                     related_appointment=payment.appointment,
+                    payload=payment.appointment.get_notification_payload(),
                 )
                 from django.contrib.auth import get_user_model
 
@@ -1184,7 +1189,10 @@ def stripe_webhook(request):
                         ),
                         priority='urgent',
                         related_appointment=payment.appointment,
-                        payload={'payment_id': payment.id},
+                        payload={
+                            **payment.appointment.get_notification_payload(),
+                            'payment_id': payment.id,
+                        },
                     )
                     if failed_recent >= 3:
                         notify(

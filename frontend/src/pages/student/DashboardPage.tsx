@@ -35,14 +35,20 @@ const StudentDashboardPage: React.FC = () => {
   });
   const [recommendedMentors, setRecommendedMentors] = useState<Mentor[]>([]);
   const [latestResume, setLatestResume] = useState<Resume | null>(null);
+  const [actionItems, setActionItems] = useState({
+    needsResume: false,
+    needsReview: 0,
+    upcomingAppointments: 0,
+  });
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        const [mentorResponse, resumes, upcomingAppointments] = await Promise.all([
+        const [mentorResponse, resumes, upcomingAppointments, completedAppointments] = await Promise.all([
           mentorService.getMentors({ page: 1, limit: 3 }),
           resumeService.getResumes(),
           appointmentService.getMyAppointments({ upcoming: 'true' }),
+          appointmentService.getMyAppointments({ status: 'completed' }),
         ]);
 
         const mentorResults = mentorResponse?.results ?? mentorResponse ?? [];
@@ -66,15 +72,32 @@ const StudentDashboardPage: React.FC = () => {
           insights = 100;
         }
 
+        const upcomingCount = Array.isArray(upcomingAppointments) ? upcomingAppointments.length : 0;
+        const completedList = Array.isArray(completedAppointments) ? completedAppointments : [];
+        const needsReview = completedList.filter(
+          (appointment: any) => !appointment.user_rating && !appointment.user_feedback
+        ).length;
+        const needsResume = !latest || resumeStatus !== 'analyzed';
+
         setProgress({
           assessment,
           insights,
-          appointments: Array.isArray(upcomingAppointments) ? upcomingAppointments.length : 0,
+          appointments: upcomingCount,
+        });
+        setActionItems({
+          needsResume,
+          needsReview,
+          upcomingAppointments: upcomingCount,
         });
       } catch {
         setProgress((prev) => ({ ...prev, appointments: 0 }));
         setRecommendedMentors([]);
         setLatestResume(null);
+        setActionItems({
+          needsResume: false,
+          needsReview: 0,
+          upcomingAppointments: 0,
+        });
       } finally {
         setLoading(false);
       }
@@ -221,6 +244,81 @@ const StudentDashboardPage: React.FC = () => {
           </Card>
         </Grid>
       </Grid>
+
+      {/* Action Items */}
+      <Card sx={{ mb: 4 }}>
+        <CardContent>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+            Action Items
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={4}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                <Box>
+                  <Typography variant="body2" fontWeight="medium">
+                    Resume & Insights
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {actionItems.needsResume ? 'Finish your assessment' : 'Insights are ready'}
+                  </Typography>
+                </Box>
+                <Chip
+                  label={actionItems.needsResume ? 'Pending' : 'Complete'}
+                  color={actionItems.needsResume ? 'warning' : 'success'}
+                  size="small"
+                />
+              </Box>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => navigate('/student/assessment')}
+              >
+                {actionItems.needsResume ? 'Complete Assessment' : 'View Insights'}
+              </Button>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                <Box>
+                  <Typography variant="body2" fontWeight="medium">
+                    Pending Reviews
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Completed sessions awaiting feedback
+                  </Typography>
+                </Box>
+                <Chip label={actionItems.needsReview} color="info" size="small" />
+              </Box>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => navigate('/student/appointments?tab=past&filter=needs_review')}
+              >
+                Leave Feedback
+              </Button>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                <Box>
+                  <Typography variant="body2" fontWeight="medium">
+                    Upcoming Sessions
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Upcoming appointments
+                  </Typography>
+                </Box>
+                <Chip label={actionItems.upcomingAppointments} color="success" size="small" />
+              </Box>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => navigate('/student/appointments?tab=upcoming')}
+              >
+                View Schedule
+              </Button>
+            </Grid>
+          </Grid>
+        </CardContent>
+      </Card>
 
       {/* Recommended Mentors */}
       <Box sx={{ mb: 4 }}>

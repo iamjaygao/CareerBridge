@@ -68,6 +68,13 @@ if SENTRY_DSN:
 CELERY_BROKER_URL = os.environ.get('REDIS_URL', 'redis://redis:6379/1')
 CELERY_RESULT_BACKEND = os.environ.get('REDIS_URL', 'redis://redis:6379/1')
 CELERY_TASK_ALWAYS_EAGER = False
+CELERY_IMPORTS = (
+    'adminpanel.tasks',
+    'appointments.tasks',
+    'chat.tasks',
+    'mentors.tasks',
+    'notifications.tasks',
+)
 CELERY_BEAT_SCHEDULE = {
     'notify_staff_unanswered_chats': {
         'task': 'chat.tasks.notify_staff_unanswered_chats',

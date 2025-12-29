@@ -70,12 +70,12 @@ const MentorListPage: React.FC = () => {
   ========================= */
   useEffect(() => {
     if (canViewFull) {
-      dispatch(fetchMentors({ ...filters, page,limit: 6}));
+      dispatch(fetchMentors({ ...filters, page, limit: 6 }));
     } else {
       if (filters.primary_track) {
         dispatch(fetchMentors({ ...filters, track: filters.primary_track, limit: 6 }));
       } else {
-        dispatch(fetchMentors({ ...filters, page: 1, limit: 4 }));
+        dispatch(fetchMentors({ ...filters, page: 1, limit: 6 }));
       }
     }
   }, [dispatch, filters, page, canViewFull]);

@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useEffect, useRef, useState } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Container,
   Card,
@@ -15,6 +15,7 @@ import {
   DialogActions,
   TextField,
   Alert,
+  Rating,
 } from '@mui/material';
 import { ArrowBack as ArrowBackIcon, Edit as EditIcon, Cancel as CancelIcon } from '@mui/icons-material';
 import { format } from 'date-fns';
@@ -55,6 +56,7 @@ const getStatusColor = (status: string): 'default' | 'primary' | 'secondary' | '
 const AppointmentDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { showSuccess, showError } = useNotification();
   const [appointment, setAppointment] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -62,6 +64,10 @@ const AppointmentDetailPage: React.FC = () => {
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelling, setCancelling] = useState(false);
+  const [ratingValue, setRatingValue] = useState<number | null>(0);
+  const [feedback, setFeedback] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const reviewSectionRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (id) {
@@ -77,6 +83,8 @@ const AppointmentDetailPage: React.FC = () => {
       setError(null);
       const data = await appointmentService.getAppointmentById(parseInt(id));
       setAppointment(data);
+      setRatingValue(data?.user_rating || 0);
+      setFeedback(data?.user_feedback || '');
     } catch (err: any) {
       setError(err?.response?.data?.error || 'Failed to load appointment');
     } finally {
@@ -117,12 +125,38 @@ const AppointmentDetailPage: React.FC = () => {
     }
   };
 
+  const handleSubmitReview = async () => {
+    if (!appointment?.id) return;
+    if (!ratingValue || ratingValue < 1) {
+      showError('Please provide a rating before submitting.');
+      return;
+    }
+    try {
+      setSubmittingReview(true);
+      await appointmentService.rateAppointment(appointment.id, ratingValue, feedback);
+      showSuccess('Thanks for your feedback!');
+      await fetchAppointment();
+    } catch (err: any) {
+      showError(err?.response?.data?.error || 'Failed to submit feedback.');
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
   const isFuture = appointment?.scheduled_start 
     ? new Date(appointment.scheduled_start) > new Date()
     : false;
   
   const canCancel = (appointment?.status === 'pending' || appointment?.status === 'confirmed') && isFuture;
   const canReschedule = appointment?.status === 'confirmed' && isFuture;
+  const needsReview = appointment?.status === 'completed' && !appointment?.user_rating && !appointment?.user_feedback;
+  const reviewRequested = new URLSearchParams(location.search).get('review') === 'true';
+
+  useEffect(() => {
+    if ((needsReview || reviewRequested) && reviewSectionRef.current) {
+      reviewSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [needsReview, reviewRequested]);
 
   if (loading) {
     return <LoadingSpinner />;
@@ -291,6 +325,56 @@ const AppointmentDetailPage: React.FC = () => {
                 </Button>
               )}
             </Box>
+
+            {appointment.status === 'completed' && (
+              <Box ref={reviewSectionRef} sx={{ mt: 4 }}>
+                <Typography variant="h6" gutterBottom>
+                  Session Feedback
+                </Typography>
+                {appointment.user_rating || appointment.user_feedback ? (
+                  <Box>
+                    <Rating value={Number(appointment.user_rating || 0)} readOnly />
+                    {appointment.user_feedback && (
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                        {appointment.user_feedback}
+                      </Typography>
+                    )}
+                  </Box>
+                ) : (
+                  <>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                      Share your experience to help improve future sessions.
+                    </Typography>
+                    <Rating
+                      value={ratingValue}
+                      onChange={(_, value) => setRatingValue(value)}
+                      sx={{ mb: 2 }}
+                    />
+                    <TextField
+                      fullWidth
+                      multiline
+                      minRows={3}
+                      label="Feedback (optional)"
+                      value={feedback}
+                      onChange={(event) => setFeedback(event.target.value)}
+                      sx={{ mb: 2 }}
+                    />
+                    <Button
+                      variant="contained"
+                      onClick={handleSubmitReview}
+                      disabled={submittingReview}
+                    >
+                      {submittingReview ? 'Submitting...' : 'Submit Feedback'}
+                    </Button>
+                  </>
+                )}
+              </Box>
+            )}
+            {appointment.status !== 'completed' && reviewRequested && (
+              <Alert severity="info" sx={{ mt: 3 }}>
+                This session is not completed yet. You can leave feedback once it is finished.
+              </Alert>
+            )}
           </CardContent>
         </Card>
       </Container>

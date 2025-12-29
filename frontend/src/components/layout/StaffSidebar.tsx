@@ -36,6 +36,7 @@ const StaffSidebar: React.FC<StaffSidebarProps> = ({ mobileOpen, onMobileClose }
     { text: 'Dashboard', icon: <Dashboard />, path: '/staff' },
     { text: 'Mentor Approvals', icon: <School />, path: '/staff/mentors' },
     { text: 'Appointments', icon: <Event />, path: '/staff/appointments' },
+    { text: 'Resume Reviews', icon: <Assessment />, path: '/staff/resumes' },
     { text: 'Content Management', icon: <Article />, path: '/staff/content' },
     { text: 'User Support', icon: <Support />, path: '/staff/support' },
     { text: 'Reports & Insights', icon: <Assessment />, path: '/staff/reports' },
@@ -160,4 +161,3 @@ const StaffSidebar: React.FC<StaffSidebarProps> = ({ mobileOpen, onMobileClose }
 };
 
 export default StaffSidebar;
-

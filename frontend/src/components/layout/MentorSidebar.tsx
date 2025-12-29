@@ -20,6 +20,7 @@ import {
   AttachMoney,
   RateReview,
   MenuBook,
+  Chat,
 } from '@mui/icons-material';
 
 const drawerWidth = 260;
@@ -41,6 +42,7 @@ const MentorSidebar: React.FC<MentorSidebarProps> = ({ mobileOpen, onMobileClose
     { text: 'Earnings', icon: <AttachMoney />, path: '/mentor/earnings' },
     { text: 'Feedback', icon: <RateReview />, path: '/mentor/feedback' },
     { text: 'Resources', icon: <MenuBook />, path: '/mentor/resources' },
+    { text: 'Chat', icon: <Chat />, path: '/mentor/chat' },
   ];
 
   const drawer = (
@@ -162,4 +164,3 @@ const MentorSidebar: React.FC<MentorSidebarProps> = ({ mobileOpen, onMobileClose
 };
 
 export default MentorSidebar;
-

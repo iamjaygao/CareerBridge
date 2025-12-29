@@ -157,6 +157,27 @@ class Appointment(models.Model):
         if scheduled_label:
             return f"{service_label} on {scheduled_label}"
         return service_label
+
+    def get_notification_payload(self) -> dict:
+        mentor_name = ''
+        if self.mentor and self.mentor.user:
+            mentor_name = self.mentor.user.get_full_name() or self.mentor.user.username or ''
+        student_name = ''
+        if self.user:
+            student_name = self.user.get_full_name() or self.user.username or ''
+
+        return {
+            'appointment_id': self.id,
+            'appointment_details': self.get_notification_details(),
+            'service_id': self.service_id,
+            'service_title': self.get_service_label(),
+            'scheduled_start': self.scheduled_start.isoformat() if self.scheduled_start else None,
+            'scheduled_end': self.scheduled_end.isoformat() if self.scheduled_end else None,
+            'mentor_id': self.mentor_id,
+            'mentor_name': mentor_name,
+            'student_id': self.user_id,
+            'student_name': student_name,
+        }
     
     @property
     def is_upcoming(self):

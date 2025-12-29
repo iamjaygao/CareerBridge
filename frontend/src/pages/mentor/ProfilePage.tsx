@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { useSelector } from 'react-redux';
+import React, { useState, useEffect, useRef } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -29,14 +30,19 @@ import {
   Star as StarIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
+  ArrowBack as ArrowBackIcon,
 } from '@mui/icons-material';
 import { RootState } from '../../store';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import mentorService from '../../services/api/mentorService';
 import { useNotification } from '../../components/common/NotificationProvider';
 import { MentorService as MentorServiceType } from '../../types';
+import authService from '../../services/auth/authService';
+import { fetchUserProfile } from '../../store/slices/authSlice';
 
 const MentorProfilePage: React.FC = () => {
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { user } = useSelector((state: RootState) => state.auth);
   const { showSuccess, showError } = useNotification();
   const [loading, setLoading] = useState(true);
@@ -52,6 +58,7 @@ const MentorProfilePage: React.FC = () => {
   const [serviceDialogOpen, setServiceDialogOpen] = useState(false);
   const [serviceDialogMode, setServiceDialogMode] = useState<'create' | 'edit'>('create');
   const [editingServiceId, setEditingServiceId] = useState<number | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
   const [serviceForm, setServiceForm] = useState({
     service_type: 'career_consultation',
     title: '',
@@ -78,6 +85,7 @@ const MentorProfilePage: React.FC = () => {
   });
 
   const [expertiseInput, setExpertiseInput] = useState('');
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
   const parsePosition = (position: string) => {
     if (!position) {
       return { title: '', company: '' };
@@ -97,6 +105,24 @@ const MentorProfilePage: React.FC = () => {
       return `${trimmedTitle} at ${trimmedCompany}`;
     }
     return trimmedTitle || trimmedCompany;
+  };
+
+  const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setAvatarUploading(true);
+    try {
+      await authService.uploadAvatar(file);
+      await dispatch(fetchUserProfile() as any);
+      showSuccess('Profile photo updated.');
+    } catch (error: any) {
+      showError(error?.response?.data?.error || 'Failed to upload profile photo.');
+    } finally {
+      setAvatarUploading(false);
+      if (avatarInputRef.current) {
+        avatarInputRef.current.value = '';
+      }
+    }
   };
 
   // Fetch mentor profile and services
@@ -374,9 +400,18 @@ const MentorProfilePage: React.FC = () => {
     <Box>
       {/* Page Header */}
       <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
-          Mentor Profile
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+          <Typography variant="h4" sx={{ fontWeight: 700 }}>
+            Mentor Profile
+          </Typography>
+          <Button
+            variant="text"
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate('/mentor')}
+          >
+            Back to Dashboard
+          </Button>
+        </Box>
         <Typography variant="body2" color="text.secondary">
           Manage your public profile and mentor information
         </Typography>
@@ -422,9 +457,21 @@ const MentorProfilePage: React.FC = () => {
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                       Add a profile photo to build trust with students.
                     </Typography>
-                    <Button variant="outlined" fullWidth>
-                      Add Profile Photo
+                    <Button
+                      variant="outlined"
+                      fullWidth
+                      onClick={() => avatarInputRef.current?.click()}
+                      disabled={avatarUploading}
+                    >
+                      {avatarUploading ? 'Uploading...' : 'Add Profile Photo'}
                     </Button>
+                    <input
+                      ref={avatarInputRef}
+                      type="file"
+                      accept="image/*"
+                      hidden
+                      onChange={handleAvatarUpload}
+                    />
                     <Typography
                       variant="caption"
                       color="text.secondary"
