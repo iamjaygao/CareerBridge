@@ -17,6 +17,19 @@ class AdminService {
   }
 
   /**
+   * Get staff dashboard statistics (legacy endpoint with staff access)
+   */
+  async getStaffDashboardStats(): Promise<any> {
+    try {
+      const response = await apiClient.get('/adminpanel/dashboard/');
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get staff dashboard stats:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get all users
    */
   async getUsers(params?: any): Promise<any> {
@@ -32,6 +45,19 @@ class AdminService {
       console.error('>>> DEBUG: adminService.getUsers ERROR:', error);
       console.error('>>> DEBUG: adminService.getUsers error.response:', error?.response);
       console.error('>>> DEBUG: adminService.getUsers error.response.data:', error?.response?.data);
+      throw error;
+    }
+  }
+
+  /**
+   * Search users for support workflows
+   */
+  async searchUsers(params?: { search?: string; limit?: number }): Promise<any> {
+    try {
+      const response = await apiClient.get('/adminpanel/users/search/', { params });
+      return response.data;
+    } catch (error) {
+      console.error('Failed to search users:', error);
       throw error;
     }
   }
@@ -327,6 +353,45 @@ class AdminService {
   }
 
   /**
+   * Get support tickets
+   */
+  async getSupportTickets(params?: any): Promise<any> {
+    try {
+      const response = await apiClient.get('/adminpanel/support/', { params });
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get support tickets:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update support ticket
+   */
+  async updateSupportTicket(ticketId: number, data: any): Promise<any> {
+    try {
+      const response = await apiClient.patch(`/adminpanel/support/${ticketId}/`, data);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to update support ticket:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create support ticket
+   */
+  async createSupportTicket(data: any): Promise<any> {
+    try {
+      const response = await apiClient.post('/adminpanel/support/', data);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to create support ticket:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Create content item
    * TODO: Backend endpoint POST /adminpanel/content/
    */
@@ -551,4 +616,3 @@ export type AdminSystemHealth = SystemHealth;
 
 const adminService = new AdminService();
 export default adminService;
-

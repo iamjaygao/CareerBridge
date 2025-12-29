@@ -29,6 +29,8 @@ import {
   Description as DocumentIcon,
 } from '@mui/icons-material';
 import LoadingSpinner from '../../../components/common/LoadingSpinner';
+import adminService from '../../../services/api/adminService';
+import { useNotification } from '../../../components/common/NotificationProvider';
 
 interface MentorApplication {
   id: number;
@@ -43,6 +45,7 @@ interface MentorApplication {
 }
 
 const MentorApprovalsPage: React.FC = () => {
+  const { showSuccess, showError } = useNotification();
   const [loading, setLoading] = useState(true);
   const [applications, setApplications] = useState<MentorApplication[]>([]);
   const [selectedApplication, setSelectedApplication] = useState<MentorApplication | null>(null);
@@ -51,44 +54,30 @@ const MentorApprovalsPage: React.FC = () => {
   const [rejectionReason, setRejectionReason] = useState('');
 
   useEffect(() => {
-    // Simulate API call
-    setTimeout(() => {
-      setApplications([
-        {
-          id: 1,
-          name: 'John Doe',
-          email: 'john@example.com',
-          experience_years: 10,
-          expertise: ['Software Engineering', 'Career Development'],
-          motivation: 'I want to help junior developers advance their careers...',
-          status: 'pending',
-          submitted_at: '2025-01-15T10:00:00Z',
-          documents: ['resume.pdf', 'certifications.pdf'],
-        },
-        {
-          id: 2,
-          name: 'Jane Smith',
-          email: 'jane@example.com',
-          experience_years: 8,
-          expertise: ['Data Science', 'Machine Learning'],
-          motivation: 'Passionate about mentoring data scientists...',
-          status: 'pending',
-          submitted_at: '2025-01-14T14:30:00Z',
-          documents: ['resume.pdf'],
-        },
-        {
-          id: 3,
-          name: 'Bob Johnson',
-          email: 'bob@example.com',
-          experience_years: 5,
-          expertise: ['Product Management'],
-          motivation: 'Experienced PM looking to give back...',
-          status: 'approved',
-          submitted_at: '2025-01-13T09:15:00Z',
-        },
-      ]);
-      setLoading(false);
-    }, 500);
+    const fetchApplications = async () => {
+      try {
+        const data = await adminService.getMentorApplications({ status: 'pending' });
+        const list = Array.isArray(data) ? data : (data?.results || []);
+        const mapped = list.map((app: any) => ({
+          id: app.id,
+          name: `${app.first_name || ''} ${app.last_name || ''}`.trim() || app.username,
+          email: app.email,
+          experience_years: app.years_of_experience || 0,
+          expertise: app.expertise || [],
+          motivation: app.motivation || app.relevant_experience || '',
+          status: app.status,
+          submitted_at: app.created_at,
+          documents: [],
+        }));
+        setApplications(mapped);
+      } catch {
+        setApplications([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchApplications();
   }, []);
 
   const handleAction = (application: MentorApplication, type: 'approve' | 'reject' | 'view') => {
@@ -98,15 +87,21 @@ const MentorApprovalsPage: React.FC = () => {
     setRejectionReason('');
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!selectedApplication) return;
 
-    // Update application status
-    setApplications(applications.map(app => 
-      app.id === selectedApplication.id 
-        ? { ...app, status: actionType === 'approve' ? 'approved' : 'rejected' as const }
-        : app
-    ));
+    try {
+      if (actionType === 'approve') {
+        await adminService.approveMentorApplication(selectedApplication.id);
+        showSuccess('Mentor application approved.');
+      } else if (actionType === 'reject') {
+        await adminService.rejectMentorApplication(selectedApplication.id, rejectionReason);
+        showSuccess('Mentor application rejected.');
+      }
+      setApplications(applications.filter(app => app.id !== selectedApplication.id));
+    } catch {
+      showError('Failed to update application.');
+    }
 
     setDialogOpen(false);
     setSelectedApplication(null);
@@ -317,4 +312,3 @@ const MentorApprovalsPage: React.FC = () => {
 };
 
 export default MentorApprovalsPage;
-

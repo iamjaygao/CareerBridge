@@ -18,6 +18,8 @@ import {
   CheckCircle as CheckCircleIcon,
 } from '@mui/icons-material';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import adminService from '../../services/api/adminService';
+import { useNotification } from '../../components/common/NotificationProvider';
 
 const StatCard: React.FC<{
   title: string;
@@ -59,20 +61,76 @@ const StatCard: React.FC<{
 );
 
 const StaffDashboardPage: React.FC = () => {
+  const { showError } = useNotification();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
-    pendingMentorApprovals: 8,
-    todaysAppointments: 12,
-    unresolvedTickets: 5,
-    contentDrafts: 3,
+    pendingMentorApprovals: 0,
+    todaysAppointments: 0,
+    unresolvedTickets: 0,
+    contentDrafts: 0,
   });
+  const [systemHealth, setSystemHealth] = useState<any>(null);
 
   useEffect(() => {
-    // Simulate API call
-    setTimeout(() => {
-      setLoading(false);
-    }, 500);
-  }, []);
+    const fetchStats = async () => {
+      try {
+        const [dashboardResult, supportResult, contentResult, healthResult] = await Promise.allSettled([
+          adminService.getStaffDashboardStats(),
+          adminService.getSupportTickets(),
+          adminService.getContent(),
+          adminService.getSystemHealth(),
+        ]);
+
+        const dashboardStats = dashboardResult.status === 'fulfilled' ? dashboardResult.value : null;
+        const supportTicketsRaw = supportResult.status === 'fulfilled' ? supportResult.value : [];
+        const contentItemsRaw = contentResult.status === 'fulfilled' ? contentResult.value : [];
+        const healthData = healthResult.status === 'fulfilled' ? healthResult.value : null;
+
+        const supportTickets = Array.isArray(supportTicketsRaw)
+          ? supportTicketsRaw
+          : (supportTicketsRaw?.results || []);
+        const contentItems = Array.isArray(contentItemsRaw)
+          ? contentItemsRaw
+          : (contentItemsRaw?.results || []);
+
+        const unresolvedTickets = Array.isArray(supportTickets)
+          ? supportTickets.filter((ticket: any) => ['open', 'in_progress'].includes(ticket.status)).length
+          : 0;
+        const contentDrafts = Array.isArray(contentItems)
+          ? contentItems.filter((item: any) => item.status === 'draft').length
+          : 0;
+
+        setStats({
+          pendingMentorApprovals: dashboardStats?.pending_mentor_approvals || 0,
+          todaysAppointments: dashboardStats?.appointments_today || 0,
+          unresolvedTickets,
+          contentDrafts,
+        });
+        setSystemHealth(healthData);
+      } catch {
+        setStats({
+          pendingMentorApprovals: 0,
+          todaysAppointments: 0,
+          unresolvedTickets: 0,
+          contentDrafts: 0,
+        });
+        showError('Failed to load staff dashboard data.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStats();
+  }, [showError]);
+
+  const formatHealthStatus = (status?: string) => {
+    if (!status) return 'Unknown';
+    return status.charAt(0).toUpperCase() + status.slice(1);
+  };
+
+  const apiResponseTime = systemHealth?.api_response_time;
+  const apiLatencyLabel = apiResponseTime ? `${Math.round(apiResponseTime)}ms (avg)` : 'Unavailable';
+  const apiLatencyPercent = apiResponseTime ? Math.min(100, Math.max(5, 100 - apiResponseTime / 5)) : 20;
 
   if (loading) {
     return <LoadingSpinner message="Loading staff dashboard..." />;
@@ -143,9 +201,11 @@ const StaffDashboardPage: React.FC = () => {
                   Database Status
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <CheckCircleIcon sx={{ color: 'success.main', fontSize: 20 }} />
+                  <CheckCircleIcon
+                    sx={{ color: systemHealth?.database_status === 'healthy' ? 'success.main' : 'warning.main', fontSize: 20 }}
+                  />
                   <Typography variant="body2" fontWeight="medium">
-                    Healthy
+                    {formatHealthStatus(systemHealth?.database_status)}
                   </Typography>
                 </Box>
               </Box>
@@ -156,9 +216,11 @@ const StaffDashboardPage: React.FC = () => {
                   Cache Status
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <CheckCircleIcon sx={{ color: 'success.main', fontSize: 20 }} />
+                  <CheckCircleIcon
+                    sx={{ color: systemHealth?.cache_status === 'healthy' ? 'success.main' : 'warning.main', fontSize: 20 }}
+                  />
                   <Typography variant="body2" fontWeight="medium">
-                    Operational
+                    {formatHealthStatus(systemHealth?.cache_status)}
                   </Typography>
                 </Box>
               </Box>
@@ -169,12 +231,12 @@ const StaffDashboardPage: React.FC = () => {
                   API Response Time
                 </Typography>
                 <Typography variant="body2" fontWeight="medium">
-                  125ms (avg)
+                  {apiLatencyLabel}
                 </Typography>
                 <LinearProgress
                   variant="determinate"
-                  value={87}
-                  color="success"
+                  value={apiLatencyPercent}
+                  color={apiResponseTime ? 'success' : 'warning'}
                   sx={{ mt: 0.5 }}
                 />
               </Box>
@@ -202,4 +264,3 @@ const StaffDashboardPage: React.FC = () => {
 };
 
 export default StaffDashboardPage;
-

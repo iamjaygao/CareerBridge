@@ -34,10 +34,15 @@ import {
   Unpublished as UnpublishIcon,
 } from '@mui/icons-material';
 import LoadingSpinner from '../../../components/common/LoadingSpinner';
+import adminService from '../../../services/api/adminService';
+import { useNotification } from '../../../components/common/NotificationProvider';
 
 interface ContentItem {
   id: number;
   title: string;
+  summary?: string;
+  body?: string;
+  cover_image_url?: string;
   type: 'blog' | 'resource' | 'guide';
   status: 'published' | 'draft' | 'archived';
   author: string;
@@ -47,58 +52,58 @@ interface ContentItem {
 }
 
 const ContentManagementPage: React.FC = () => {
+  const { showSuccess, showError } = useNotification();
   const [loading, setLoading] = useState(true);
   const [content, setContent] = useState<ContentItem[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingContent, setEditingContent] = useState<ContentItem | null>(null);
   const [formData, setFormData] = useState({
     title: '',
+    summary: '',
+    body: '',
+    cover_image_url: '',
     type: 'blog' as 'blog' | 'resource' | 'guide',
     status: 'draft' as 'published' | 'draft' | 'archived',
   });
 
   useEffect(() => {
-    // Simulate API call
-    setTimeout(() => {
-      setContent([
-        {
-          id: 1,
-          title: 'Top 10 AI Tools for Resume Optimization',
-          type: 'blog',
-          status: 'published',
-          author: 'Staff',
-          created_at: '2025-01-10T10:00:00Z',
-          updated_at: '2025-01-10T10:00:00Z',
-          views: 1250,
-        },
-        {
-          id: 2,
-          title: 'Behavioral Interview Questions Guide',
-          type: 'guide',
-          status: 'draft',
-          author: 'Staff',
-          created_at: '2025-01-08T14:30:00Z',
-          updated_at: '2025-01-08T14:30:00Z',
-        },
-        {
-          id: 3,
-          title: 'Software Engineering Career Roadmap',
-          type: 'resource',
-          status: 'draft',
-          author: 'Staff',
-          created_at: '2025-01-12T09:15:00Z',
-          updated_at: '2025-01-12T09:15:00Z',
-        },
-      ]);
-      setLoading(false);
-    }, 500);
-  }, []);
+    const fetchContent = async () => {
+      try {
+        const data = await adminService.getContent();
+        const list = Array.isArray(data) ? data : (data?.results || []);
+        const mapped = list.map((item: any) => ({
+          id: item.id,
+          title: item.title,
+          summary: item.summary || '',
+          body: item.body || '',
+          cover_image_url: item.cover_image_url || '',
+          type: item.content_type || item.type,
+          status: item.status,
+          author: item.author_name || item.author || 'Staff',
+          created_at: item.created_at,
+          updated_at: item.updated_at,
+          views: item.views,
+        }));
+        setContent(mapped);
+      } catch {
+        showError('Failed to load content items.');
+        setContent([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchContent();
+  }, [showError]);
 
   const handleOpenDialog = (item?: ContentItem) => {
     if (item) {
       setEditingContent(item);
       setFormData({
         title: item.title,
+        summary: item.summary || '',
+        body: item.body || '',
+        cover_image_url: item.cover_image_url || '',
         type: item.type,
         status: item.status,
       });
@@ -106,6 +111,9 @@ const ContentManagementPage: React.FC = () => {
       setEditingContent(null);
       setFormData({
         title: '',
+        summary: '',
+        body: '',
+        cover_image_url: '',
         type: 'blog',
         status: 'draft',
       });
@@ -118,39 +126,92 @@ const ContentManagementPage: React.FC = () => {
     setEditingContent(null);
   };
 
-  const handleSave = () => {
-    // Simulate save
-    if (editingContent) {
-      setContent(content.map(c => 
-        c.id === editingContent.id 
-          ? { ...c, ...formData, updated_at: new Date().toISOString() }
+  const handleSave = async () => {
+    try {
+      if (editingContent) {
+        const updated = await adminService.updateContent(editingContent.id, {
+          title: formData.title,
+          summary: formData.summary,
+          body: formData.body,
+          cover_image_url: formData.cover_image_url,
+          content_type: formData.type,
+          status: formData.status,
+        });
+        setContent(content.map(c =>
+          c.id === editingContent.id
+            ? {
+                ...c,
+                title: updated.title ?? formData.title,
+                summary: updated.summary ?? formData.summary,
+                body: updated.body ?? formData.body,
+                cover_image_url: updated.cover_image_url ?? formData.cover_image_url,
+                type: updated.content_type ?? formData.type,
+                status: updated.status ?? formData.status,
+                author: updated.author_name || c.author,
+                updated_at: updated.updated_at || new Date().toISOString(),
+                views: updated.views ?? c.views,
+              }
+            : c
+        ));
+        showSuccess('Content updated.');
+      } else {
+        const created = await adminService.createContent({
+          title: formData.title,
+          summary: formData.summary,
+          body: formData.body,
+          cover_image_url: formData.cover_image_url,
+          content_type: formData.type,
+          status: formData.status,
+        });
+        const newItem: ContentItem = {
+          id: created.id,
+          title: created.title ?? formData.title,
+          summary: created.summary ?? formData.summary,
+          body: created.body ?? formData.body,
+          cover_image_url: created.cover_image_url ?? formData.cover_image_url,
+          type: created.content_type ?? formData.type,
+          status: created.status ?? formData.status,
+          author: created.author_name || 'Staff',
+          created_at: created.created_at || new Date().toISOString(),
+          updated_at: created.updated_at || new Date().toISOString(),
+          views: created.views,
+        };
+        setContent([newItem, ...content]);
+        showSuccess('Content created.');
+      }
+      handleCloseDialog();
+    } catch {
+      showError('Failed to save content item.');
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    try {
+      await adminService.deleteContent(id);
+      setContent(content.filter(c => c.id !== id));
+      showSuccess('Content deleted.');
+    } catch {
+      showError('Failed to delete content.');
+    }
+  };
+
+  const handleTogglePublish = async (id: number) => {
+    const target = content.find(c => c.id === id);
+    if (!target) return;
+    const nextStatus = target.status === 'published' ? 'draft' : 'published';
+    try {
+      const updated = await adminService.updateContent(id, {
+        status: nextStatus,
+      });
+      setContent(content.map(c =>
+        c.id === id
+          ? { ...c, status: updated.status || nextStatus, updated_at: updated.updated_at || new Date().toISOString() }
           : c
       ));
-    } else {
-      const newItem: ContentItem = {
-        id: content.length + 1,
-        title: formData.title,
-        type: formData.type,
-        status: formData.status,
-        author: 'Staff',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      setContent([...content, newItem]);
+      showSuccess(`Content ${nextStatus === 'published' ? 'published' : 'unpublished'}.`);
+    } catch {
+      showError('Failed to update content status.');
     }
-    handleCloseDialog();
-  };
-
-  const handleDelete = (id: number) => {
-    setContent(content.filter(c => c.id !== id));
-  };
-
-  const handleTogglePublish = (id: number) => {
-    setContent(content.map(c => 
-      c.id === id 
-        ? { ...c, status: c.status === 'published' ? 'draft' as const : 'published' as const, updated_at: new Date().toISOString() }
-        : c
-    ));
   };
 
   const getTypeChip = (type: string) => {
@@ -293,6 +354,34 @@ const ContentManagementPage: React.FC = () => {
                 required
               />
             </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Summary"
+                value={formData.summary}
+                onChange={(e) => setFormData({ ...formData, summary: e.target.value })}
+                multiline
+                minRows={2}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Body"
+                value={formData.body}
+                onChange={(e) => setFormData({ ...formData, body: e.target.value })}
+                multiline
+                minRows={4}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Cover Image URL"
+                value={formData.cover_image_url}
+                onChange={(e) => setFormData({ ...formData, cover_image_url: e.target.value })}
+              />
+            </Grid>
             <Grid item xs={12} md={6}>
               <FormControl fullWidth>
                 <InputLabel>Type</InputLabel>
@@ -344,4 +433,3 @@ const ContentManagementPage: React.FC = () => {
 };
 
 export default ContentManagementPage;
-
