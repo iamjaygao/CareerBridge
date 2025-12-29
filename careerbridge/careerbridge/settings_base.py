@@ -7,10 +7,12 @@ This file contains common settings that are shared between development and produ
 from pathlib import Path
 import os
 from datetime import timedelta
+from dotenv import load_dotenv
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / '.env')
 
 
 # Application definition
@@ -66,6 +68,52 @@ if SENTRY_DSN:
 CELERY_BROKER_URL = os.environ.get('REDIS_URL', 'redis://redis:6379/1')
 CELERY_RESULT_BACKEND = os.environ.get('REDIS_URL', 'redis://redis:6379/1')
 CELERY_TASK_ALWAYS_EAGER = False
+CELERY_BEAT_SCHEDULE = {
+    'notify_staff_unanswered_chats': {
+        'task': 'chat.tasks.notify_staff_unanswered_chats',
+        'schedule': timedelta(hours=1),
+        'args': (24,),
+    },
+    'notify_staff_upcoming_appointments': {
+        'task': 'appointments.tasks.notify_staff_upcoming_appointments',
+        'schedule': timedelta(hours=1),
+        'args': (24,),
+    },
+    'notify_staff_unconfirmed_appointments': {
+        'task': 'appointments.tasks.notify_staff_unconfirmed_appointments',
+        'schedule': timedelta(hours=1),
+        'args': (12, 24),
+    },
+    'notify_staff_missing_mentor_feedback': {
+        'task': 'appointments.tasks.notify_staff_missing_mentor_feedback',
+        'schedule': timedelta(hours=12),
+        'args': (48,),
+    },
+    'notify_admin_slot_conflicts': {
+        'task': 'appointments.tasks.notify_admin_slot_conflicts',
+        'schedule': timedelta(minutes=30),
+    },
+    'notify_admin_payment_success_drop': {
+        'task': 'adminpanel.tasks.notify_admin_payment_success_drop',
+        'schedule': timedelta(hours=6),
+        'args': (0.2,),
+    },
+    'notify_admin_metric_anomaly': {
+        'task': 'adminpanel.tasks.notify_admin_metric_anomaly',
+        'schedule': timedelta(hours=6),
+    },
+    'notify_admin_risk_alerts': {
+        'task': 'adminpanel.tasks.notify_admin_risk_alerts',
+        'schedule': timedelta(hours=6),
+    },
+    'notify_superadmin_system_alerts': {
+        'task': 'adminpanel.tasks.notify_superadmin_system_alerts',
+        'schedule': timedelta(minutes=10),
+    },
+}
+
+# Notifications retention (read notifications only)
+NOTIFICATION_RETENTION_DAYS = int(os.environ.get('NOTIFICATION_RETENTION_DAYS', 180))
 
 AUTH_USER_MODEL = 'users.User'
 AUTHENTICATION_BACKENDS = [

@@ -33,7 +33,7 @@ class NotificationListView(generics.ListAPIView):
         # 2. notification.target_role == current_user.role (role-based)
         queryset = Notification.objects.filter(
             Q(user=user) | Q(target_role=user_role)
-        )
+        ).order_by('-created_at')
         
         # Apply filter conditions
         serializer = NotificationFilterSerializer(data=self.request.query_params)
@@ -55,10 +55,12 @@ class NotificationListView(generics.ListAPIView):
             if data.get('date_to'):
                 queryset = queryset.filter(created_at__date__lte=data['date_to'])
             
-            limit = data.get('limit', 20)
-            return queryset[:limit]
+            limit = data.get('limit')
+            if limit is not None:
+                return queryset[:limit]
+            return queryset
         
-        return queryset[:20]
+        return queryset
 
 class NotificationDetailView(generics.RetrieveAPIView):
     """Notification details"""
@@ -286,9 +288,8 @@ class NotificationDeleteAllView(generics.GenericAPIView):
     
     def post(self, request):
         user = request.user
-        user_role = getattr(user, 'role', None)
         deleted_count = Notification.objects.filter(
-            Q(user=user) | Q(target_role=user_role)
+            user=user
         ).delete()[0]
         
         return Response({

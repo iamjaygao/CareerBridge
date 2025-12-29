@@ -182,4 +182,4 @@ class NotificationFilterSerializer(serializers.Serializer):
     )
     date_from = serializers.DateField(required=False)
     date_to = serializers.DateField(required=False)
-    limit = serializers.IntegerField(min_value=1, max_value=100, default=20) 
+    limit = serializers.IntegerField(min_value=1, max_value=100, required=False)

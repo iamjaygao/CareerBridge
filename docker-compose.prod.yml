@@ -54,6 +54,48 @@ services:
       - ./careerbridge/media:/app/media
       - ./careerbridge/logs:/app/logs
 
+  celery_worker:
+    build:
+      context: ./careerbridge
+      dockerfile: Dockerfile
+    command: celery -A careerbridge worker -l info
+    environment:
+      - DATABASE_URL=postgresql://careerbridge_user:${POSTGRES_PASSWORD}@postgres:5432/careerbridge
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY}
+      - DEBUG=False
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS}
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - careerbridge_network
+    restart: unless-stopped
+    volumes:
+      - ./careerbridge/media:/app/media
+      - ./careerbridge/logs:/app/logs
+
+  celery_beat:
+    build:
+      context: ./careerbridge
+      dockerfile: Dockerfile
+    command: celery -A careerbridge beat -l info
+    environment:
+      - DATABASE_URL=postgresql://careerbridge_user:${POSTGRES_PASSWORD}@postgres:5432/careerbridge
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY}
+      - DEBUG=False
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS}
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - careerbridge_network
+    restart: unless-stopped
+    volumes:
+      - ./careerbridge/media:/app/media
+      - ./careerbridge/logs:/app/logs
+
   # JobCrawler Service
   jobcrawler:
     build:
