@@ -2,6 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
+from zoneinfo import ZoneInfo
 from mentors.services import enrich_mentor_value_copy,build_mentor_contract
 
 
@@ -90,6 +91,7 @@ class MentorProfileSerializer(serializers.ModelSerializer):
             "rating",
             "review_count",
             "is_verified",
+            "timezone",
         )
 
     def to_representation(self, instance):
@@ -101,7 +103,7 @@ class MentorProfileSerializer(serializers.ModelSerializer):
         # 2) frozen v1 contract
         request = self.context.get("request")
         is_visitor = not bool(getattr(request, "user", None) and request.user.is_authenticated)
-        data = build_mentor_contract(data, is_visitor=is_visitor)
+        data = build_mentor_contract(data)
 
         return data
     
@@ -147,6 +149,13 @@ class MentorProfileSerializer(serializers.ModelSerializer):
             return "Recommended for your current career focus"
 
         return "Recommended based on profile match"
+
+    def validate_timezone(self, value: str) -> str:
+        try:
+            ZoneInfo(value)
+        except Exception as exc:
+            raise serializers.ValidationError("Invalid timezone") from exc
+        return value
 
 
     def get_starting_price(self, obj: MentorProfile):
@@ -303,9 +312,23 @@ class MentorProfileDetailSerializer(MentorProfileSerializer):
     reviews = serializers.SerializerMethodField()
     availability = serializers.SerializerMethodField()
     primary_service_id = serializers.IntegerField(required=False, allow_null=True)
+    current_position = serializers.CharField(required=False, allow_blank=True)
+    years_of_experience = serializers.IntegerField(required=False)
+    specializations = serializers.ListField(
+        child=serializers.CharField(),
+        required=False
+    )
 
     class Meta(MentorProfileSerializer.Meta):
-        fields = MentorProfileSerializer.Meta.fields + ("services", "reviews", "availability", "primary_service_id")
+        fields = MentorProfileSerializer.Meta.fields + (
+            "services",
+            "reviews",
+            "availability",
+            "primary_service_id",
+            "current_position",
+            "years_of_experience",
+            "specializations",
+        )
     
     def validate_primary_service_id(self, value):
         """Validate that primary_service_id is a valid, active service belonging to this mentor"""
@@ -355,7 +378,7 @@ class MentorProfileDetailSerializer(MentorProfileSerializer):
         # Apply contract with is_detail_view=True for detail page
         request = self.context.get("request")
         is_visitor = not bool(getattr(request, "user", None) and request.user.is_authenticated)
-        data = build_mentor_contract(data, is_visitor=is_visitor, is_detail_view=True)
+        data = build_mentor_contract(data, is_detail_view=True)
         
         return data
 

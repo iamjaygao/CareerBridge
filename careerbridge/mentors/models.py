@@ -120,6 +120,12 @@ class MentorProfile(models.Model):
         help_text="Mentor-selected primary service (SKU anchor)"
     )
 
+    timezone = models.CharField(
+        max_length=64,
+        default=settings.TIME_ZONE,
+        help_text="IANA timezone for availability (e.g., America/New_York)"
+    )
+
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

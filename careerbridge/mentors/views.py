@@ -3,49 +3,72 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.pagination import PageNumberPagination
+
 from django.shortcuts import get_object_or_404
-from django.db.models import Q, Avg, Count  
+from django.db.models import Q, Avg, Count
 from django.utils import timezone
+from django.conf import settings
+from zoneinfo import ZoneInfo
 from datetime import date, timedelta, datetime
+
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from django.conf import settings
-from mentors.services.legacy import apply_track_ranking
+
 import stripe
+
+from mentors.services.legacy import apply_track_ranking
+from adminpanel.permissions import IsAdminUser, user_has_role
 
 from .models import (
     MentorProfile, MentorService, MentorAvailability, MentorSession,
     MentorReview, MentorApplication, MentorPayment, MentorNotification
 )
+
 from .serializers import (
-    MentorProfileSerializer, MentorProfileDetailSerializer, MentorServiceSerializer,
-    MentorAvailabilitySerializer, MentorSessionSerializer, MentorSessionCreateSerializer,
-    MentorReviewSerializer, MentorApplicationSerializer, MentorPaymentSerializer,
-    MentorNotificationSerializer, MentorSearchSerializer, MentorRecommendationSerializer,
-    MentorAnalyticsSerializer, MentorAvailabilitySlotSerializer, MentorRankingSerializer
+    MentorProfileSerializer, MentorProfileDetailSerializer,
+    MentorServiceSerializer, MentorAvailabilitySerializer,
+    MentorSessionSerializer, MentorSessionCreateSerializer,
+    MentorReviewSerializer, MentorApplicationSerializer,
+    MentorPaymentSerializer, MentorNotificationSerializer,
+    MentorSearchSerializer, MentorRecommendationSerializer,
+    MentorAnalyticsSerializer, MentorAvailabilitySlotSerializer,
+    MentorRankingSerializer
 )
-from .services.legacy import MentorRecommendationService, MentorSearchService, MentorAnalyticsService
-from adminpanel.permissions import IsAdminUser, user_has_role   
+
+from .services.legacy import (
+    MentorRecommendationService,
+    MentorSearchService,
+    MentorAnalyticsService
+)
+
+# ======================================================
+# Pagination (GLOBAL RULE)
+# ======================================================
+
+class MentorListPagination(PageNumberPagination):
+    """
+    Default mentor list pagination.
+    SaaS rule: Explore mentors = 6 per page.
+    """
+    page_size = 6
+    page_size_query_param = "limit"
+    max_page_size = 12
+
+
+# ======================================================
+# Mentor List
+# ======================================================
 
 class MentorListView(generics.ListAPIView):
-    """List all approved mentors with filtering and search"""
+    """
+    List all approved mentors with filtering, ranking, and pagination.
+    """
     serializer_class = MentorProfileSerializer
-    permission_classes = []  # Allow public access to view mentors
+    permission_classes = []
+    pagination_class = MentorListPagination
 
-    def mentor_score(self, m):
-        score = 0
-        if m.is_verified:
-            score += 50
-        if m.specializations:
-            score += 20
-        if m.session_focus:
-            score += 10
-        score += (m.review_count_calc or 0) * 5
-        score += float(m.avg_rating_calc or 0) * 10
-        if m.user.username == "test_mentor":
-            score -= 30
-        return score
-    
     def get_queryset(self):
         queryset = MentorProfile.objects.filter(
             status="approved"
@@ -54,9 +77,9 @@ class MentorListView(generics.ListAPIView):
             review_count_calc=Count("reviews"),
         )
 
-        # ======================
-        # Filters (保留你原来的)
-        # ======================
+        # ----------------------
+        # Filters
+        # ----------------------
         service_type = self.request.query_params.get("service_type")
         industry = self.request.query_params.get("industry")
         min_rating = self.request.query_params.get("min_rating")
@@ -77,14 +100,13 @@ class MentorListView(generics.ListAPIView):
 
         queryset = queryset.distinct()
 
-        # ======================
-        # ✅ 6.2 核心：Track-aware ranking
-        # ======================
+        # ----------------------
+        # Ranking
+        # ----------------------
         if track:
             queryset = queryset.filter(primary_track=track)
             queryset = apply_track_ranking(queryset, track)
         else:
-            # fallback ranking（无 track）
             queryset = queryset.order_by(
                 "-is_verified",
                 "-avg_rating_calc",
@@ -93,116 +115,128 @@ class MentorListView(generics.ListAPIView):
 
         return queryset
 
-    def list(self, request, *args, **kwargs):
-        track = request.query_params.get("track")
-        is_visitor = not request.user.is_authenticated
-
-        if is_visitor and track:
-            queryset = self.get_queryset()
-            queryset = queryset[:6]
-            serializer = self.get_serializer(queryset, many=True)
-            return Response(serializer.data)
-
-        return super().list(request, *args, **kwargs)
-
     @swagger_auto_schema(
-        operation_description="List all approved mentors with filtering options",
+        operation_description="List approved mentors with filters and pagination",
         manual_parameters=[
-            openapi.Parameter('service_type', openapi.IN_QUERY, description="Filter by service type", type=openapi.TYPE_STRING),
-            openapi.Parameter('industry', openapi.IN_QUERY, description="Filter by industry", type=openapi.TYPE_STRING),
-            openapi.Parameter('min_rating', openapi.IN_QUERY, description="Minimum rating filter", type=openapi.TYPE_NUMBER),
-            openapi.Parameter('is_verified', openapi.IN_QUERY, description="Filter by verification status", type=openapi.TYPE_BOOLEAN),
+            openapi.Parameter("service_type", openapi.IN_QUERY, type=openapi.TYPE_STRING),
+            openapi.Parameter("industry", openapi.IN_QUERY, type=openapi.TYPE_STRING),
+            openapi.Parameter("min_rating", openapi.IN_QUERY, type=openapi.TYPE_NUMBER),
+            openapi.Parameter("is_verified", openapi.IN_QUERY, type=openapi.TYPE_BOOLEAN),
+            openapi.Parameter("track", openapi.IN_QUERY, type=openapi.TYPE_STRING),
+            openapi.Parameter("page", openapi.IN_QUERY, type=openapi.TYPE_INTEGER),
+            openapi.Parameter("limit", openapi.IN_QUERY, type=openapi.TYPE_INTEGER),
         ],
-        responses={200: MentorProfileSerializer(many=True)}
+        responses={200: MentorProfileSerializer(many=True)},
     )
     def get(self, request, *args, **kwargs):
         return super().get(request, *args, **kwargs)
+
+
+# ======================================================
+# Mentor Detail
+# ======================================================
 
 class MentorDetailView(generics.RetrieveAPIView):
-    """Get detailed mentor profile"""
     serializer_class = MentorProfileDetailSerializer
-    permission_classes = []  # Allow public access to view mentor details
-    queryset = MentorProfile.objects.filter(status='approved')
+    permission_classes = []
+    queryset = MentorProfile.objects.filter(status="approved")
 
     @swagger_auto_schema(
-        operation_description="Get detailed mentor profile information",
-        responses={200: MentorProfileDetailSerializer}
+        operation_description="Get detailed mentor profile",
+        responses={200: MentorProfileDetailSerializer},
     )
     def get(self, request, *args, **kwargs):
         return super().get(request, *args, **kwargs)
 
+
+# ======================================================
+# Mentor Search
+# ======================================================
+
 class MentorSearchView(APIView):
-    """Advanced mentor search"""
     permission_classes = [permissions.IsAuthenticated]
-    
+
     @swagger_auto_schema(
-        operation_description="Advanced mentor search with multiple filters",
+        operation_description="Advanced mentor search",
         request_body=MentorSearchSerializer,
-        responses={200: MentorProfileSerializer(many=True)}
+        responses={200: MentorProfileSerializer(many=True)},
     )
     def post(self, request):
         serializer = MentorSearchSerializer(data=request.data)
         if serializer.is_valid():
-            mentors = MentorSearchService.search_mentors(**serializer.validated_data)
-            mentor_serializer = MentorProfileSerializer(mentors, many=True)
-            return Response(mentor_serializer.data)
+            mentors = MentorSearchService.search_mentors(
+                **serializer.validated_data
+            )
+            return Response(
+                MentorProfileSerializer(mentors, many=True).data
+            )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
+# ======================================================
+# Mentor Recommendation
+# ======================================================
+
 class MentorRecommendationView(APIView):
-    """Get personalized mentor recommendations"""
     permission_classes = [permissions.IsAuthenticated]
-    
+
     @swagger_auto_schema(
-        operation_description="Get personalized mentor recommendations for the user",
+        operation_description="Get personalized mentor recommendations",
         request_body=MentorRecommendationSerializer,
-        responses={200: openapi.Response("List of recommended mentors")}
+        responses={200: openapi.Response("Recommended mentors")},
     )
     def post(self, request):
         serializer = MentorRecommendationSerializer(data=request.data)
         if serializer.is_valid():
-            recommendations = MentorRecommendationService.get_recommended_mentors(
+            data = MentorRecommendationService.get_recommended_mentors(
                 user=request.user,
                 **serializer.validated_data
             )
-            return Response(recommendations)
+            return Response(data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
+# ======================================================
+# Mentor Ranking
+# ======================================================
+
 class MentorRankingView(APIView):
-    """Get mentor rankings"""
     permission_classes = [permissions.IsAuthenticated]
-    
+
     @swagger_auto_schema(
-        operation_description="Get mentor rankings by different criteria",
+        operation_description="Get mentor rankings",
         request_body=MentorRankingSerializer,
-        responses={200: openapi.Response("List of ranked mentors")}
+        responses={200: openapi.Response("Ranked mentors")},
     )
     def post(self, request):
         serializer = MentorRankingSerializer(data=request.data)
         if serializer.is_valid():
             data = serializer.validated_data
-            ranking_type = data.get('ranking_type', 'overall')
-            
-            if ranking_type == 'rating':
+            ranking_type = data.get("ranking_type", "overall")
+
+            if ranking_type == "rating":
                 mentors = MentorRecommendationService.get_mentors_by_rating(
-                    limit=data.get('limit', 10)
+                    limit=data.get("limit", 10)
                 )
-            elif ranking_type == 'sessions':
+            elif ranking_type == "sessions":
                 mentors = MentorRecommendationService.get_mentors_by_sessions(
-                    limit=data.get('limit', 10)
+                    limit=data.get("limit", 10)
                 )
-            elif ranking_type == 'earnings':
+            elif ranking_type == "earnings":
                 mentors = MentorRecommendationService.get_mentors_by_earnings(
-                    limit=data.get('limit', 10)
+                    limit=data.get("limit", 10)
                 )
-            else:  # overall
+            else:
                 mentors = MentorRecommendationService.get_top_mentors(
-                    limit=data.get('limit', 10),
-                    category=data.get('category'),
-                    industry=data.get('industry')
+                    limit=data.get("limit", 10),
+                    category=data.get("category"),
+                    industry=data.get("industry"),
                 )
-            
+
             return Response(mentors)
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+      
 
 class StripeConnectCreateAccountView(APIView):
     """Create or fetch Stripe Connect account for the authenticated mentor"""
@@ -274,7 +308,7 @@ class StripeConnectStatusView(APIView):
             'payouts_enabled': profile.payouts_enabled,
             'charges_enabled': profile.charges_enabled,
             'kyc_disabled_reason': profile.kyc_disabled_reason,
-            'kyc_due_by': profile.kyc_due_by.isoformat() if profile.kyc_due_by else null,
+            'kyc_due_by': profile.kyc_due_by.isoformat() if profile.kyc_due_by else None,
             'capabilities': profile.stripe_capabilities,
         })
 
@@ -324,15 +358,15 @@ class MentorAvailabilitySlotsView(APIView):
         if isinstance(check_date, str):
             check_date = date.fromisoformat(check_date)
         
-        # Get service duration if service_id is provided
-        duration_minutes = 60  # default 1 hour
-        if service_id:
-            try:
-                service = MentorService.objects.get(id=service_id, mentor=mentor, is_active=True)
-                duration_minutes = service.duration_minutes
-            except MentorService.DoesNotExist:
-                pass
+        # Use fixed 1-hour slots for availability
+        slot_minutes = 60
         
+        mentor_tz_value = getattr(mentor, "timezone", settings.TIME_ZONE) or settings.TIME_ZONE
+        try:
+            mentor_tz = ZoneInfo(mentor_tz_value)
+        except Exception:
+            mentor_tz = ZoneInfo(settings.TIME_ZONE)
+
         day_of_week = check_date.weekday()
         availabilities = MentorAvailability.objects.filter(
             mentor=mentor,
@@ -342,21 +376,98 @@ class MentorAvailabilitySlotsView(APIView):
         
         slots = []
         for availability in availabilities:
-            # Generate slots based on service duration
+            # Generate slots based on fixed slot size (default 1 hour)
             current_time = availability.start_time
             while current_time < availability.end_time:
                 # Calculate end time for this slot
-                slot_end = (datetime.combine(check_date, current_time) + timedelta(minutes=duration_minutes)).time()
+                slot_end = (datetime.combine(check_date, current_time) + timedelta(minutes=slot_minutes)).time()
                 
                 # Check if the entire slot fits within availability
                 if slot_end <= availability.end_time:
                     # Check if this time slot is available (no conflicting sessions)
-                    is_available = not MentorSession.objects.filter(
+                    slot_datetime_start = timezone.make_aware(
+                        datetime.combine(check_date, current_time),
+                        timezone=mentor_tz
+                    )
+                    slot_datetime_end = timezone.make_aware(
+                        datetime.combine(check_date, slot_end),
+                        timezone=mentor_tz
+                    )
+                    slot_start_utc = slot_datetime_start.astimezone(timezone.utc)
+                    slot_end_utc = slot_datetime_end.astimezone(timezone.utc)
+                    
+                    has_conflicting_session = MentorSession.objects.filter(
                         mentor=mentor,
                         scheduled_date=check_date,
                         scheduled_time=current_time,
                         status__in=['confirmed', 'pending']
                     ).exists()
+                    
+                    # Check TimeSlot holds from appointments app
+                    from appointments.models import TimeSlot
+                    now = timezone.now()
+                    conflicting_timeslot = TimeSlot.objects.filter(
+                        mentor=mentor,
+                        start_time__lt=slot_end_utc,
+                        end_time__gt=slot_start_utc,
+                        is_available=False
+                    ).filter(
+                        Q(reserved_until__isnull=False) &
+                        Q(reserved_until__gte=now) &
+                        Q(reserved_appointment__status='pending')
+                    ).exists()
+                    
+                    # Release expired holds (lightweight check)
+                    expired_holds = TimeSlot.objects.filter(
+                        mentor=mentor,
+                        start_time__lt=slot_end_utc,
+                        end_time__gt=slot_start_utc,
+                        is_available=False,
+                        reserved_until__lt=now,
+                        reserved_appointment__status='pending'
+                    )
+                    for expired_slot in expired_holds:
+                        expired_slot.is_available = True
+                        expired_slot.reserved_until = None
+                        if expired_slot.reserved_appointment:
+                            expired_slot.reserved_appointment.status = 'expired'
+                            expired_slot.reserved_appointment.save()
+                        expired_slot.reserved_appointment = None
+                        expired_slot.save()
+                    
+                    is_available = not has_conflicting_session and not conflicting_timeslot
+                    
+                    # Find or create matching TimeSlot
+                    matching_timeslot = TimeSlot.objects.filter(
+                        mentor=mentor,
+                        start_time=slot_start_utc,
+                        end_time=slot_end_utc
+                    ).first()
+                    
+                    if not matching_timeslot:
+                        # Create TimeSlot on the fly for booking
+                        from decimal import Decimal
+                        service_price = Decimal('0.00')
+                        if service_id:
+                            try:
+                                service = MentorService.objects.get(id=service_id, mentor=mentor, is_active=True)
+                                if hasattr(service, 'fixed_price') and service.fixed_price:
+                                    service_price = Decimal(str(service.fixed_price))
+                                elif hasattr(service, 'price_per_hour') and service.price_per_hour:
+                                    service_price = Decimal(str(service.price_per_hour)) * Decimal(str(duration_minutes)) / Decimal('60')
+                            except MentorService.DoesNotExist:
+                                pass
+                        
+                        matching_timeslot = TimeSlot.objects.create(
+                            mentor=mentor,
+                            start_time=slot_start_utc,
+                            end_time=slot_end_utc,
+                            is_available=True,
+                            price=service_price,
+                            currency='USD'
+                        )
+                    
+                    slot_id = matching_timeslot.id
                     
                     if is_available:
                         slots.append({
@@ -364,11 +475,12 @@ class MentorAvailabilitySlotsView(APIView):
                             'start_time': current_time,
                             'end_time': slot_end,
                             'is_available': is_available,
-                            'duration_minutes': duration_minutes
+                            'duration_minutes': slot_minutes,
+                            'slot_id': slot_id
                         })
                 
-                # Move to next slot (30-minute intervals for selection)
-                current_time = (datetime.combine(check_date, current_time) + timedelta(minutes=30)).time()
+                # Move to next slot (fixed slot size)
+                current_time = (datetime.combine(check_date, current_time) + timedelta(minutes=slot_minutes)).time()
         
         serializer = MentorAvailabilitySlotSerializer(slots, many=True)
         return Response(serializer.data)
@@ -561,6 +673,28 @@ class MentorProfileUpdateView(generics.RetrieveUpdateAPIView):
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
+        from django.contrib.auth import get_user_model
+        from notifications.services.dispatcher import notify
+        from notifications.services.rules import NotificationType
+
+        User = get_user_model()
+        admin_users = User.objects.filter(role="admin")
+        for admin_user in admin_users:
+            notify(
+                NotificationType.ADMIN_MENTOR_PROFILE_UPDATED,
+                context={
+                    'mentor_id': instance.id,
+                    'admin': admin_user,
+                },
+                title='Mentor profile updated',
+                message=(
+                    f'Mentor {instance.user.get_full_name() or instance.user.username} '
+                    'updated their profile and needs review.'
+                ),
+                priority='normal',
+                related_mentor=instance,
+                payload={'mentor_id': instance.id},
+            )
         return Response(serializer.data)
 
 class MentorServiceUpdateView(generics.UpdateAPIView):
