@@ -114,7 +114,8 @@ const PublicHeader: React.FC = () => {
       sx={{
         bgcolor: 'white',
         color: 'text.primary',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+        boxShadow: '0 1px 10px rgba(0, 0, 0, 0.08)',
+        backdropFilter: 'blur(8px)',
       }}
     >
       <Container maxWidth="xl">
@@ -143,10 +144,7 @@ const PublicHeader: React.FC = () => {
               sx={{
                 fontWeight: 700,
                 fontSize: '1.5rem',
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                backgroundClip: 'text',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
+                color: 'primary.main',
                 lineHeight: 1.2,
               }}
             >
@@ -162,7 +160,7 @@ const PublicHeader: React.FC = () => {
                 mt: 0.25,
               }}
             >
-              AI Career Decision Engine
+              Career clarity, guided execution
             </Typography>
           </Box>
 
@@ -279,7 +277,6 @@ const PublicHeader: React.FC = () => {
                         width: 36,
                         height: 36,
                         bgcolor: 'primary.main',
-                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                         cursor: 'pointer',
                       }}
                     >
@@ -485,14 +482,14 @@ const PublicHeader: React.FC = () => {
                   sx={{
                     textTransform: 'none',
                     fontWeight: 600,
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
                     px: 3,
                     py: 1,
                     borderRadius: '8px',
-                    boxShadow: '0 2px 8px rgba(102, 126, 234, 0.3)',
+                    boxShadow: '0 8px 18px rgba(25, 118, 210, 0.25)',
                     '&:hover': {
-                      background: 'linear-gradient(135deg, #5568d3 0%, #6a3d8f 100%)',
-                      boxShadow: '0 4px 12px rgba(102, 126, 234, 0.4)',
+                      background: 'linear-gradient(135deg, #1565c0 0%, #0d47a1 100%)',
+                      boxShadow: '0 12px 22px rgba(25, 118, 210, 0.3)',
                     },
                   }}
                 >
@@ -508,4 +505,3 @@ const PublicHeader: React.FC = () => {
 };
 
 export default PublicHeader;
-

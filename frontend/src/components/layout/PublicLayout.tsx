@@ -16,6 +16,7 @@ const PublicLayout: React.FC = () => {
         flexDirection: 'column',
         minHeight: '100vh',
         bgcolor: 'background.default',
+        color: 'text.primary',
       }}
     >
       {/* Public Header with marketing navigation */}
@@ -39,4 +40,3 @@ const PublicLayout: React.FC = () => {
 };
 
 export default PublicLayout;
-
