@@ -33,7 +33,6 @@ import { logout } from '../../store/slices/authSlice';
 import { useRole } from '../../contexts/RoleContext';
 import NotificationBell from '../common/NotificationBell';
 import ViewingAsChip from '../common/ViewingAsChip';
-import { getHomePath } from '../../utils/getHomePath';
 
 const DashboardHeader: React.FC = () => {
   const navigate = useNavigate();
@@ -118,7 +117,7 @@ const DashboardHeader: React.FC = () => {
             cursor: 'pointer',
             mr: 3,
           }}
-          onClick={() => navigate(getHomePath(user?.role))}
+          onClick={() => navigate('/')}
         >
           <Typography
             variant="h6"
@@ -304,4 +303,3 @@ const DashboardHeader: React.FC = () => {
 };
 
 export default DashboardHeader;
-

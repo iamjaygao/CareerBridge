@@ -55,6 +55,9 @@ const EmailVerificationPage = lazy(() => import('./pages/auth/EmailVerificationP
 // Student
 const StudentDashboardPage = lazy(() => import('./pages/student/DashboardPage'));
 const StudentAssessmentPage = lazy(() => import('./pages/student/AssessmentPage'));
+const StudentInsightsPage = lazy(() => import('./pages/student/InsightsPage'));
+const StudentIntelligencePage = lazy(() => import('./pages/student/IntelligencePage'));
+const ResumeAnalysisDetailPage = lazy(() => import('./pages/student/ResumeAnalysisDetailPage'));
 const StudentAppointmentsPage = lazy(() => import('./pages/student/AppointmentsPage'));
 const StudentProfilePage = lazy(() => import('./pages/student/ProfilePage'));
 
@@ -68,9 +71,16 @@ const MentorProfilePage = lazy(() => import('./pages/mentor/ProfilePage'));
 const MentorAvailabilityPage = lazy(() => import('./pages/mentor/AvailabilityPage'));
 const MentorAppointmentsPage = lazy(() => import('./pages/mentor/AppointmentsPage'));
 const MentorEarningsPage = lazy(() => import('./pages/mentor/EarningsPage'));
+const MentorFeedbackPage = lazy(() => import('./pages/mentor/FeedbackPage'));
+const MentorResourcesPage = lazy(() => import('./pages/mentor/ResourcesPage'));
 
 // Staff
 const StaffDashboardPage = lazy(() => import('./pages/staff/DashboardPage'));
+const StaffMentorApprovalsPage = lazy(() => import('./pages/staff/mentors/MentorApprovalsPage'));
+const StaffAppointmentsPage = lazy(() => import('./pages/staff/appointments/AppointmentsPage'));
+const StaffContentManagementPage = lazy(() => import('./pages/staff/content/ContentManagementPage'));
+const StaffUserSupportPage = lazy(() => import('./pages/staff/support/UserSupportPage'));
+const StaffReportsPage = lazy(() => import('./pages/staff/reports/ReportsPage'));
 
 // Admin
 const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage'));
@@ -80,6 +90,11 @@ const CommandCenter = lazy(() => import('./pages/superadmin/CommandCenter'));
 
 // Notifications (shared)
 const NotificationsPage = lazy(() => import('./pages/notifications/NotificationsPage'));
+
+// Appointments (student)
+const AppointmentDetailPage = lazy(() => import('./pages/appointments/AppointmentDetailPage'));
+const CreateAppointmentPage = lazy(() => import('./pages/appointments/CreateAppointmentPage'));
+const RescheduleAppointmentPage = lazy(() => import('./pages/appointments/RescheduleAppointmentPage'));
 
 // Fallback
 const NotFoundPage = lazy(() => import('./pages/error/NotFoundPage'));
@@ -151,9 +166,15 @@ const AppInner: React.FC = () => {
               <Route element={<StudentLayout />}>
                 <Route path="/student" element={<StudentDashboardPage />} />
                 <Route path="/student/assessment" element={<StudentAssessmentPage />} />
+                <Route path="/student/assessment/:id" element={<ResumeAnalysisDetailPage />} />
+                <Route path="/student/insights" element={<StudentInsightsPage />} />
+                <Route path="/student/intelligence" element={<StudentIntelligencePage />} />
                 <Route path="/student/mentors" element={<MentorListPage />} />
                 <Route path="/student/mentors/:id" element={<MentorDetailPage />} />
                 <Route path="/student/appointments" element={<StudentAppointmentsPage />} />
+                <Route path="/student/appointments/create" element={<CreateAppointmentPage />} />
+                <Route path="/student/appointments/:id" element={<AppointmentDetailPage />} />
+                <Route path="/student/appointments/:id/reschedule" element={<RescheduleAppointmentPage />} />
                 <Route path="/student/notifications" element={<NotificationsPage />} />
                 <Route path="/student/profile" element={<StudentProfilePage />} />
               </Route>
@@ -169,6 +190,8 @@ const AppInner: React.FC = () => {
                 <Route path="/mentor/availability" element={<MentorAvailabilityPage />} />
                 <Route path="/mentor/appointments" element={<MentorAppointmentsPage />} />
                 <Route path="/mentor/earnings" element={<MentorEarningsPage />} />
+                <Route path="/mentor/feedback" element={<MentorFeedbackPage />} />
+                <Route path="/mentor/resources" element={<MentorResourcesPage />} />
                 <Route path="/mentor/notifications" element={<NotificationsPage />} />
               </Route>
             </Route>
@@ -179,6 +202,11 @@ const AppInner: React.FC = () => {
             <Route element={<StaffRoute />}>
               <Route element={<StaffLayout />}>
                 <Route path="/staff" element={<StaffDashboardPage />} />
+                <Route path="/staff/mentors" element={<StaffMentorApprovalsPage />} />
+                <Route path="/staff/appointments" element={<StaffAppointmentsPage />} />
+                <Route path="/staff/content" element={<StaffContentManagementPage />} />
+                <Route path="/staff/support" element={<StaffUserSupportPage />} />
+                <Route path="/staff/reports" element={<StaffReportsPage />} />
                 <Route path="/staff/notifications" element={<NotificationsPage />} />
               </Route>
             </Route>

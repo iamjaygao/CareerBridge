@@ -48,9 +48,15 @@ const NotificationsPage: React.FC = () => {
   const [selectedNotification, setSelectedNotification] = useState<number | null>(null);
 
   useEffect(() => {
-    dispatch(fetchNotifications() as any);
+    const params =
+      filter === 'read'
+        ? { is_read: true }
+        : filter === 'unread'
+          ? { is_read: false }
+          : undefined;
+    dispatch(fetchNotifications(params) as any);
     dispatch(getUnreadCount() as any);
-  }, [dispatch]);
+  }, [dispatch, filter]);
 
   const handleFilterChange = (newFilter: 'all' | 'unread' | 'read') => {
     setFilter(newFilter);
@@ -60,6 +66,11 @@ const NotificationsPage: React.FC = () => {
     try {
       await dispatch(markNotificationAsRead([notificationId]) as any).unwrap();
       dispatch(getUnreadCount() as any); // Refresh unread count
+
+      if (filter === 'unread') {
+        setFilter('read'); // or 'all' if you prefer
+      }
+  
       showNotification('Notification marked as read', 'success');
     } catch (error: any) {
       showNotification(error || 'Failed to mark notification as read', 'error');
@@ -79,6 +90,10 @@ const NotificationsPage: React.FC = () => {
       }
       await dispatch(markNotificationAsRead(unreadIds) as any).unwrap();
       dispatch(getUnreadCount() as any); // Refresh unread count
+
+      if (filter === 'unread') {
+        setFilter('read');
+      }
       showNotification('All notifications marked as read', 'success');
     } catch (error: any) {
       showNotification(error || 'Failed to mark all as read', 'error');
@@ -291,7 +306,7 @@ const NotificationsPage: React.FC = () => {
                   <ListItemButton
                     onClick={() => {
                       if (notification.payload?.action === 'review_appointment' && notification.payload?.appointment_id) {
-                        navigate(`/appointments/${notification.payload.appointment_id}?review=true`);
+                        navigate(`/student/appointments/${notification.payload.appointment_id}?review=true`);
                       }
                       if (!notification.is_read) {
                         handleMarkAsRead(notification.id);
@@ -327,6 +342,11 @@ const NotificationsPage: React.FC = () => {
                           {notification.message && (
                             <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
                               {notification.message}
+                            </Typography>
+                          )}
+                          {notification.payload?.appointment_details && (
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                              {notification.payload.appointment_details}
                             </Typography>
                           )}
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5, flexWrap: 'wrap' }}>
@@ -390,4 +410,3 @@ const NotificationsPage: React.FC = () => {
 };
 
 export default NotificationsPage;
-

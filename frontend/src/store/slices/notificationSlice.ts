@@ -23,9 +23,11 @@ interface BackendNotification {
 // Async thunks
 export const fetchNotifications = createAsyncThunk(
   'notifications/fetchNotifications',
-  async (_, { rejectWithValue }) => {
+  async (params: { is_read?: boolean } | undefined, { rejectWithValue }) => {
     try {
-      const response = await apiClient.get<PaginatedResponse<BackendNotification>>('/notifications/');
+      const response = await apiClient.get<PaginatedResponse<BackendNotification>>('/notifications/', {
+        params,
+      });
       return response;
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.error || 'Failed to fetch notifications');
@@ -112,6 +114,9 @@ const notificationSlice = createSlice({
   extraReducers: (builder) => {
     // Fetch notifications
     builder
+      .addCase('auth/logout', () => initialState)
+      .addCase('auth/login/fulfilled', () => initialState)
+      .addCase('auth/init/fulfilled', () => initialState)
       .addCase(fetchNotifications.pending, (state) => {
         state.loading = true;
         state.error = null;

@@ -16,6 +16,7 @@ export interface User {
   linkedin_url?: string;
   github_url?: string;
   is_verified?: boolean;
+  email_verified?: boolean;
   created_at?: string;
   last_login?: string;
   date_joined?: string;
@@ -73,6 +74,9 @@ export interface Mentor {
   trust_label?: string | null;  // shown when rating === null
   cta_action?: 'view' | 'unlock' | 'book';
   display_name?: string;
+  hero_title?: string;
+  hero_headline?: string;
+  hero_subline?: string;
 
   // ======================
   // 🔥 SaaS Positioning Core（新增）
@@ -124,6 +128,7 @@ export interface Appointment {
   date: string;
   time: string;
   status: 'pending' | 'confirmed' | 'completed' | 'cancelled' | string;
+  is_paid?: boolean;
   notes?: string;
   meeting_link?: string;
   meeting_platform?: string;
@@ -513,4 +518,3 @@ export interface SystemSettings {
   updated_at?: string;
   updated_by?: number;
 }
-

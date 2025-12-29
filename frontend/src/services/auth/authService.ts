@@ -136,6 +136,68 @@ class AuthService {
   }
 
   /**
+   * Upload user avatar
+   */
+  async uploadAvatar(file: File): Promise<{ avatar_url?: string }> {
+    try {
+      const formData = new FormData();
+      formData.append('avatar', file);
+      const response = await apiClient.post('/users/avatar/', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      return response.data;
+    } catch (error: any) {
+      console.error('Avatar upload failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Change password
+   */
+  async changePassword(payload: {
+    old_password: string;
+    new_password: string;
+    new_password_confirm: string;
+  }): Promise<any> {
+    try {
+      const response = await apiClient.post('/users/change-password/', payload);
+      return response.data;
+    } catch (error: any) {
+      console.error('Password change failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Check username change availability
+   */
+  async getUsernameChangeStatus(): Promise<{ can_change: boolean; days_left: number }> {
+    try {
+      const response = await apiClient.get('/users/username-change-status/');
+      return response.data;
+    } catch (error: any) {
+      console.error('Failed to get username change status:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Resend email verification
+   */
+  async resendVerification(email: string): Promise<any> {
+    try {
+      const response = await apiClient.post('/users/resend-verification/', { email });
+      return response.data;
+    } catch (error: any) {
+      console.error('Resend verification failed:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Confirm email verification
    */
   async confirmEmailVerification(token: string): Promise<any> {
@@ -198,4 +260,3 @@ class AuthService {
 
 const authService = new AuthService();
 export default authService;
-

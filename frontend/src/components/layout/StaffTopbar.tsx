@@ -27,7 +27,6 @@ import { useRole } from '../../contexts/RoleContext';
 import { isSuperAdmin } from '../../utils/adminPermissions';
 import NotificationBell from '../common/NotificationBell';
 import ViewingAsChip from '../common/ViewingAsChip';
-import { getHomePath } from '../../utils/getHomePath';
 import {
   SwapHoriz as SwapIcon,
   School as StudentIcon,
@@ -196,12 +195,12 @@ const StaffTopbar: React.FC<StaffTopbarProps> = ({ onMenuClick }) => {
 
           {/* Home link */}
           <IconButton
-            onClick={() => navigate(getHomePath(user?.role))}
+            onClick={() => navigate('/?from=portal')}
             sx={{
               color: 'text.primary',
               '&:hover': { bgcolor: 'grey.100' },
             }}
-            title="Go to dashboard"
+            title="Go to homepage"
           >
             <Home />
           </IconButton>
@@ -273,4 +272,3 @@ const StaffTopbar: React.FC<StaffTopbarProps> = ({ onMenuClick }) => {
 };
 
 export default StaffTopbar;
-

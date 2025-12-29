@@ -26,7 +26,6 @@ import { logout } from '../../store/slices/authSlice';
 import { useRole } from '../../contexts/RoleContext';
 import NotificationBell from '../common/NotificationBell';
 import ViewingAsChip from '../common/ViewingAsChip';
-import { getHomePath } from '../../utils/getHomePath';
 import {
   SwapHoriz as SwapIcon,
   School as StudentIcon,
@@ -195,12 +194,12 @@ const StudentTopbar: React.FC<StudentTopbarProps> = ({ onMenuClick }) => {
 
           {/* Home link */}
           <IconButton
-            onClick={() => navigate(getHomePath(user?.role))}
+            onClick={() => navigate('/?from=portal')}
             sx={{
               color: 'text.primary',
               '&:hover': { bgcolor: 'grey.100' },
             }}
-            title="Go to dashboard"
+            title="Go to homepage"
           >
             <Home />
           </IconButton>
@@ -272,4 +271,3 @@ const StudentTopbar: React.FC<StudentTopbarProps> = ({ onMenuClick }) => {
 };
 
 export default StudentTopbar;
-

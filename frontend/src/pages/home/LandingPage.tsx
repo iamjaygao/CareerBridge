@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -34,14 +34,16 @@ import {
 
 const LandingPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const isAuthenticated = !!localStorage.getItem('access_token');
+  const allowHomepage = new URLSearchParams(location.search).get('from') === 'portal';
 
   // If user is already logged in, redirect to dashboard
   React.useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && !allowHomepage) {
       navigate('/dashboard', { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, allowHomepage, navigate]);
 
   const painPoints = [
     "You don't know which skills to learn next",
