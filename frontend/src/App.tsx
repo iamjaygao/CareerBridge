@@ -125,6 +125,7 @@ const NotificationsPage = lazy(() => import('./pages/notifications/Notifications
 // Shared flows (authenticated)
 const ProfilePage = lazy(() => import('./pages/profile/ProfilePage'));
 const SettingsPage = lazy(() => import('./pages/settings/SettingsPage'));
+const ConsentManagementPage = lazy(() => import('./pages/settings/ConsentManagementPage'));
 const ChatListPage = lazy(() => import('./pages/chat/ChatListPage'));
 const ChatRoomPage = lazy(() => import('./pages/chat/ChatRoomPage'));
 const ResumeListPage = lazy(() => import('./pages/resumes/ResumeListPage'));
@@ -273,6 +274,7 @@ const AppInner: React.FC = () => {
             />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/settings/consent" element={<RoleRedirect targetByRole={{ student: '/student/settings/consent' }} />} />
             <Route
               path="/appointments"
               element={
@@ -341,6 +343,7 @@ const AppInner: React.FC = () => {
                 <Route path="/student/chat/:id" element={<ChatRoomPage />} />
                 <Route path="/student/notifications" element={<NotificationsPage />} />
                 <Route path="/student/profile" element={<StudentProfilePage />} />
+                <Route path="/student/settings/consent" element={<ConsentManagementPage />} />
               </Route>
             </Route>
           </Route>

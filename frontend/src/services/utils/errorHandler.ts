@@ -104,3 +104,47 @@ export const handleApiError = (error: unknown): ApiError => {
     code,
   };
 };
+
+export const createApiError = (message: string, code?: string): ApiError => ({
+  message,
+  code,
+});
+
+export const getUserFacingMessageFromApiError = (error: ApiError): string => {
+  switch (error.code) {
+    case 'NETWORK_ERROR':
+      return 'Network error. Please check your connection and try again.';
+    case 'AUTHENTICATION_ERROR':
+      return 'Your session has expired. Please sign in again.';
+    case 'AUTHORIZATION_ERROR':
+      return 'You do not have access to this resource.';
+    case 'NOT_FOUND_ERROR':
+      return 'Requested resource was not found.';
+    case 'VALIDATION_ERROR':
+      return error.message || 'Invalid request.';
+    default:
+      return error.message || 'An unexpected error occurred.';
+  }
+};
+
+export const getUserFacingErrorMessage = (
+  error: unknown,
+  fallback: string
+): string => {
+  const apiError = handleApiError(error);
+
+  switch (apiError.code) {
+    case 'NETWORK_ERROR':
+      return 'Network error. Please check your connection and try again.';
+    case 'AUTHENTICATION_ERROR':
+      return 'Your session has expired. Please sign in again.';
+    case 'AUTHORIZATION_ERROR':
+      return 'You do not have access to this resource.';
+    case 'NOT_FOUND_ERROR':
+      return 'Requested resource was not found.';
+    case 'VALIDATION_ERROR':
+      return apiError.message || fallback;
+    default:
+      return apiError.message || fallback;
+  }
+};

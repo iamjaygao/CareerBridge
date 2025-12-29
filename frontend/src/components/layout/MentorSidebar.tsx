@@ -21,6 +21,7 @@ import {
   RateReview,
   MenuBook,
   Chat,
+  Policy,
 } from '@mui/icons-material';
 
 const drawerWidth = 260;

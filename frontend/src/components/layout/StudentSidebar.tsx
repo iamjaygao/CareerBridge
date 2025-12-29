@@ -22,6 +22,7 @@ import {
   Person,
   Description,
   Chat,
+  Policy,
 } from '@mui/icons-material';
 
 const drawerWidth = 260;
@@ -45,6 +46,7 @@ const StudentSidebar: React.FC<StudentSidebarProps> = ({ mobileOpen, onMobileClo
     { text: 'Resumes', icon: <Description />, path: '/student/resumes' },
     { text: 'Chat', icon: <Chat />, path: '/student/chat' },
     { text: 'Profile', icon: <Person />, path: '/student/profile' },
+    { text: 'Consent', icon: <Policy />, path: '/student/settings/consent' },
   ];
 
   const drawer = (

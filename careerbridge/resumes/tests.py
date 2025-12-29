@@ -1,4 +1,4 @@
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
@@ -6,6 +6,8 @@ from careerbridge.external_services.utils import get_circuit_breaker, _service_b
 from unittest.mock import patch
 import requests
 from django.urls import reverse
+from django.utils import timezone
+from rest_framework.settings import api_settings
 
 class LegalEndpointsTests(TestCase):
     def setUp(self):
@@ -48,7 +50,7 @@ class LegalEndpointsTests(TestCase):
         self.assertTrue(r.data.get('fallback'))
 from django.test import TestCase
 from django.contrib.auth import get_user_model
-from .models import Resume, ResumeComparison, UserDataConsent, DataRetentionPolicy
+from .models import Resume, ResumeComparison, UserDataConsent, DataRetentionPolicy, LegalDisclaimer
 from django.core.files.uploadedfile import SimpleUploadedFile
 from decimal import Decimal
 
@@ -166,3 +168,76 @@ class DataRetentionPolicyTest(TestCase):
         self.assertEqual(policy.retention_period_days, 365)
         self.assertTrue(policy.auto_delete)
         self.assertTrue(policy.anonymize_before_delete)
+
+
+class ConsentEndpointsTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='consentuser', password='pass')
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+        resume_file = SimpleUploadedFile('resume.pdf', b'%PDF-1.4 test', content_type='application/pdf')
+        self.resume = Resume.objects.create(
+            user=self.user,
+            title='Resume',
+            file=resume_file,
+            file_size=resume_file.size,
+            file_type='pdf',
+        )
+        self.disclaimer = LegalDisclaimer.objects.create(
+            disclaimer_type='resume_analysis',
+            title='Resume Analysis Disclaimer',
+            content='Test disclaimer',
+            version='1.0',
+            is_active=True,
+            effective_date=timezone.now().date(),
+            requires_consent=True,
+        )
+
+    def test_missing_consent_returns_403(self):
+        url = reverse('resumes:resume-analyze')
+        response = self.client.post(url, {'resume_id': self.resume.id}, format='json')
+        self.assertEqual(response.status_code, 403)
+        self.assertIn('required_disclaimers', response.data)
+
+    def test_grant_consent_endpoint(self):
+        url = reverse('resumes:data-consent')
+        response = self.client.post(
+            url,
+            {'consent_type': 'data_processing', 'disclaimer_types': ['resume_analysis']},
+            format='json'
+        )
+        self.assertEqual(response.status_code, 200)
+        consent_types = [c['consent_type'] for c in response.data.get('data_consents', [])]
+        self.assertIn('data_processing', consent_types)
+
+    @override_settings(
+        REST_FRAMEWORK={
+            'DEFAULT_THROTTLE_RATES': {
+                'user': '1000/day',
+                'anon': '100/day',
+                'burst': '20/min',
+                'ai_analysis': '1/min',
+            },
+            'DEFAULT_THROTTLE_CLASSES': [
+                'rest_framework.throttling.UserRateThrottle',
+                'rest_framework.throttling.AnonRateThrottle',
+            ],
+        }
+    )
+    def test_ai_analysis_throttle(self):
+        api_settings.reload()
+        from django.core.cache import cache
+        cache.clear()
+        url = reverse('resumes:resume-analyze')
+        first = self.client.post(
+            url,
+            {'resume_id': self.resume.id, 'consent': True, 'consent_version': '1.0'},
+            format='json'
+        )
+        self.assertIn(first.status_code, (200, 400))
+        second = self.client.post(
+            url,
+            {'resume_id': self.resume.id, 'consent': True, 'consent_version': '1.0'},
+            format='json'
+        )
+        self.assertEqual(second.status_code, 429)

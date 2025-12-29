@@ -29,7 +29,8 @@ from rest_framework import permissions
 from django.conf import settings    
 from django.conf.urls.static import static
 
-# swagger documentation information 
+# swagger documentation information
+schema_permission_classes = (permissions.AllowAny,) if settings.DEBUG else (permissions.IsAdminUser,)
 schema_view = get_schema_view(
     openapi.Info(
         title="CareerBridge API",
@@ -37,8 +38,8 @@ schema_view = get_schema_view(
         description="API documentation for CareerBridge",
         contact=openapi.Contact(email="contact@careerbridge.com"),
     ),
-    public=True,
-    permission_classes=(permissions.AllowAny,),
+    public=settings.DEBUG,
+    permission_classes=schema_permission_classes,
     patterns=[
         path('api/v1/users/', include('users.urls')),
         path('api/v1/mentors/', include('mentors.urls')),
@@ -98,7 +99,6 @@ if settings.DEBUG:
         path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
     ]
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
-
 
 
 

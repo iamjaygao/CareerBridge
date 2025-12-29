@@ -20,7 +20,6 @@ import {
   Select,
   MenuItem,
   Rating,
-  Alert,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -33,6 +32,9 @@ import { RootState } from '../../store';
 import { useRole } from '../../contexts/RoleContext';
 import adminService from '../../services/api/adminService';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import ErrorAlert from '../../components/common/ErrorAlert';
+import { handleApiError } from '../../services/utils/errorHandler';
+import type { ApiError } from '../../services/utils/errorHandler';
 
 interface Mentor {
   mentor_id: number;
@@ -58,7 +60,7 @@ const MentorsPage: React.FC = () => {
   const { user } = useSelector((state: RootState) => state.auth);
   const { isSuperAdmin } = useRole();
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
   const [mentors, setMentors] = useState<Mentor[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -103,11 +105,7 @@ const MentorsPage: React.FC = () => {
         
         setMentors(normalizedMentors);
       } catch (err: any) {
-        const errorMessage = err?.response?.data?.detail 
-          || err?.response?.data?.error
-          || err?.message 
-          || 'Failed to load mentors';
-        setError(errorMessage);
+        setError(handleApiError(err));
         console.error('Failed to fetch mentors:', err);
         setMentors([]);
       } finally {
@@ -170,9 +168,7 @@ const MentorsPage: React.FC = () => {
       </Box>
 
       {error && (
-        <Alert severity="error" sx={{ mb: 3 }}>
-          {error}
-        </Alert>
+        <ErrorAlert error={error} overrideMessage="Failed to load mentors." />
       )}
 
       {/* Filters */}

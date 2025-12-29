@@ -19,7 +19,13 @@ class DataConsentManager:
     """Manager for user data consent operations"""
     
     @staticmethod
-    def grant_consent(user, consent_type: str, ip_address: str = None, user_agent: str = None):
+    def grant_consent(
+        user,
+        consent_type: str,
+        ip_address: str = None,
+        user_agent: str = None,
+        consent_version: str = "1.0",
+    ):
         """Grant consent for data processing"""
         consent, created = UserDataConsent.objects.get_or_create(
             user=user,
@@ -27,7 +33,7 @@ class DataConsentManager:
             defaults={
                 'is_granted': True,
                 'granted_at': timezone.now(),
-                'consent_version': '1.0',
+                'consent_version': consent_version,
                 'ip_address': ip_address,
                 'user_agent': user_agent
             }
@@ -39,6 +45,7 @@ class DataConsentManager:
             consent.revoked_at = None
             consent.ip_address = ip_address
             consent.user_agent = user_agent
+            consent.consent_version = consent_version
             consent.save()
         
         return consent

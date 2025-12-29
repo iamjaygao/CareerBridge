@@ -19,7 +19,6 @@ import {
   DialogActions,
   TextField,
   MenuItem,
-  Alert,
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -32,6 +31,9 @@ import { RootState } from '../../store';
 import { useRole } from '../../contexts/RoleContext';
 import adminService from '../../services/api/adminService';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import ErrorAlert from '../../components/common/ErrorAlert';
+import { createApiError, handleApiError } from '../../services/utils/errorHandler';
+import type { ApiError } from '../../services/utils/errorHandler';
 
 interface User {
   user_id: number;
@@ -51,7 +53,7 @@ const UsersPage: React.FC = () => {
   const { isSuperAdmin } = useRole();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [formData, setFormData] = useState({
@@ -83,7 +85,7 @@ const UsersPage: React.FC = () => {
         usersData = response.data;
       } else {
         console.error('>>> DEBUG: Unexpected response format:', response);
-        setError('Unexpected response format from backend');
+        setError(createApiError('Unexpected response format from backend', 'VALIDATION_ERROR'));
         usersData = [];
       }
       
@@ -105,12 +107,7 @@ const UsersPage: React.FC = () => {
       setUsers(normalizedUsers);
     } catch (err: any) {
       console.error('>>> DEBUG: SuperAdmin UsersPage error:', err);
-      const errorMessage = err?.response?.data?.detail 
-        || err?.response?.data?.error 
-        || err?.response?.data?.message
-        || err?.message 
-        || 'Failed to load users';
-      setError(errorMessage);
+      setError(handleApiError(err));
       setUsers([]);
     } finally {
       setLoading(false);
@@ -141,7 +138,7 @@ const UsersPage: React.FC = () => {
       fetchUsers(); // Refresh user list
     } catch (err: any) {
       console.error('Failed to update user:', err);
-      setError(err?.response?.data?.detail || 'Failed to update user');
+      setError(handleApiError(err));
     }
   };
 
@@ -152,7 +149,7 @@ const UsersPage: React.FC = () => {
         fetchUsers(); // Refresh user list
       } catch (err: any) {
         console.error('Failed to delete user:', err);
-        setError(err?.response?.data?.detail || 'Failed to delete user');
+        setError(handleApiError(err));
       }
     }
   };
@@ -167,7 +164,7 @@ const UsersPage: React.FC = () => {
       fetchUsers(); // Refresh user list
     } catch (err: any) {
       console.error('Failed to toggle user status:', err);
-      setError(err?.response?.data?.detail || 'Failed to update user status');
+      setError(handleApiError(err));
     }
   };
 
@@ -191,9 +188,7 @@ const UsersPage: React.FC = () => {
       </Box>
 
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
+        <ErrorAlert error={error} overrideMessage="Failed to load users." />
       )}
 
       <Paper>
@@ -320,4 +315,3 @@ const UsersPage: React.FC = () => {
 };
 
 export default UsersPage;
-

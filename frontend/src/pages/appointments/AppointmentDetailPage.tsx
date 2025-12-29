@@ -25,6 +25,8 @@ import LoadingSpinner from '../../components/common/LoadingSpinner';
 import ErrorAlert from '../../components/common/ErrorAlert';
 import { useNotification } from '../../components/common/NotificationProvider';
 import appointmentService from '../../services/api/appointmentService';
+import type { ApiError } from '../../services/utils/errorHandler';
+import { handleApiError, createApiError } from '../../services/utils/errorHandler';
 
 const getStatusLabel = (status: string): string => {
   const statusMap: { [key: string]: string } = {
@@ -60,7 +62,7 @@ const AppointmentDetailPage: React.FC = () => {
   const { showSuccess, showError } = useNotification();
   const [appointment, setAppointment] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelling, setCancelling] = useState(false);
@@ -85,8 +87,8 @@ const AppointmentDetailPage: React.FC = () => {
       setAppointment(data);
       setRatingValue(data?.user_rating || 0);
       setFeedback(data?.user_feedback || '');
-    } catch (err: any) {
-      setError(err?.response?.data?.error || 'Failed to load appointment');
+    } catch (err) {
+      setError(handleApiError(err));
     } finally {
       setLoading(false);
     }
@@ -163,11 +165,11 @@ const AppointmentDetailPage: React.FC = () => {
   }
 
   if (error) {
-    return <ErrorAlert message={error} />;
+    return <ErrorAlert error={error} />;
   }
 
   if (!appointment) {
-    return <ErrorAlert message="Appointment not found" />;
+    return <ErrorAlert error={createApiError('Appointment not found', 'NOT_FOUND_ERROR')} />;
   }
 
   const scheduledStart = new Date(appointment.scheduled_start);

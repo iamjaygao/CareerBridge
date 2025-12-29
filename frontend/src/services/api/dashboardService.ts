@@ -27,7 +27,10 @@ class DashboardService {
    */
   async getDashboardStats(): Promise<DashboardStats> {
     try {
-      const response = await apiClient.get('/dashboard/stats/');
+      const response = await apiClient.get('/users/dashboard/stats/');
+      if (response.data?.stats) {
+        return response.data.stats;
+      }
       return response.data;
     } catch (error) {
       console.error('Failed to get dashboard stats:', error);
@@ -55,10 +58,9 @@ class DashboardService {
    */
   async getRecentActivities(limit: number = 10): Promise<RecentActivity[]> {
     try {
-      const response = await apiClient.get('/dashboard/activities/', {
-        params: { limit },
-      });
-      return response.data.results || response.data;
+      const response = await apiClient.get('/users/dashboard/stats/');
+      const activities = response.data?.activities || [];
+      return activities.slice(0, limit);
     } catch (error) {
       console.error('Failed to get recent activities:', error);
       return [];
@@ -70,7 +72,7 @@ class DashboardService {
    */
   async getUpcomingAppointments(limit: number = 5): Promise<any[]> {
     try {
-      const response = await apiClient.get('/appointments/', {
+      const response = await apiClient.get('/appointments/appointments/', {
         params: {
           status: 'confirmed',
           upcoming: true,
@@ -102,4 +104,3 @@ class DashboardService {
 
 const dashboardService = new DashboardService();
 export default dashboardService;
-

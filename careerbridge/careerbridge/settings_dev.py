@@ -4,6 +4,8 @@ Development Django settings for careerbridge project.
 This file contains settings specific to the development environment.
 """
 
+import sys
+
 from .settings_base import *
 
 # Ensure local .env values override any shell defaults in development.
@@ -36,6 +38,14 @@ DATABASES = {
         'PORT': os.environ.get('POSTGRES_PORT', '5432'),
     }
 }
+
+if 'test' in sys.argv or os.environ.get('USE_SQLITE_FOR_TESTS') == '1':
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db_test.sqlite3',
+        }
+    }
 
 # Email Configuration for Development
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'

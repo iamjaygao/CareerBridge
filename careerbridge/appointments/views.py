@@ -272,22 +272,24 @@ class AppointmentDetailView(generics.RetrieveUpdateDestroyAPIView):
     def get_queryset(self):
         user = self.request.user
         return Appointment.objects.filter(user=user)
-    
-    @action(detail=True, methods=['post'])
-    def cancel(self, request, pk=None):
-        """Cancel appointment"""
-        appointment = self.get_object()
-        
+
+class AppointmentCancelView(APIView):
+    """Cancel appointment"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        appointment = get_object_or_404(Appointment, pk=pk, user=request.user)
+
         if not appointment.can_cancel:
             return Response(
                 {"error": "Cannot cancel this appointment"},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         reason = request.data.get('reason', '')
         appointment.cancel_appointment(reason=reason, cancelled_by='user')
         _sync_slot_bookings(appointment.time_slot)
-        
+
         mentor_name = appointment.mentor.user.get_full_name() or appointment.mentor.user.username
         appointment_details = appointment.get_notification_details()
         notify(
@@ -307,29 +309,31 @@ class AppointmentDetailView(generics.RetrieveUpdateDestroyAPIView):
             payload=appointment.get_notification_payload(),
         )
         _notify_staff_appointment_cancelled(appointment)
-        
+
         return Response({"message": "Appointment cancelled successfully"})
-    
-    @action(detail=True, methods=['post'])
-    def rate(self, request, pk=None):
-        """User rates appointment"""
-        appointment = self.get_object()
-        
+
+class AppointmentRateView(APIView):
+    """User rates appointment"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        appointment = get_object_or_404(Appointment, pk=pk, user=request.user)
+
         if appointment.status != 'completed':
             return Response(
                 {"error": "Can only rate completed appointments"},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         rating = request.data.get('rating')
         feedback = request.data.get('feedback', '')
-        
+
         if not rating or not (1 <= int(rating) <= 5):
             return Response(
                 {"error": "Rating must be between 1 and 5"},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         appointment.user_rating = rating
         appointment.user_feedback = feedback
         appointment.save()
@@ -351,7 +355,7 @@ class AppointmentDetailView(generics.RetrieveUpdateDestroyAPIView):
         appointment.mentor.average_rating = summary['average'] or 0
         appointment.mentor.total_reviews = summary['total'] or 0
         appointment.mentor.save(update_fields=['average_rating', 'total_reviews'])
-        
+
         appointment_details = appointment.get_notification_details()
         mentor_name = appointment.mentor.user.get_full_name() or appointment.mentor.user.username
         notify(
@@ -387,7 +391,7 @@ class AppointmentDetailView(generics.RetrieveUpdateDestroyAPIView):
                     related_mentor=appointment.mentor,
                     payload={'mentor_id': appointment.mentor.id},
                 )
-        
+
         return Response({"message": "Rating submitted successfully"})
 
 class MentorAppointmentListView(generics.ListAPIView):

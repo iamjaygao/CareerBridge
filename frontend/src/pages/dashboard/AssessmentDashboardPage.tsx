@@ -36,7 +36,10 @@ import LoadingSpinner from '../../components/common/LoadingSpinner';
 import ErrorAlert from '../../components/common/ErrorAlert';
 import UploadResumeDialog from '../../components/resumes/UploadResumeDialog';
 import resumeService from '../../services/api/resumeService';
+import ConsentDialog from '../../components/resumes/ConsentDialog';
+import MissingConsentDialog from '../../components/resumes/MissingConsentDialog';
 import { useNavigate } from 'react-router-dom';
+import { createApiError } from '../../services/utils/errorHandler';
 
 const AssessmentDashboardPage: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -59,6 +62,11 @@ const AssessmentDashboardPage: React.FC = () => {
   const [analysisResult, setAnalysisResult] = useState<any | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [analysisResumeId, setAnalysisResumeId] = useState<number | null>(null);
+  const [consentDialogOpen, setConsentDialogOpen] = useState(false);
+  const [missingConsentDialogOpen, setMissingConsentDialogOpen] = useState(false);
+  const [missingConsents, setMissingConsents] = useState<any[]>([]);
+  const [missingConsentResumeId, setMissingConsentResumeId] = useState<number | null>(null);
+  const [missingConsentError, setMissingConsentError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
 
   useEffect(() => {
@@ -89,14 +97,14 @@ const AssessmentDashboardPage: React.FC = () => {
     }
   };
 
-  const handleAnalyze = async (resumeId: number) => {
+  const startAnalysis = async (resumeId: number) => {
     setAnalysisResumeId(resumeId);
     setAnalysisDialogOpen(true);
     setAnalysisLoading(true);
     setAnalysisResult(null);
     setAnalysisError(null);
     try {
-      await resumeService.analyzeResume(resumeId);
+      await resumeService.analyzeResume(resumeId, undefined, undefined, true, '1.0');
       let attempts = 0;
       let result = null;
       while (attempts < 10) {
@@ -110,9 +118,59 @@ const AssessmentDashboardPage: React.FC = () => {
       }
       setAnalysisResult(result);
     } catch (error: any) {
+      const errorData = error?.response?.data;
+      if (error?.response?.status === 403 && errorData?.required_disclaimers) {
+        await handleMissingConsent(resumeId, errorData.required_disclaimers);
+        setAnalysisDialogOpen(false);
+        return;
+      }
       setAnalysisError(error?.message || 'Failed to analyze resume');
     } finally {
       setAnalysisLoading(false);
+    }
+  };
+
+  const handleAnalyze = (resumeId: number) => {
+    setAnalysisResumeId(resumeId);
+    setConsentDialogOpen(true);
+  };
+
+  const handleConsentConfirm = async () => {
+    if (!analysisResumeId) return;
+    setConsentDialogOpen(false);
+    await startAnalysis(analysisResumeId);
+  };
+
+  const handleMissingConsent = async (resumeId: number, requiredDisclaimers: any[]) => {
+    setMissingConsentResumeId(resumeId);
+    setMissingConsentError(null);
+    try {
+      const details = await Promise.all(
+        requiredDisclaimers.map((item) =>
+          resumeService.getLegalDisclaimer(item.type || item.disclaimer_type)
+        )
+      );
+      setMissingConsents(details);
+    } catch (err: any) {
+      setMissingConsents(requiredDisclaimers || []);
+      setMissingConsentError(err?.message || 'Failed to load consent details.');
+    }
+    setMissingConsentDialogOpen(true);
+  };
+
+  const handleMissingConsentConfirm = async () => {
+    if (!missingConsentResumeId) return;
+    const disclaimerTypes = missingConsents.map((item) => item.disclaimer_type).filter(Boolean);
+    try {
+      await resumeService.grantConsent({
+        consent_type: 'data_processing',
+        consent_version: '1.0',
+        disclaimer_types: disclaimerTypes,
+      });
+      setMissingConsentDialogOpen(false);
+      await startAnalysis(missingConsentResumeId);
+    } catch (err: any) {
+      setMissingConsentError(err?.message || 'Failed to record consent.');
     }
   };
 
@@ -147,7 +205,7 @@ const AssessmentDashboardPage: React.FC = () => {
   }
 
   if (error) {
-    return <ErrorAlert message={error} />;
+    return <ErrorAlert error={createApiError(error)} />;
   }
 
   return (
@@ -318,10 +376,27 @@ const AssessmentDashboardPage: React.FC = () => {
         </DialogActions>
       </Dialog>
 
+      <ConsentDialog
+        open={consentDialogOpen}
+        onClose={() => setConsentDialogOpen(false)}
+        onConfirm={handleConsentConfirm}
+      />
+
+      <MissingConsentDialog
+        open={missingConsentDialogOpen}
+        onClose={() => setMissingConsentDialogOpen(false)}
+        onConfirm={handleMissingConsentConfirm}
+        items={missingConsents}
+        error={missingConsentError}
+      />
+
       {/* AI Analysis Result Dialog */}
       <Dialog open={analysisDialogOpen} onClose={() => setAnalysisDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>AI Resume Analysis Result</DialogTitle>
         <DialogContent>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            AI analysis is informational only and does not guarantee job outcomes.
+          </Alert>
           {analysisLoading ? (
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 4 }}>
               <CircularProgress />
@@ -384,4 +459,3 @@ const AssessmentDashboardPage: React.FC = () => {
 };
 
 export default AssessmentDashboardPage;
-

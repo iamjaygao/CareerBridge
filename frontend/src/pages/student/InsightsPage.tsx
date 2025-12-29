@@ -21,6 +21,7 @@ import {
 } from '@mui/icons-material';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import resumeService, { Resume } from '../../services/api/resumeService';
+import { getUserFacingErrorMessage } from '../../services/utils/errorHandler';
 
 interface ResumeAnalysis {
   overall_score?: number;
@@ -95,8 +96,8 @@ const StudentInsightsPage: React.FC = () => {
         } else {
           setFeedback(null);
         }
-      } catch {
-        setError('Failed to load insights. Please try again.');
+      } catch (err) {
+        setError(getUserFacingErrorMessage(err, 'Failed to load insights. Please try again.'));
       } finally {
         setLoading(false);
       }

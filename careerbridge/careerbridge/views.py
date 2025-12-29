@@ -9,6 +9,8 @@ from rest_framework.response import Response
 from django.urls import reverse
 from django.db import connection
 from django.core.cache import cache
+from django.conf import settings
+from django.utils import timezone
 import structlog
 
 logger = structlog.get_logger()
@@ -77,35 +79,43 @@ def health_check(request):
         health_status["components"]["cache"] = "unhealthy"
         health_status["status"] = "unhealthy"
 
-    # Check external services
-    try:
-        # Check JobCrawler health
-        from careerbridge.external_services.third_party_apis.job_crawler import job_crawler_service
-        job_crawler_health = job_crawler_service.check_health()
-        
-        # Check ResumeMatcher health
-        from careerbridge.external_services.third_party_apis.resume_matcher import resume_matcher_service
-        resume_matcher_health = resume_matcher_service.check_health()
-        
-        external_health = {
-            'job_crawler': {
-                'status': job_crawler_health.get('status', 'unknown'),
-                'error': job_crawler_health.get('error', None)
-            },
-            'resume_matcher': {
-                'status': resume_matcher_health.get('status', 'unknown'),
-                'error': resume_matcher_health.get('error', None)
-            },
-            'ai_analyzer': {
-                'status': 'not_implemented',
-                'error': 'AI Analyzer service not yet implemented'
+    # Check external services (restricted to staff or debug)
+    include_external = getattr(settings, 'DEBUG', False)
+    if not include_external:
+        user = getattr(request, 'user', None)
+        include_external = bool(user and user.is_authenticated and user.is_staff)
+
+    if include_external:
+        try:
+            # Check JobCrawler health
+            from careerbridge.external_services.third_party_apis.job_crawler import job_crawler_service
+            job_crawler_health = job_crawler_service.check_health()
+            
+            # Check ResumeMatcher health
+            from careerbridge.external_services.third_party_apis.resume_matcher import resume_matcher_service
+            resume_matcher_health = resume_matcher_service.check_health()
+            
+            external_health = {
+                'job_crawler': {
+                    'status': job_crawler_health.get('status', 'unknown'),
+                    'error': job_crawler_health.get('error', None)
+                },
+                'resume_matcher': {
+                    'status': resume_matcher_health.get('status', 'unknown'),
+                    'error': resume_matcher_health.get('error', None)
+                },
+                'ai_analyzer': {
+                    'status': 'not_implemented',
+                    'error': 'AI Analyzer service not yet implemented'
+                }
             }
-        }
-        health_status["components"]["external_services"] = external_health
-    except Exception as e:
-        logger.error("External services health check failed", error=str(e))
-        health_status["components"]["external_services"] = "unhealthy"
-        health_status["status"] = "unhealthy"
+            health_status["components"]["external_services"] = external_health
+        except Exception as e:
+            logger.error("External services health check failed", error=str(e))
+            health_status["components"]["external_services"] = "unhealthy"
+            health_status["status"] = "unhealthy"
+    else:
+        health_status["components"]["external_services"] = "restricted"
 
     return JsonResponse(health_status)
 

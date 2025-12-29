@@ -12,7 +12,6 @@ import {
   TableRow,
   Chip,
   IconButton,
-  Alert,
 } from '@mui/material';
 import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { useSelector } from 'react-redux';
@@ -20,12 +19,15 @@ import { RootState } from '../../store';
 import { useRole } from '../../contexts/RoleContext';
 import adminService from '../../services/api/adminService';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import ErrorAlert from '../../components/common/ErrorAlert';
+import { handleApiError } from '../../services/utils/errorHandler';
+import type { ApiError } from '../../services/utils/errorHandler';
 
 const AppointmentsPage: React.FC = () => {
   const { user } = useSelector((state: RootState) => state.auth);
   const { isSuperAdmin } = useRole();
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
   const [appointments, setAppointments] = useState<any[]>([]);
 
   useEffect(() => {
@@ -62,11 +64,7 @@ const AppointmentsPage: React.FC = () => {
         
         setAppointments(normalizedAppointments);
       } catch (err: any) {
-        const errorMessage = err?.response?.data?.detail 
-          || err?.response?.data?.error
-          || err?.message 
-          || 'Failed to load appointments';
-        setError(errorMessage);
+        setError(handleApiError(err));
         console.error('Failed to fetch appointments:', err);
         setAppointments([]);
       } finally {
@@ -97,9 +95,7 @@ const AppointmentsPage: React.FC = () => {
       </Box>
 
       {error && (
-        <Alert severity="error" sx={{ mb: 3 }}>
-          {error}
-        </Alert>
+        <ErrorAlert error={error} overrideMessage="Failed to load appointments." />
       )}
 
       <Paper>

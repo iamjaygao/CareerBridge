@@ -43,6 +43,9 @@ import {
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import SkeletonLoader from '../../components/common/SkeletonLoader';
 import adminService from '../../services/api/adminService';
+import ErrorAlert from '../../components/common/ErrorAlert';
+import { handleApiError } from '../../services/utils/errorHandler';
+import type { ApiError } from '../../services/utils/errorHandler';
 
 interface MentorApplication {
   id: number;
@@ -63,7 +66,7 @@ interface MentorApplication {
 const MentorApplicationsPage: React.FC = () => {
   const [applications, setApplications] = useState<MentorApplication[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -102,7 +105,7 @@ const MentorApplicationsPage: React.FC = () => {
         setTotalCount(0);
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to load applications');
+      setError(handleApiError(err));
       console.error('Error fetching applications:', err);
     } finally {
       setLoading(false);
@@ -158,7 +161,7 @@ const MentorApplicationsPage: React.FC = () => {
       fetchApplications(); // Refresh the list
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to perform action');
+      setError(handleApiError(err));
       console.error('Error performing action:', err);
     }
   };
@@ -194,9 +197,7 @@ const MentorApplicationsPage: React.FC = () => {
 
       <Box>
         {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
+          <ErrorAlert error={error} overrideMessage="Unable to load mentor applications." />
         )}
         {success && (
           <Alert severity="success" sx={{ mb: 2 }}>

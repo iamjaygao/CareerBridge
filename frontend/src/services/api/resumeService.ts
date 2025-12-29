@@ -74,12 +74,20 @@ class ResumeService {
   /**
    * Analyze a resume
    */
-  async analyzeResume(id: number, industry?: string, jobTitle?: string): Promise<any> {
+  async analyzeResume(
+    id: number,
+    industry?: string,
+    jobTitle?: string,
+    consent: boolean = false,
+    consentVersion: string = '1.0'
+  ): Promise<any> {
     try {
       const response = await apiClient.post('/resumes/analyze/', {
         resume_id: id,
         industry,
         job_title: jobTitle,
+        consent,
+        consent_version: consentVersion,
       });
       return response.data;
     } catch (error) {
@@ -93,7 +101,7 @@ class ResumeService {
    */
   async getResumeAnalysis(id: number): Promise<any> {
     try {
-      const response = await apiClient.get(`/resumes/analysis/${id}/`);
+      const response = await apiClient.get(`/resumes/${id}/analysis/`);
       return response.data;
     } catch (error) {
       console.error('Failed to get resume analysis:', error);
@@ -113,7 +121,7 @@ class ResumeService {
    */
   async getFeedback(id: number): Promise<any> {
     try {
-      const response = await apiClient.get(`/resumes/feedback/${id}/`);
+      const response = await apiClient.get(`/resumes/${id}/feedback/`);
       return response.data;
     } catch (error) {
       console.error('Failed to get resume feedback:', error);
@@ -192,6 +200,45 @@ class ResumeService {
       console.error('Failed to download resume:', error);
       throw error;
     }
+  }
+
+  async getLegalDisclaimers(): Promise<any[]> {
+    const response = await apiClient.get('/resumes/legal/disclaimers/');
+    return response.data;
+  }
+
+  async getLegalDisclaimer(type: string): Promise<any> {
+    const response = await apiClient.get(`/resumes/legal/disclaimers/${type}/`);
+    return response.data;
+  }
+
+  async getConsents(): Promise<any> {
+    const response = await apiClient.get('/resumes/legal/consent/');
+    return response.data;
+  }
+
+  async grantConsent(payload: {
+    consent_type?: string;
+    consent_version?: string;
+    disclaimer_types?: string[];
+  }): Promise<any> {
+    const response = await apiClient.post('/resumes/legal/consent/', payload);
+    return response.data;
+  }
+
+  async revokeConsent(payload: { consent_type?: string; disclaimer_type?: string }): Promise<any> {
+    const response = await apiClient.post('/resumes/legal/consent/revoke/', payload);
+    return response.data;
+  }
+
+  async requestDataDeletion(): Promise<any> {
+    const response = await apiClient.post('/resumes/data/deletion/request/');
+    return response.data;
+  }
+
+  async listDataDeletionRequests(): Promise<any[]> {
+    const response = await apiClient.get('/resumes/data/deletion/requests/');
+    return response.data;
   }
 }
 

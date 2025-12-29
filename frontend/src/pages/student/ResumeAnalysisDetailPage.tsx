@@ -18,6 +18,8 @@ import {
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import ErrorAlert from '../../components/common/ErrorAlert';
 import resumeService from '../../services/api/resumeService';
+import type { ApiError } from '../../services/utils/errorHandler';
+import { handleApiError, createApiError } from '../../services/utils/errorHandler';
 
 interface ResumeAnalysisDetail {
   overall_score?: number;
@@ -34,12 +36,12 @@ const ResumeAnalysisDetailPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [analysis, setAnalysis] = useState<ResumeAnalysisDetail | null>(null);
   const [resumeTitle, setResumeTitle] = useState<string>('');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
 
   useEffect(() => {
     const resumeId = Number(id);
     if (!resumeId) {
-      setError('Invalid resume ID');
+      setError(createApiError('Invalid resume ID', 'VALIDATION_ERROR'));
       setLoading(false);
       return;
     }
@@ -71,8 +73,8 @@ const ResumeAnalysisDetailPage: React.FC = () => {
         }
 
         throw analysisResult.reason;
-      } catch {
-        setError('Failed to load analysis details. Please try again.');
+      } catch (err) {
+        setError(handleApiError(err));
       } finally {
         setLoading(false);
       }
@@ -86,7 +88,7 @@ const ResumeAnalysisDetailPage: React.FC = () => {
   }
 
   if (error) {
-    return <ErrorAlert message={error} />;
+    return <ErrorAlert error={error} />;
   }
 
   if (!analysis) {

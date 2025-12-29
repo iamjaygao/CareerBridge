@@ -46,7 +46,7 @@ class SettingsService {
   async getUserSettings(): Promise<UserSettings> {
     try {
       const response = await apiClient.get('/users/settings/');
-      return response.data;
+      return response.data?.data || response.data;
     } catch (error) {
       console.error('Failed to get user settings:', error);
       throw error;
@@ -91,4 +91,3 @@ class SettingsService {
 
 const settingsService = new SettingsService();
 export default settingsService;
-

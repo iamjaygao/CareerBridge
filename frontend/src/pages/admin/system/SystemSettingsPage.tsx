@@ -31,6 +31,9 @@ import {
 
 import LoadingSpinner from '../../../components/common/LoadingSpinner';
 import adminService from '../../../services/api/adminService';
+import ErrorAlert from '../../../components/common/ErrorAlert';
+import { handleApiError } from '../../../services/utils/errorHandler';
+import type { ApiError } from '../../../services/utils/errorHandler';
 
 interface SystemSettings {
   platform_name: string;
@@ -100,7 +103,7 @@ const emptyApiKeys = {
 const SystemSettingsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [settings, setSettings] = useState<SystemSettings>(emptySettings);
   const [apiKeys, setApiKeys] = useState(emptyApiKeys);
@@ -123,7 +126,7 @@ const SystemSettingsPage: React.FC = () => {
       });
       setApiKeys(emptyApiKeys);
     } catch (err) {
-      setError('Failed to load system settings');
+      setError(handleApiError(err));
       console.error('Error fetching settings:', err);
     } finally {
       setLoading(false);
@@ -154,7 +157,7 @@ const SystemSettingsPage: React.FC = () => {
       setSuccess('Settings saved successfully');
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
-      setError('Failed to save settings');
+      setError(handleApiError(err));
       console.error('Error saving settings:', err);
     } finally {
       setSaving(false);
@@ -167,7 +170,7 @@ const SystemSettingsPage: React.FC = () => {
       setSuccess('Cache cleared successfully');
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
-      setError('Failed to clear cache');
+      setError(handleApiError(err));
       console.error('Error clearing cache:', err);
     }
   };
@@ -219,9 +222,7 @@ const SystemSettingsPage: React.FC = () => {
 
       {/* Alerts */}
       {error && (
-        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
+        <ErrorAlert error={error} overrideMessage="System settings could not be loaded." />
       )}
 
       {success && (

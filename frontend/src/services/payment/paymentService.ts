@@ -14,6 +14,7 @@ const initializeStripe = async () => {
 };
 
 export interface PaymentIntent {
+  payment_id?: number;
   id: string;
   amount: number;
   currency: string;
@@ -28,11 +29,28 @@ export interface PaymentResult {
 }
 
 class PaymentService {
-  private baseURL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+  private baseURL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8001/api/v1';
 
   // Create payment intent on the server
-  async createPaymentIntent(amount: number, currency: string = 'USD'): Promise<PaymentIntent> {
+  async createPaymentIntent(params: {
+    amount: number;
+    currency?: string;
+    appointmentId?: number;
+    mentorId?: number;
+    paymentType?: string;
+    provider?: string;
+    description?: string;
+  }): Promise<PaymentIntent> {
     try {
+      const {
+        amount,
+        currency = 'USD',
+        appointmentId,
+        mentorId,
+        paymentType = 'appointment',
+        provider = 'stripe',
+        description,
+      } = params;
       const response = await fetch(`${this.baseURL}/payments/create-intent/`, {
         method: 'POST',
         headers: {
@@ -42,6 +60,11 @@ class PaymentService {
         body: JSON.stringify({
           amount,
           currency,
+          appointment_id: appointmentId,
+          mentor_id: mentorId,
+          payment_type: paymentType,
+          provider,
+          description,
         }),
       });
 
@@ -49,7 +72,15 @@ class PaymentService {
         throw new Error('Failed to create payment intent');
       }
 
-      return await response.json();
+      const data = await response.json();
+      return {
+        payment_id: data.payment_id,
+        id: data.payment_intent_id || data.id,
+        amount: data.amount,
+        currency: data.currency,
+        status: data.status || 'processing',
+        client_secret: data.client_secret,
+      };
     } catch (error) {
       console.error('Error creating payment intent:', error);
       throw error;
@@ -65,7 +96,10 @@ class PaymentService {
       }
 
       // Create payment intent
-      const paymentIntent = await this.createPaymentIntent(paymentData.amount, paymentData.currency);
+      const paymentIntent = await this.createPaymentIntent({
+        amount: paymentData.amount,
+        currency: paymentData.currency,
+      });
 
       // Handle different payment methods
       let result;
@@ -126,42 +160,33 @@ class PaymentService {
           };
         }
 
-        return {
-          success: true,
-          paymentIntentId: confirmedIntent.id,
-        };
-      } else {
-        // For development/testing: Send card data to server for processing
-        // In production, always use Stripe Elements
-        const response = await fetch(`${this.baseURL}/payments/process-card/`, {
+        const confirmResponse = await fetch(`${this.baseURL}/payments/confirm/`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
           },
           body: JSON.stringify({
-            payment_intent_id: paymentIntent.id,
-            card_number: paymentData.cardNumber,
-            exp_month: parseInt(paymentData.expiryDate!.split('/')[0]),
-            exp_year: parseInt('20' + paymentData.expiryDate!.split('/')[1]),
-            cvc: paymentData.cvv,
-            cardholder_name: paymentData.cardholderName,
+            payment_intent_id: confirmedIntent.id,
           }),
         });
 
-        if (!response.ok) {
-          const errorData = await response.json();
+        if (!confirmResponse.ok) {
+          const errorData = await confirmResponse.json();
           return {
             success: false,
-            error: errorData.error || 'Failed to process card payment',
+            error: errorData.error || 'Failed to confirm payment',
           };
         }
 
-        const result = await response.json();
-
         return {
           success: true,
-          paymentIntentId: result.payment_intent_id,
+          paymentIntentId: confirmedIntent.id,
+        };
+      } else {
+        return {
+          success: false,
+          error: 'Card token required. Use Stripe Elements to generate a token.',
         };
       }
     } catch (error) {
@@ -177,32 +202,9 @@ class PaymentService {
     paymentData: PaymentFormData
   ): Promise<PaymentResult> {
     try {
-      // Redirect to PayPal for payment
-      const response = await fetch(`${this.baseURL}/payments/paypal/create/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-        },
-        body: JSON.stringify({
-          payment_intent_id: paymentIntent.id,
-          amount: paymentData.amount,
-          currency: paymentData.currency,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to create PayPal payment');
-      }
-
-      const { approval_url } = await response.json();
-      
-      // Redirect to PayPal
-      window.location.href = approval_url;
-
       return {
-        success: true,
-        paymentIntentId: paymentIntent.id,
+        success: false,
+        error: 'PayPal is not supported yet.',
       };
     } catch (error) {
       return {
@@ -217,30 +219,9 @@ class PaymentService {
     paymentData: PaymentFormData
   ): Promise<PaymentResult> {
     try {
-      const response = await fetch(`${this.baseURL}/payments/bank-transfer/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-        },
-        body: JSON.stringify({
-          payment_intent_id: paymentIntent.id,
-          bank_account: paymentData.bankAccount,
-          routing_number: paymentData.routingNumber,
-          amount: paymentData.amount,
-          currency: paymentData.currency,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to process bank transfer');
-      }
-
-      const result = await response.json();
-
       return {
-        success: true,
-        paymentIntentId: result.payment_intent_id,
+        success: false,
+        error: 'Bank transfer is not supported yet.',
       };
     } catch (error) {
       return {
@@ -253,7 +234,7 @@ class PaymentService {
   // Get payment history
   async getPaymentHistory(): Promise<any[]> {
     try {
-      const response = await fetch(`${this.baseURL}/payments/history/`, {
+      const response = await fetch(`${this.baseURL}/payments/list/`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
         },
@@ -271,9 +252,9 @@ class PaymentService {
   }
 
   // Get payment status
-  async getPaymentStatus(paymentIntentId: string): Promise<any> {
+  async getPaymentStatus(paymentId: number): Promise<any> {
     try {
-      const response = await fetch(`${this.baseURL}/payments/status/${paymentIntentId}/`, {
+      const response = await fetch(`${this.baseURL}/payments/detail/${paymentId}/`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
         },
@@ -291,18 +272,14 @@ class PaymentService {
   }
 
   // Refund payment
-  async refundPayment(paymentIntentId: string, amount?: number): Promise<PaymentResult> {
+  async refundPayment(paymentId: number): Promise<PaymentResult> {
     try {
-      const response = await fetch(`${this.baseURL}/payments/refund/`, {
+      const response = await fetch(`${this.baseURL}/payments/refund/${paymentId}/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
         },
-        body: JSON.stringify({
-          payment_intent_id: paymentIntentId,
-          amount,
-        }),
       });
 
       if (!response.ok) {

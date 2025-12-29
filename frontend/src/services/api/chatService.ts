@@ -123,7 +123,7 @@ class ChatService {
   async getOrCreateRoom(userId: number): Promise<ChatRoom> {
     try {
       const response = await apiClient.post('/chat/rooms/', {
-        participant_id: userId,
+        mentor_id: userId,
       });
       return response.data;
     } catch (error) {
@@ -171,4 +171,3 @@ class ChatService {
 
 const chatService = new ChatService();
 export default chatService;
-

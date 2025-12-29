@@ -36,6 +36,8 @@ import mentorService from '../../services/api/mentorService';
 import appointmentService from '../../services/api/appointmentService';
 import apiClient from '../../services/api/client';
 import { MentorDetail } from '../../types';
+import type { ApiError } from '../../services/utils/errorHandler';
+import { handleApiError } from '../../services/utils/errorHandler';
 
 interface CreateAppointmentForm {
   mentor_id: number;
@@ -60,7 +62,7 @@ const CreateAppointmentPage: React.FC = () => {
   const [activeStep, setActiveStep] = useState(0);
   const [pageLoading, setPageLoading] = useState(false);
   const [submitLoading, setSubmitLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
   const [mentors, setMentors] = useState<any[]>([]);
   const [selectedMentor, setSelectedMentor] = useState<MentorDetail | null>(null);
   const [availableSlots, setAvailableSlots] = useState<TimeSlot[]>([]);
@@ -97,7 +99,7 @@ const CreateAppointmentPage: React.FC = () => {
       const mentorsData = await mentorService.getMentors();
       setMentors(mentorsData);
     } catch (err) {
-      setError('Failed to load mentors');
+      setError(handleApiError(err));
       console.error('Mentors fetch error:', err);
     } finally {
       setPageLoading(false);
@@ -220,7 +222,7 @@ const CreateAppointmentPage: React.FC = () => {
   }
 
   if (error) {
-    return <ErrorAlert message={error} />;
+    return <ErrorAlert error={error} />;
   }
 
   const selectedService = selectedMentor?.services?.find(s => s.id === form.service_id);

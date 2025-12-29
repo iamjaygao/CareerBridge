@@ -16,12 +16,15 @@ import { RootState } from '../../store';
 import { useRole } from '../../contexts/RoleContext';
 import adminService from '../../services/api/adminService';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import ErrorAlert from '../../components/common/ErrorAlert';
+import { handleApiError } from '../../services/utils/errorHandler';
+import type { ApiError } from '../../services/utils/errorHandler';
 
 const AssessmentPage: React.FC = () => {
   const { user } = useSelector((state: RootState) => state.auth);
   const { isSuperAdmin } = useRole();
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
   const [stats, setStats] = useState({
     totalAssessments: 0,
     totalResumes: 0,
@@ -41,11 +44,7 @@ const AssessmentPage: React.FC = () => {
           aiUsage: data.ai_usage || data.aiUsage || data.ai_api_calls || 0,
         });
       } catch (err: any) {
-        const errorMessage = err?.response?.data?.detail 
-          || err?.response?.data?.error
-          || err?.message 
-          || 'Failed to load assessment statistics';
-        setError(errorMessage);
+        setError(handleApiError(err));
         console.error('Failed to fetch assessment stats:', err);
       } finally {
         setLoading(false);
@@ -75,9 +74,7 @@ const AssessmentPage: React.FC = () => {
       </Box>
 
       {error && (
-        <Alert severity="error" sx={{ mb: 3 }}>
-          {error}
-        </Alert>
+        <ErrorAlert error={error} overrideMessage="Failed to load assessment statistics." />
       )}
 
       <Grid container spacing={3} sx={{ mb: 4 }}>
@@ -138,4 +135,3 @@ const AssessmentPage: React.FC = () => {
 };
 
 export default AssessmentPage;
-

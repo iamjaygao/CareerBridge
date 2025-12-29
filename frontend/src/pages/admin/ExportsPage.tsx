@@ -14,12 +14,14 @@ import {
   TableRow,
   Typography,
   Paper,
-  Alert,
 } from '@mui/material';
 import { Refresh as RefreshIcon, Download as DownloadIcon } from '@mui/icons-material';
 
 import adminService from '../../services/api/adminService';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import ErrorAlert from '../../components/common/ErrorAlert';
+import { handleApiError } from '../../services/utils/errorHandler';
+import type { ApiError } from '../../services/utils/errorHandler';
 
 interface ExportItem {
   id: number;
@@ -39,7 +41,7 @@ interface ExportItem {
 
 const ExportsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
   const [exports, setExports] = useState<ExportItem[]>([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -62,7 +64,7 @@ const ExportsPage: React.FC = () => {
         setTotalPages(1);
       }
     } catch (err: any) {
-      setError(err?.response?.data?.error || 'Failed to load export requests.');
+      setError(handleApiError(err));
       setExports([]);
       setTotalPages(1);
     } finally {
@@ -99,7 +101,7 @@ const ExportsPage: React.FC = () => {
       await adminService.retryDataExport(exportId);
       await fetchExports();
     } catch (err: any) {
-      setError(err?.response?.data?.error || 'Failed to retry export.');
+      setError(handleApiError(err));
     } finally {
       setRetryingId(null);
     }
@@ -134,9 +136,7 @@ const ExportsPage: React.FC = () => {
       </Box>
 
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
+        <ErrorAlert error={error} overrideMessage="Failed to load export requests." />
       )}
 
       <Card>

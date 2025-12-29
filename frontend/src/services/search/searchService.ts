@@ -39,7 +39,7 @@ export interface SearchQuery {
 import { fetchWithRetry } from '../api/searchService';
 
 class SearchService {
-  private baseURL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+  private baseURL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8001/api/v1';
   private searchCache = new Map<string, SearchSuggestion[]>();
   private cacheExpiry = 5 * 60 * 1000; // 5 minutes
 
@@ -110,7 +110,7 @@ class SearchService {
   async getPopularSkills(limit: number = 20): Promise<SearchSuggestion[]> {
     try {
       const response = await fetchWithRetry(
-        `${this.baseURL}/search/popular-skills/?limit=${limit}`,
+        `${this.baseURL}/search/popular/skills/?limit=${limit}`,
         {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
@@ -133,7 +133,7 @@ class SearchService {
   async getPopularIndustries(limit: number = 15): Promise<SearchSuggestion[]> {
     try {
       const response = await fetchWithRetry(
-        `${this.baseURL}/search/popular-industries/?limit=${limit}`,
+        `${this.baseURL}/search/popular/industries/?limit=${limit}`,
         {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('access_token')}`,

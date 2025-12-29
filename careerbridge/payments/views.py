@@ -25,6 +25,13 @@ from notifications.services.dispatcher import notify
 from notifications.services.rules import NotificationType
 from payments.services import get_payout_settings, refresh_payout_status
 
+# Stripe error helpers
+def _stripe_not_configured():
+    return Response({'error': 'Stripe not configured', 'service': 'stripe'}, status=status.HTTP_502_BAD_GATEWAY)
+
+def _stripe_error_response(error):
+    return Response({'error': str(error), 'service': 'stripe'}, status=status.HTTP_502_BAD_GATEWAY)
+
 # Payment Views
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
@@ -103,20 +110,23 @@ def create_payment_intent(request):
             if payment.provider == 'stripe':
                 stripe.api_key = getattr(settings, 'STRIPE_SECRET_KEY', None)
                 if not stripe.api_key:
-                    return Response({'error': 'Stripe not configured'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                    return _stripe_not_configured()
 
-                intent = stripe.PaymentIntent.create(
-                    amount=int(payment.amount * 100),
-                    currency=payment.currency.lower(),
-                    metadata={
-                        'payment_id': str(payment.id),
-                        'user_id': str(request.user.id),
-                        'payment_type': payment.payment_type,
-                    },
-                    description=payment.description or 'CareerBridge payment',
-                    automatic_payment_methods={'enabled': True},
-                    idempotency_key=f"pi_{payment.id}_{uuid.uuid4()}"
-                )
+                try:
+                    intent = stripe.PaymentIntent.create(
+                        amount=int(payment.amount * 100),
+                        currency=payment.currency.lower(),
+                        metadata={
+                            'payment_id': str(payment.id),
+                            'user_id': str(request.user.id),
+                            'payment_type': payment.payment_type,
+                        },
+                        description=payment.description or 'CareerBridge payment',
+                        automatic_payment_methods={'enabled': True},
+                        idempotency_key=f"pi_{payment.id}_{uuid.uuid4()}"
+                    )
+                except stripe.error.StripeError as e:
+                    return _stripe_error_response(e)
 
                 payment.provider_payment_id = intent['id']
                 payment.status = 'processing'
@@ -208,37 +218,37 @@ def create_checkout_session(request):
         # Initialize Stripe
         stripe.api_key = getattr(settings, 'STRIPE_SECRET_KEY', None)
         if not stripe.api_key:
-            return Response(
-                {'error': 'Stripe not configured'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            return _stripe_not_configured()
         
         # Create Stripe Checkout Session
         success_url = 'http://localhost:3000/student/appointments?payment=success&session_id={CHECKOUT_SESSION_ID}'
         cancel_url = 'http://localhost:3000/student/appointments?payment=cancel'
         
-        session = stripe.checkout.Session.create(
-            mode='payment',
-            payment_method_types=['card'],
-            line_items=[{
-                'price_data': {
-                    'currency': payment.currency.lower(),
-                    'product_data': {
-                        'name': appointment.title,
-                        'description': appointment.description or f"Appointment with {appointment.mentor.user.get_full_name() or appointment.mentor.user.username}",
+        try:
+            session = stripe.checkout.Session.create(
+                mode='payment',
+                payment_method_types=['card'],
+                line_items=[{
+                    'price_data': {
+                        'currency': payment.currency.lower(),
+                        'product_data': {
+                            'name': appointment.title,
+                            'description': appointment.description or f"Appointment with {appointment.mentor.user.get_full_name() or appointment.mentor.user.username}",
+                        },
+                        'unit_amount': int(payment.amount * 100),
                     },
-                    'unit_amount': int(payment.amount * 100),
+                    'quantity': 1,
+                }],
+                metadata={
+                    'payment_id': str(payment.id),
+                    'appointment_id': str(appointment.id),
+                    'user_id': str(request.user.id),
                 },
-                'quantity': 1,
-            }],
-            metadata={
-                'payment_id': str(payment.id),
-                'appointment_id': str(appointment.id),
-                'user_id': str(request.user.id),
-            },
-            success_url=success_url,
-            cancel_url=cancel_url,
-        )
+                success_url=success_url,
+                cancel_url=cancel_url,
+            )
+        except stripe.error.StripeError as e:
+            return _stripe_error_response(e)
         
         # Store session ID in payment (payment_intent will be set when checkout completes)
         payment.provider_payment_id = session.id
@@ -268,6 +278,8 @@ def confirm_payment(request):
 
     try:
         stripe.api_key = getattr(settings, 'STRIPE_SECRET_KEY', None)
+        if not stripe.api_key:
+            return _stripe_not_configured()
 
         payment = Payment.objects.select_for_update().filter(
             user=request.user,
@@ -282,7 +294,10 @@ def confirm_payment(request):
         if payment.status == 'completed':
             return Response({'payment_id': payment.id, 'status': 'completed'})
 
-        intent = stripe.PaymentIntent.retrieve(payment_intent_id)
+        try:
+            intent = stripe.PaymentIntent.retrieve(payment_intent_id)
+        except stripe.error.StripeError as e:
+            return _stripe_error_response(e)
         if intent['status'] not in ['succeeded', 'requires_capture']:
             return Response(
                 {'payment_id': payment.id, 'status': intent['status']},
@@ -363,22 +378,25 @@ def reconcile_payment(request):
 
         # Last-resort lookup via Stripe metadata if payment not found
         if not payment and session_id and stripe.api_key:
-            session = stripe.checkout.Session.retrieve(session_id)
-            metadata = session.get('metadata') or {}
-            payment_id = metadata.get('payment_id')
-            if payment_id:
-                payment = Payment.objects.filter(
-                    id=payment_id,
-                    user=request.user,
-                    provider='stripe'
-                ).first()
+            try:
+                session = stripe.checkout.Session.retrieve(session_id)
+                metadata = session.get('metadata') or {}
+                payment_id = metadata.get('payment_id')
+                if payment_id:
+                    payment = Payment.objects.filter(
+                        id=payment_id,
+                        user=request.user,
+                        provider='stripe'
+                    ).first()
 
-            if not payment and session.get('payment_intent'):
-                payment = Payment.objects.filter(
-                    user=request.user,
-                    provider='stripe',
-                    provider_payment_id=session.get('payment_intent')
-                ).first()
+                if not payment and session.get('payment_intent'):
+                    payment = Payment.objects.filter(
+                        user=request.user,
+                        provider='stripe',
+                        provider_payment_id=session.get('payment_intent')
+                    ).first()
+            except stripe.error.StripeError as e:
+                return _stripe_error_response(e)
 
         if not payment:
             return Response({'error': 'Payment not found'}, status=status.HTTP_404_NOT_FOUND)
@@ -391,17 +409,23 @@ def reconcile_payment(request):
                 verified = False
 
                 if session_id:
-                    session = stripe.checkout.Session.retrieve(session_id)
-                    if session.get('payment_status') == 'paid':
-                        verified = True
-                        payment_intent = session.get('payment_intent')
-                        if payment_intent and payment.provider_payment_id != payment_intent:
-                            payment.provider_payment_id = payment_intent
+                    try:
+                        session = stripe.checkout.Session.retrieve(session_id)
+                        if session.get('payment_status') == 'paid':
+                            verified = True
+                            payment_intent = session.get('payment_intent')
+                            if payment_intent and payment.provider_payment_id != payment_intent:
+                                payment.provider_payment_id = payment_intent
+                    except stripe.error.StripeError as e:
+                        return _stripe_error_response(e)
 
                 if not verified and payment_intent_id:
-                    intent = stripe.PaymentIntent.retrieve(payment_intent_id)
-                    if intent.get('status') in ['succeeded', 'requires_capture']:
-                        verified = True
+                    try:
+                        intent = stripe.PaymentIntent.retrieve(payment_intent_id)
+                        if intent.get('status') in ['succeeded', 'requires_capture']:
+                            verified = True
+                    except stripe.error.StripeError as e:
+                        return _stripe_error_response(e)
 
                 if verified:
                     payment.status = 'completed'
@@ -522,13 +546,16 @@ def process_refund(request, payment_id):
         if payment.provider == 'stripe':
             stripe.api_key = getattr(settings, 'STRIPE_SECRET_KEY', None)
             if not stripe.api_key:
-                return Response({'error': 'Stripe not configured'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                return _stripe_not_configured()
 
-            refund_obj = stripe.Refund.create(
-                payment_intent=payment.provider_payment_id,
-                amount=int(payment.amount * 100),
-                idempotency_key=f"rf_{payment.id}_{uuid.uuid4()}"
-            )
+            try:
+                refund_obj = stripe.Refund.create(
+                    payment_intent=payment.provider_payment_id,
+                    amount=int(payment.amount * 100),
+                    idempotency_key=f"rf_{payment.id}_{uuid.uuid4()}"
+                )
+            except stripe.error.StripeError as e:
+                return _stripe_error_response(e)
 
             refund = Refund.objects.create(
                 payment=payment,

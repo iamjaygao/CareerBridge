@@ -3,9 +3,13 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
-from .serializers import ( RegisterSerializer,LoginSerializer, UserSerializer,
-    UserUpdateSerializer, PasswordChangeSerializer,  ResendVerificationSerializer,
-    PasswordResetRequestSerializer, PasswordResetSerializer)
+from .serializers import (
+    RegisterSerializer, LoginSerializer, UserSerializer,
+    UserUpdateSerializer, PasswordChangeSerializer, ResendVerificationSerializer,
+    PasswordResetRequestSerializer, PasswordResetSerializer, EmailVerificationSerializer,
+    UserSettingsSerializer
+)
+from .models import UserSettings
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from django.utils import timezone
@@ -18,7 +22,6 @@ from .models import User
 # Register View
 # Handles user registration with email and password
 #----------------------------------------------------------
-print("🔥 USERS.VIEWS LOADED FROM:", __file__)
 
 
 class RegisterView(APIView):
@@ -185,6 +188,84 @@ class ResendVerificationView(APIView):
                 'message': 'Verification email sent successfully. Please check your email.'
             }, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class RequestVerificationView(APIView):
+    @swagger_auto_schema(
+        operation_description="Request verification email",
+        request_body=ResendVerificationSerializer,
+        responses={
+            200: openapi.Response(
+                description="Verification email sent successfully",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'message': openapi.Schema(type=openapi.TYPE_STRING)
+                    }
+                )
+            ),
+            400: openapi.Response(description="Failed to send verification email")
+        }
+    )
+    def post(self, request):
+        serializer = ResendVerificationSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                'message': 'Verification email sent successfully. Please check your email.'
+            }, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class EmailVerificationView(APIView):
+    @swagger_auto_schema(
+        operation_description="Verify email using token",
+        request_body=EmailVerificationSerializer,
+        responses={
+            200: openapi.Response(
+                description="Email verified successfully",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'message': openapi.Schema(type=openapi.TYPE_STRING)
+                    }
+                )
+            ),
+            400: openapi.Response(description="Verification failed")
+        }
+    )
+    def post(self, request):
+        serializer = EmailVerificationSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                'message': 'Email verified successfully.'
+            }, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class PasswordResetConfirmView(APIView):
+    @swagger_auto_schema(
+        operation_description="Reset password using reset token",
+        request_body=PasswordResetSerializer,
+        responses={
+            200: openapi.Response(
+                description="Password reset successfully",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'message': openapi.Schema(type=openapi.TYPE_STRING)
+                    }
+                )
+            ),
+            400: openapi.Response(description="Password reset failed")
+        }
+    )
+    def post(self, request):
+        serializer = PasswordResetSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                'message': 'Password reset successfully. You can now log in with your new password.'
+            }, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
 #----------------------------------------------------------
 # User View
@@ -230,6 +311,23 @@ class UserView(APIView):
         if serializer.is_valid():
             serializer.save()
             return Response({'message': 'user profile updated successfully'})
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class UserSettingsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        settings_obj, _ = UserSettings.objects.get_or_create(user=request.user)
+        serializer = UserSettingsSerializer(settings_obj)
+        return Response(serializer.data)
+
+    def put(self, request):
+        settings_obj, _ = UserSettings.objects.get_or_create(user=request.user)
+        serializer = UserSettingsSerializer(settings_obj, data={'data': request.data}, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 #----------------------------------------------------------
@@ -383,4 +481,3 @@ class RefreshTokenView(TokenRefreshView):
     )
     def post(self, request, *args, **kwargs):
         return super().post(request, *args, **kwargs)
-

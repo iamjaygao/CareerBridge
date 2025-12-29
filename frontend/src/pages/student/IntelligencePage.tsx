@@ -17,6 +17,7 @@ import {
 } from '@mui/icons-material';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import resumeService, { Resume } from '../../services/api/resumeService';
+import { getUserFacingErrorMessage } from '../../services/utils/errorHandler';
 
 interface ResumeAnalysis {
   job_titles?: string[];
@@ -160,8 +161,8 @@ const StudentIntelligencePage: React.FC = () => {
         } else if (fallbackSkills.length) {
           setSkillsDemand(fallbackSkills.slice(0, 12));
         }
-      } catch {
-        setError('Failed to load market intelligence data.');
+      } catch (err) {
+        setError(getUserFacingErrorMessage(err, 'Failed to load market intelligence data.'));
       } finally {
         setLoading(false);
       }

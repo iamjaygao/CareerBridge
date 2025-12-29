@@ -43,6 +43,7 @@ REST_FRAMEWORK = {
         'user': '1000/day',
         'anon': '100/day',
         'burst': '20/min',
+        'ai_analysis': '10/day',
     },
     'DEFAULT_THROTTLE_CLASSES': [
         'rest_framework.throttling.UserRateThrottle',

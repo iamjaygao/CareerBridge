@@ -24,7 +24,6 @@ import {
   Select,
   MenuItem,
   Grid,
-  Alert,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -33,7 +32,10 @@ import {
   Visibility as ViewIcon,
 } from '@mui/icons-material';
 import LoadingSpinner from '../../../components/common/LoadingSpinner';
+import ErrorAlert from '../../../components/common/ErrorAlert';
 import adminService from '../../../services/api/adminService';
+import { handleApiError } from '../../../services/utils/errorHandler';
+import type { ApiError } from '../../../services/utils/errorHandler';
 
 interface ContentItem {
   id: number;
@@ -48,7 +50,7 @@ interface ContentItem {
 
 const ContentPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
   const [content, setContent] = useState<ContentItem[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingContent, setEditingContent] = useState<ContentItem | null>(null);
@@ -89,11 +91,7 @@ const ContentPage: React.FC = () => {
         
         setContent(normalizedContent);
       } catch (err: any) {
-        const errorMessage = err?.response?.data?.detail 
-          || err?.response?.data?.error
-          || err?.message 
-          || 'Failed to load content';
-        setError(errorMessage);
+        setError(handleApiError(err));
         console.error('Failed to fetch content:', err);
         setContent([]);
       } finally {
@@ -248,9 +246,7 @@ const ContentPage: React.FC = () => {
       </Box>
 
       {error && (
-        <Alert severity="error" sx={{ mb: 3 }}>
-          {error}
-        </Alert>
+        <ErrorAlert error={error} overrideMessage="Failed to load content." />
       )}
 
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
@@ -405,4 +401,3 @@ const ContentPage: React.FC = () => {
 };
 
 export default ContentPage;
-

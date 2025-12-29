@@ -19,17 +19,21 @@ class ChatRoomViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
-        mentor_id = self.request.data.get('mentor_id')
+        mentor_id = self.request.data.get('mentor_id') or self.request.data.get('participant_id')
+        if getattr(user, 'role', None) == 'mentor':
+            mentor_id, user_id = user.id, mentor_id
+        else:
+            user_id = user.id
         
         # Check if chat room already exists
         existing_room = ChatRoom.objects.filter(
-            user=user, mentor_id=mentor_id, is_active=True
+            user_id=user_id, mentor_id=mentor_id, is_active=True
         ).first()
         
         if existing_room:
             serializer.instance = existing_room
         else:
-            serializer.save(user=user)
+            serializer.save(user_id=user_id, mentor_id=mentor_id)
 
     @action(detail=True, methods=['post'])
     def mark_messages_read(self, request, pk=None):
@@ -46,6 +50,23 @@ class ChatRoomViewSet(viewsets.ModelViewSet):
             message.mark_as_read()
         
         return Response({'status': 'messages marked as read'})
+
+    @action(detail=True, methods=['post'], url_path='mark-read')
+    def mark_read(self, request, pk=None):
+        return self.mark_messages_read(request, pk=pk)
+
+    @action(detail=True, methods=['get', 'post'], url_path='messages')
+    def messages(self, request, pk=None):
+        chat_room = self.get_object()
+        if request.method == 'GET':
+            messages = chat_room.messages.all()
+            serializer = MessageSerializer(messages, many=True)
+            return Response(serializer.data)
+
+        serializer = MessageSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(chat_room=chat_room, sender=request.user)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['get'])
     def participants(self, request, pk=None):

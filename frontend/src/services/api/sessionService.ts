@@ -2,12 +2,10 @@
 import apiClient from './client';
 
 export interface CreateSessionPayload {
-  mentor_id: number;
+  time_slot_id: number;
   service_id: number;
-  scheduled_date: string;
-  scheduled_time: string;
-  user_notes?: string;
-  duration_minutes?: number;
+  title?: string;
+  description?: string;
 }
 
 export interface LockSlotPayload {
@@ -19,7 +17,7 @@ export interface LockSlotPayload {
 
 class SessionService {
   async createSession(data: CreateSessionPayload): Promise<any> {
-    return apiClient.post('/appointments/sessions/', data);
+    return apiClient.post('/appointments/appointments/', data);
   }
 
   async lockSlot(data: LockSlotPayload): Promise<any> {
@@ -31,9 +29,8 @@ class SessionService {
     date: string,
     serviceId?: number
   ): Promise<any> {
-    return apiClient.get('/appointments/available-slots/', {
+    return apiClient.get(`/mentors/${mentorId}/availability/slots/`, {
       params: {
-        mentor_id: mentorId,
         date,
         service_id: serviceId,
       },

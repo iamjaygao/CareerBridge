@@ -10,7 +10,8 @@ from django.conf import settings
 import uuid
 import logging
 
-print("🔥 USERS.SERIALIZERS LOADED FROM:", __file__)
+from .models import UserSettings
+
 
 
 User = get_user_model()
@@ -200,6 +201,12 @@ class UserUpdateSerializer(serializers.ModelSerializer):
                 )
 
         return value
+
+
+class UserSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserSettings
+        fields = ["data", "updated_at"]
 
     def update(self, instance, validated_data):
         if validated_data.get("username") != instance.username:

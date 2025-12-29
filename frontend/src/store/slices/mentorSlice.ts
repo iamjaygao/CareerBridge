@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import apiClient from '../../services/api/client';
+import { getUserFacingErrorMessage } from '../../services/utils/errorHandler';
 import { Mentor } from '../../types';
 import type { MentorFilters } from '../../types';
 
@@ -78,7 +79,7 @@ export const fetchMentors = createAsyncThunk<
     }
 
     return rejectWithValue(
-      error.response?.data?.message || 'Failed to fetch mentors'
+      getUserFacingErrorMessage(error, 'Failed to fetch mentors')
     );
   }
 });

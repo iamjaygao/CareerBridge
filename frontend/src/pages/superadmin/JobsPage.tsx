@@ -8,7 +8,6 @@ import {
   Card,
   CardContent,
   Button,
-  Alert,
   Table,
   TableBody,
   TableCell,
@@ -22,12 +21,15 @@ import { RootState } from '../../store';
 import { useRole } from '../../contexts/RoleContext';
 import adminService from '../../services/api/adminService';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import ErrorAlert from '../../components/common/ErrorAlert';
+import { handleApiError } from '../../services/utils/errorHandler';
+import type { ApiError } from '../../services/utils/errorHandler';
 
 const JobsPage: React.FC = () => {
   const { user } = useSelector((state: RootState) => state.auth);
   const { isSuperAdmin } = useRole();
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
   const [stats, setStats] = useState({
     totalJobs: 0,
     activeCrawlers: 0,
@@ -51,11 +53,7 @@ const JobsPage: React.FC = () => {
         const logs = data.crawler_logs || data.logs || [];
         setCrawlerLogs(Array.isArray(logs) ? logs : []);
       } catch (err: any) {
-        const errorMessage = err?.response?.data?.detail 
-          || err?.response?.data?.error
-          || err?.message 
-          || 'Failed to load job statistics';
-        setError(errorMessage);
+        setError(handleApiError(err));
         console.error('Failed to fetch job stats:', err);
       } finally {
         setLoading(false);
@@ -130,9 +128,7 @@ const JobsPage: React.FC = () => {
       </Box>
 
       {error && (
-        <Alert severity="error" sx={{ mb: 3 }}>
-          {error}
-        </Alert>
+        <ErrorAlert error={error} overrideMessage="Failed to load job statistics." />
       )}
 
       <Grid container spacing={3} sx={{ mb: 4 }}>
@@ -230,4 +226,3 @@ const JobsPage: React.FC = () => {
 };
 
 export default JobsPage;
-

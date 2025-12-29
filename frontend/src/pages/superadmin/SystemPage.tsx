@@ -57,6 +57,9 @@ import adminService from '../../services/api/adminService';
 import { SystemHealth, SystemSettings } from '../../types';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import { useNotification } from '../../components/common/NotificationProvider';
+import ErrorAlert from '../../components/common/ErrorAlert';
+import { handleApiError } from '../../services/utils/errorHandler';
+import type { ApiError } from '../../services/utils/errorHandler';
 
 const SystemPage: React.FC = () => {
   const { user } = useSelector((state: RootState) => state.auth);
@@ -69,7 +72,7 @@ const SystemPage: React.FC = () => {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   
   // Error states
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
   
   // Data states
   const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null);
@@ -122,11 +125,7 @@ const SystemPage: React.FC = () => {
       setSettingsForm(settingsData);
       setAuditLogs(Array.isArray(actionsData) ? actionsData : (actionsData?.results || []));
     } catch (err: any) {
-      const errorMessage = err?.response?.data?.detail 
-        || err?.response?.data?.error
-        || err?.message 
-        || 'Failed to load system data';
-      setError(errorMessage);
+      setError(handleApiError(err));
       console.error('Failed to fetch system data:', err);
     } finally {
       setLoading(false);
@@ -319,9 +318,7 @@ const SystemPage: React.FC = () => {
       </Box>
 
       {error && (
-        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
+        <ErrorAlert error={error} overrideMessage="Failed to load system data." />
       )}
 
       {/* SECTION 1: System Health */}

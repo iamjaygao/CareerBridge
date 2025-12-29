@@ -9,7 +9,6 @@ import {
   Typography,
   Paper,
   Divider,
-  Alert,
   Chip,
 } from '@mui/material';
 import {
@@ -43,6 +42,9 @@ import adminService from '../../services/api/adminService';
 import FinancialOverview from '../../components/admin/FinancialOverview';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import { DashboardStats, TrendDataPoint } from '../../types';
+import ErrorAlert from '../../components/common/ErrorAlert';
+import { handleApiError } from '../../services/utils/errorHandler';
+import type { ApiError } from '../../services/utils/errorHandler';
 
 const SuperAdminDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -50,7 +52,7 @@ const SuperAdminDashboard: React.FC = () => {
   const { isSuperAdmin } = useRole();
   const [dashboardData, setDashboardData] = useState<DashboardStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
-  const [statsError, setStatsError] = useState<string | null>(null);
+  const [statsError, setStatsError] = useState<ApiError | null>(null);
 
   // Redirect if not superadmin
   useEffect(() => {
@@ -74,11 +76,7 @@ const SuperAdminDashboard: React.FC = () => {
         setDashboardData(data);
       } catch (error: any) {
         console.error('Failed to fetch dashboard stats:', error);
-        const errorMessage = error?.response?.data?.detail 
-          || error?.response?.data?.error
-          || error?.message 
-          || 'Failed to load dashboard stats';
-        setStatsError(errorMessage);
+        setStatsError(handleApiError(error));
       } finally {
         setStatsLoading(false);
       }
@@ -295,7 +293,7 @@ const SuperAdminDashboard: React.FC = () => {
   if (statsError) {
     return (
       <Container maxWidth="xl" sx={{ py: 4 }}>
-        <Alert severity="error">{statsError}</Alert>
+        <ErrorAlert error={statsError} overrideMessage="Failed to load dashboard stats." />
       </Container>
     );
   }

@@ -9,6 +9,8 @@ import ErrorAlert from '../../components/common/ErrorAlert';
 import ChatWindow from '../../components/chat/ChatWindow';
 import chatService, { ChatRoom } from '../../services/api/chatService';
 import { RootState } from '../../store';
+import type { ApiError } from '../../services/utils/errorHandler';
+import { handleApiError, createApiError } from '../../services/utils/errorHandler';
 
 const ChatRoomPage: React.FC = () => {
   const { roomId, id } = useParams<{ roomId?: string; id?: string }>();
@@ -16,7 +18,7 @@ const ChatRoomPage: React.FC = () => {
   const navigate = useNavigate();
   const [chatRoom, setChatRoom] = useState<ChatRoom | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
   const resolvedRoomId = roomId || id;
 
   useEffect(() => {
@@ -31,7 +33,7 @@ const ChatRoomPage: React.FC = () => {
       const room = await chatService.getChatRoom(parseInt(resolvedRoomId!));
       setChatRoom(room);
     } catch (err) {
-      setError('Failed to load chat room');
+      setError(handleApiError(err));
       console.error('Error loading chat room:', err);
     } finally {
       setLoading(false);
@@ -48,11 +50,11 @@ const ChatRoomPage: React.FC = () => {
   }
 
   if (error) {
-    return <ErrorAlert message={error} />;
+    return <ErrorAlert error={error} />;
   }
 
   if (!chatRoom) {
-    return <ErrorAlert message="Chat room not found" />;
+    return <ErrorAlert error={createApiError('Chat room not found', 'NOT_FOUND_ERROR')} />;
   }
 
   return (

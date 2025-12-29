@@ -28,6 +28,7 @@ import {
   Lock as LockIcon,
 } from '@mui/icons-material';
 import { useSelector, useDispatch } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import { RootState } from '../../store';
 import {
   setTheme,
@@ -45,11 +46,14 @@ import PaymentIcon from '@mui/icons-material/Payment';
 
 const SettingsPage: React.FC = () => {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const settings = useSelector((state: RootState) => state.settings);
+  const user = useSelector((state: RootState) => state.auth.user);
   const { showSuccess } = useNotification();
   const [hasChanges, setHasChanges] = useState(false);
   const [privacyMsg, setPrivacyMsg] = useState<string | null>(null);
   const [kycStatus, setKycStatus] = useState<any | null>(null);
+  const isStudent = user?.role === 'student';
 
   React.useEffect(() => {
     (async () => {
@@ -299,45 +303,50 @@ const SettingsPage: React.FC = () => {
         </Grid>
 
         {/* Privacy & Data Actions */}
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                <LockIcon sx={{ mr: 1 }} />
-                <Typography variant="h6">Privacy & Data</Typography>
-              </Box>
-              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                <Button variant="outlined" onClick={async () => {
-                  setPrivacyMsg(null);
-                  const res = await fetch('/api/v1/resumes/data/deletion/request/', { method: 'POST' });
-                  const data = await res.json();
-                  if (!res.ok) return setPrivacyMsg(data.error || 'Failed to request deletion');
-                  setPrivacyMsg(`Deletion requested. Token: ${data.token}`);
-                }}>Request Deletion</Button>
-                <Button variant="outlined" onClick={async () => {
-                  setPrivacyMsg(null);
-                  const res = await fetch('/api/v1/resumes/privacy/export/', { method: 'POST' });
-                  const data = await res.json();
-                  if (!res.ok) return setPrivacyMsg(data.error || 'Failed to request export');
-                  setPrivacyMsg('Export job started. Check status shortly.');
-                }}>Request Export</Button>
-                <Button variant="contained" onClick={async () => {
-                  setPrivacyMsg(null);
-                  const res = await fetch('/api/v1/resumes/privacy/export/status/');
-                  const data = await res.json();
-                  if (!res.ok) return setPrivacyMsg('Failed to fetch export status');
-                  if (data.status === 'completed' && data.download_url) {
-                    setPrivacyMsg('Export ready. Downloading...');
-                    window.location.href = data.download_url;
-                  } else {
-                    setPrivacyMsg(`Export status: ${data.status}`);
-                  }
-                }}>Check Export Status</Button>
-              </Box>
-              {privacyMsg && <Alert severity="info" sx={{ mt: 2 }}>{privacyMsg}</Alert>}
-            </CardContent>
-          </Card>
-        </Grid>
+        {isStudent && (
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                  <LockIcon sx={{ mr: 1 }} />
+                  <Typography variant="h6">Privacy & Data</Typography>
+                </Box>
+                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                  <Button variant="outlined" onClick={() => navigate('/student/settings/consent')}>
+                    Manage Consents
+                  </Button>
+                  <Button variant="outlined" onClick={async () => {
+                    setPrivacyMsg(null);
+                    const res = await fetch('/api/v1/resumes/data/deletion/request/', { method: 'POST' });
+                    const data = await res.json();
+                    if (!res.ok) return setPrivacyMsg(data.error || 'Failed to request deletion');
+                    setPrivacyMsg(`Deletion requested. Token: ${data.token}`);
+                  }}>Request Deletion</Button>
+                  <Button variant="outlined" onClick={async () => {
+                    setPrivacyMsg(null);
+                    const res = await fetch('/api/v1/resumes/privacy/export/', { method: 'POST' });
+                    const data = await res.json();
+                    if (!res.ok) return setPrivacyMsg(data.error || 'Failed to request export');
+                    setPrivacyMsg('Export job started. Check status shortly.');
+                  }}>Request Export</Button>
+                  <Button variant="contained" onClick={async () => {
+                    setPrivacyMsg(null);
+                    const res = await fetch('/api/v1/resumes/privacy/export/status/');
+                    const data = await res.json();
+                    if (!res.ok) return setPrivacyMsg('Failed to fetch export status');
+                    if (data.status === 'completed' && data.download_url) {
+                      setPrivacyMsg('Export ready. Downloading...');
+                      window.location.href = data.download_url;
+                    } else {
+                      setPrivacyMsg(`Export status: ${data.status}`);
+                    }
+                  }}>Check Export Status</Button>
+                </Box>
+                {privacyMsg && <Alert severity="info" sx={{ mt: 2 }}>{privacyMsg}</Alert>}
+              </CardContent>
+            </Card>
+          </Grid>
+        )}
 
         {/* Mentor Connect Onboarding */}
         <Grid item xs={12}>

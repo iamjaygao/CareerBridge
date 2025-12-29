@@ -61,7 +61,7 @@ class AppointmentService {
    */
   async getLockStatus(appointmentId: number): Promise<any> {
     const response = await apiClient.get(
-      `/appointments/appointment-lock-status/${appointmentId}/`
+      `/appointments/lock-status/${appointmentId}/`
     );
     return response.data;
   }

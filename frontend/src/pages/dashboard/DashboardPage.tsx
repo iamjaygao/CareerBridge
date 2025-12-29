@@ -9,6 +9,8 @@ import { useNavigate } from 'react-router-dom';
 import { Description, Event, People, Upload, TrendingUp } from '@mui/icons-material';
 import dashboardService, { DashboardStats, RecentActivity } from '../../services/api/dashboardService';
 import { getPopularJobs, getPopularSkills, getPopularIndustries } from '../../services/api/searchService';
+import type { ApiError } from '../../services/utils/errorHandler';
+import { handleApiError } from '../../services/utils/errorHandler';
 
 
 
@@ -16,7 +18,7 @@ const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useSelector((state: RootState) => state.auth);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
   const [stats, setStats] = useState<DashboardStats>({
     upcomingAppointments: 0,
     resumesUploaded: 0,
@@ -59,7 +61,7 @@ const DashboardPage: React.FC = () => {
         }
         setPopularData({ jobs, skills, industries });
       } catch (err) {
-        setError('Failed to load dashboard data. Please try again later.');
+        setError(handleApiError(err));
         console.error('Dashboard data fetch error:', err);
       } finally {
         setLoading(false);
@@ -74,7 +76,7 @@ const DashboardPage: React.FC = () => {
   }
 
   if (error) {
-    return <ErrorAlert message={error} />;
+    return <ErrorAlert error={error} />;
   }
 
   const statsData = [

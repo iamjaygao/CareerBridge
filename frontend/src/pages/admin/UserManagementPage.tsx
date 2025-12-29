@@ -46,8 +46,11 @@ import {
 
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import SkeletonLoader from '../../components/common/SkeletonLoader';
+import ErrorAlert from '../../components/common/ErrorAlert';
 import adminService from '../../services/api/adminService';
 import { RootState } from '../../store';
+import { createApiError, handleApiError } from '../../services/utils/errorHandler';
+import type { ApiError } from '../../services/utils/errorHandler';
 
 interface User {
   user_id: number;
@@ -68,7 +71,7 @@ const UserManagementPage: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [roleFilter, setRoleFilter] = useState('all');
@@ -149,7 +152,12 @@ const UserManagementPage: React.FC = () => {
       }
       else {
         usersData = [];
-        setError(`Unexpected response format from backend. Received: ${typeof response}. Check console for details.`);
+        setError(
+          createApiError(
+            `Unexpected response format from backend. Received: ${typeof response}. Check console for details.`,
+            'VALIDATION_ERROR'
+          )
+        );
       }
       
       // Validate user data structure
@@ -177,12 +185,11 @@ const UserManagementPage: React.FC = () => {
       setTotalPages(totalPagesCount);
       
     } catch (err: any) {
-      const errorMessage = err?.response?.data?.detail 
-        || err?.response?.data?.error 
-        || err?.response?.data?.message
-        || err?.message 
-        || 'Failed to load users. Please check your connection and try again.';
-      setError(`Failed to load users: ${errorMessage}`);
+      const apiError = handleApiError(err);
+      setError({
+        ...apiError,
+        message: `Failed to load users: ${apiError.message}`,
+      });
       setUsers([]); // Clear users on error
       setTotalPages(1);
     } finally {
@@ -234,9 +241,9 @@ const UserManagementPage: React.FC = () => {
   const handleUserAction = (user: User, action: 'edit' | 'delete' | 'block') => {
     if (user.role === 'superadmin') {
       if (action === 'delete') {
-        setError('Super admin accounts cannot be deleted.');
+        setError(createApiError('Super admin accounts cannot be deleted.', 'AUTHORIZATION_ERROR'));
       } else {
-        setError('Super admin accounts cannot be edited or blocked.');
+        setError(createApiError('Super admin accounts cannot be edited or blocked.', 'AUTHORIZATION_ERROR'));
       }
       return;
     }
@@ -258,7 +265,7 @@ const UserManagementPage: React.FC = () => {
 
   const handleCreateUser = (role: 'student' | 'mentor' | 'staff' | 'admin') => {
     if (role === 'admin' && !isSuperAdmin) {
-      setError('Only super admin can create admin accounts.');
+      setError(createApiError('Only super admin can create admin accounts.', 'AUTHORIZATION_ERROR'));
       return;
     }
     setSelectedUser(null);
@@ -294,7 +301,7 @@ const UserManagementPage: React.FC = () => {
       setSuccess('Export request created. View it under Admin > Exports.');
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
-      setError(err?.response?.data?.error || 'Failed to create export.');
+      setError(handleApiError(err));
     } finally {
       setActionLoading(false);
     }
@@ -368,7 +375,7 @@ const UserManagementPage: React.FC = () => {
       fetchUsers(); // Refresh the list
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
-      setError(err.response?.data?.error || err.response?.data?.message || 'Failed to perform action');
+      setError(handleApiError(err));
       console.error('Error performing action:', err);
       // Don't close dialog on error so user can see the error message
     } finally {
@@ -396,9 +403,7 @@ const UserManagementPage: React.FC = () => {
 
       <Box>
         {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
+          <ErrorAlert error={error} overrideMessage="Unable to load users." />
         )}
 
         {success && (
@@ -779,9 +784,7 @@ const UserManagementPage: React.FC = () => {
             </Typography>
           )}
           {error && (
-            <Alert severity="error" sx={{ mt: 2 }}>
-              {error}
-            </Alert>
+            <ErrorAlert error={error} overrideMessage="Action failed. Please review the details and try again." />
           )}
         </DialogContent>
         <DialogActions>

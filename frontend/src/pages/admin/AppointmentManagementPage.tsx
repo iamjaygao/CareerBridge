@@ -25,7 +25,6 @@ import {
   Select,
   MenuItem,
   Pagination,
-  Alert,
   Avatar,
   Grid,
 } from '@mui/material';
@@ -38,7 +37,10 @@ import {
 
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import SkeletonLoader from '../../components/common/SkeletonLoader';
+import ErrorAlert from '../../components/common/ErrorAlert';
 import adminService from '../../services/api/adminService';
+import { handleApiError } from '../../services/utils/errorHandler';
+import type { ApiError } from '../../services/utils/errorHandler';
 
 interface Appointment {
   id: number;
@@ -74,7 +76,7 @@ interface Appointment {
 const AppointmentManagementPage: React.FC = () => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [paymentFilter, setPaymentFilter] = useState('all');
@@ -250,11 +252,7 @@ const AppointmentManagementPage: React.FC = () => {
       
       setAppointments(appointmentsData);
     } catch (err: any) {
-      const errorMessage = err?.response?.data?.detail 
-        || err?.response?.data?.error
-        || err?.message 
-        || 'Failed to load appointments';
-      setError(errorMessage);
+      setError(handleApiError(err));
       console.error('Error fetching appointments:', err);
       // Set empty array on error to prevent showing stale mock data
       setAppointments([]);
@@ -372,9 +370,7 @@ const AppointmentManagementPage: React.FC = () => {
 
       <Box>
         {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
+          <ErrorAlert error={error} overrideMessage="Failed to load appointments." />
         )}
 
         <Card sx={{ mb: 3 }}>

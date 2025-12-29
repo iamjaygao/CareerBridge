@@ -4,6 +4,7 @@ from rest_framework import status
 from django.db.models import Count, Q
 from collections import Counter
 import json
+from typing import Dict, List
 
 @api_view(['GET'])
 def popular_jobs(request):
@@ -182,4 +183,162 @@ def popular_industries(request):
         import logging
         logger = logging.getLogger(__name__)
         logger.error(f"Error fetching popular industries: {e}")
-        return Response([]) 
+        return Response([])
+
+
+@api_view(['GET'])
+def search_all(request):
+    """Lightweight unified search endpoint"""
+    query = (request.GET.get('q') or '').strip()
+    if not query:
+        return Response({'jobs': [], 'mentors': [], 'resumes': []})
+
+    results: Dict[str, List] = {'jobs': [], 'mentors': [], 'resumes': []}
+
+    try:
+        from mentors.models import MentorProfile
+        mentors = MentorProfile.objects.filter(
+            Q(status='approved'),
+            Q(user__username__icontains=query)
+            | Q(current_position__icontains=query)
+            | Q(industry__icontains=query)
+            | Q(headline__icontains=query)
+        ).select_related('user')[:10]
+        results['mentors'] = [
+            {
+                'id': mentor.id,
+                'name': mentor.user.get_full_name() or mentor.user.username,
+                'headline': mentor.headline or mentor.current_position,
+                'industry': mentor.industry,
+            }
+            for mentor in mentors
+        ]
+    except Exception:
+        results['mentors'] = []
+
+    try:
+        from resumes.models import Resume
+        resumes = Resume.objects.filter(
+            Q(title__icontains=query),
+        ).select_related('user')[:10]
+        results['resumes'] = [
+            {
+                'id': resume.id,
+                'title': resume.title,
+                'user_id': resume.user_id,
+            }
+            for resume in resumes
+        ]
+    except Exception:
+        results['resumes'] = []
+
+    return Response(results)
+
+
+@api_view(['GET'])
+def search_suggestions(request):
+    """Return lightweight suggestions across jobs/skills/industries"""
+    query = (request.GET.get('q') or '').strip().lower()
+    limit = int(request.GET.get('limit') or 10)
+
+    if not query:
+        return Response([])
+
+    suggestions = []
+
+    try:
+        jobs = popular_jobs(request).data or []
+        for job in jobs:
+            if query in str(job).lower():
+                suggestions.append({
+                    'id': f'job:{job}',
+                    'text': job,
+                    'type': 'job_title',
+                    'relevance': 0.9,
+                })
+    except Exception:
+        pass
+
+    try:
+        skills = popular_skills(request).data or []
+        for skill in skills:
+            if query in str(skill).lower():
+                suggestions.append({
+                    'id': f'skill:{skill}',
+                    'text': skill,
+                    'type': 'skill',
+                    'relevance': 0.8,
+                })
+    except Exception:
+        pass
+
+    try:
+        industries = popular_industries(request).data or []
+        for industry in industries:
+            if query in str(industry).lower():
+                suggestions.append({
+                    'id': f'industry:{industry}',
+                    'text': industry,
+                    'type': 'industry',
+                    'relevance': 0.7,
+                })
+    except Exception:
+        pass
+
+    return Response(suggestions[:limit])
+
+
+@api_view(['GET'])
+def trending_searches(request):
+    """Return trending search terms (fallback to popular data)"""
+    limit = int(request.GET.get('limit') or 10)
+    trending = []
+
+    try:
+        jobs = popular_jobs(request).data or []
+        trending.extend([
+            {
+                'id': f'job:{job}',
+                'text': job,
+                'type': 'job_title',
+                'relevance': 0.9,
+            }
+            for job in jobs
+        ])
+    except Exception:
+        pass
+
+    return Response(trending[:limit])
+
+
+@api_view(['GET'])
+def search_filters(request):
+    """Return available filter options for search UI"""
+    return Response({
+        'types': [],
+        'industries': [],
+        'skills': [],
+        'locations': [],
+        'experience_levels': [],
+        'price_ranges': [],
+        'availability': [],
+    })
+
+
+@api_view(['GET', 'POST', 'DELETE'])
+def search_history(request):
+    """Placeholder search history endpoint"""
+    if request.method == 'GET':
+        return Response([])
+    return Response({'status': 'ok'})
+
+
+@api_view(['GET'])
+def search_analytics(request):
+    """Placeholder search analytics endpoint"""
+    return Response({
+        'total_searches': 0,
+        'popular_queries': [],
+        'search_trends': [],
+        'no_results_queries': [],
+    })

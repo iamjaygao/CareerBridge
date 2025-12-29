@@ -19,7 +19,6 @@ import {
   DialogContent,
   DialogActions,
   TextField,
-  Alert,
 } from '@mui/material';
 import {
   CheckCircle as ApproveIcon,
@@ -27,7 +26,10 @@ import {
   Visibility as ViewIcon,
 } from '@mui/icons-material';
 import LoadingSpinner from '../../../components/common/LoadingSpinner';
+import ErrorAlert from '../../../components/common/ErrorAlert';
 import adminService from '../../../services/api/adminService';
+import { handleApiError } from '../../../services/utils/errorHandler';
+import type { ApiError } from '../../../services/utils/errorHandler';
 
 interface Payout {
   id: number;
@@ -45,7 +47,7 @@ interface Payout {
 
 const PayoutsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
   const [payouts, setPayouts] = useState<Payout[]>([]);
   const [selectedPayout, setSelectedPayout] = useState<Payout | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -86,11 +88,7 @@ const PayoutsPage: React.FC = () => {
         
         setPayouts(normalizedPayouts);
       } catch (err: any) {
-        const errorMessage = err?.response?.data?.detail 
-          || err?.response?.data?.error
-          || err?.message 
-          || 'Failed to load payouts';
-        setError(errorMessage);
+        setError(handleApiError(err));
         console.error('Failed to fetch payouts:', err);
         setPayouts([]);
       } finally {
@@ -184,9 +182,7 @@ const PayoutsPage: React.FC = () => {
       </Box>
 
       {error && (
-        <Alert severity="error" sx={{ mb: 3 }}>
-          {error}
-        </Alert>
+        <ErrorAlert error={error} overrideMessage="Failed to load payouts." />
       )}
 
       {/* Stats Cards */}
@@ -353,4 +349,3 @@ const PayoutsPage: React.FC = () => {
 };
 
 export default PayoutsPage;
-

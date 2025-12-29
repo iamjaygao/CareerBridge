@@ -60,7 +60,9 @@ export const deleteResume = createAsyncThunk('resumes/delete', async (id: number
 export const analyzeResume = createAsyncThunk(
   'resumes/analyze',
   async (id: number) => {
-    const response = await apiClient.post(`/resumes/${id}/analyze/`, {});
+    const response = await apiClient.post('/resumes/analyze/', {
+      resume_id: id,
+    });
     return response.data;
   }
 );
@@ -101,4 +103,3 @@ const resumeSlice = createSlice({
 
 export const { setSelectedResume, clearError } = resumeSlice.actions;
 export default resumeSlice.reducer;
-

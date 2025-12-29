@@ -38,6 +38,47 @@ class AuthenticationError(ExternalServiceError):
     pass
 
 
+class CircuitBreaker:
+    """Simple circuit breaker for external services"""
+    def __init__(self, failure_threshold: int = 5, reset_timeout: float = 30.0):
+        self.failure_threshold = failure_threshold
+        self.reset_timeout = reset_timeout
+        self.failure_count = 0
+        self.opened_at: Optional[float] = None
+
+    def is_open(self) -> bool:
+        if self.opened_at is None:
+            return False
+        if time.time() - self.opened_at >= self.reset_timeout:
+            return False
+        return True
+
+    def on_success(self) -> None:
+        self.failure_count = 0
+        self.opened_at = None
+
+    def on_failure(self) -> None:
+        self.failure_count += 1
+        if self.failure_count >= self.failure_threshold:
+            self.opened_at = time.time()
+
+
+_service_breakers: Dict[str, CircuitBreaker] = {}
+_service_metrics: Dict[str, Dict[str, Any]] = {}
+
+
+def get_circuit_breaker(service: str) -> CircuitBreaker:
+    if service not in _service_breakers:
+        _service_breakers[service] = CircuitBreaker()
+        _service_metrics[service] = {
+            'success': 0,
+            'timeout': 0,
+            'conn_error': 0,
+            'request_error': 0,
+            'open_events': 0,
+        }
+    return _service_breakers[service]
+
 def retry_on_failure(max_retries: int = 3, delay: float = 1.0, backoff: float = 2.0):
     """
     Decorator to retry function calls on failure
@@ -165,6 +206,20 @@ def make_api_request(
     Raises:
         ExternalServiceError: If request fails
     """
+    breaker = get_circuit_breaker(service)
+
+    if breaker.is_open():
+        _service_metrics[service]['open_events'] += 1
+        try:
+            import sentry_sdk
+            with sentry_sdk.push_scope() as scope:
+                scope.set_tag('service', service)
+                scope.set_tag('circuit', 'open')
+                sentry_sdk.capture_message(f"Circuit open for {service}")
+        except Exception:
+            pass
+        raise ExternalServiceError(f"Circuit open for {service}", service)
+
     try:
         response = requests.request(
             method=method,
@@ -173,13 +228,29 @@ def make_api_request(
             json=data,
             timeout=timeout
         )
-        return validate_response(response, service)
+        result = validate_response(response, service)
+        breaker.on_success()
+        _service_metrics[service]['success'] += 1
+        return result
     except Timeout:
+        breaker.on_failure()
+        _service_metrics[service]['timeout'] += 1
         raise ExternalServiceError(f"Timeout for {service} request", service)
     except ConnectionError:
+        breaker.on_failure()
+        _service_metrics[service]['conn_error'] += 1
         raise ExternalServiceError(f"Connection error for {service}", service)
     except RequestException as e:
+        breaker.on_failure()
+        _service_metrics[service]['request_error'] += 1
         raise ExternalServiceError(f"Request failed for {service}: {e}", service)
+
+
+def get_service_metrics(service: Optional[str] = None) -> Dict[str, Any]:
+    """Expose in-memory service metrics for debugging/health endpoints."""
+    if service:
+        return _service_metrics.get(service, {})
+    return _service_metrics
 
 
 def sanitize_api_key(api_key: str) -> str:

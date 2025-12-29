@@ -8,6 +8,7 @@ import {
   Grid,
   Card,
   CardContent,
+  Alert,
   Chip,
   Button,
   List,
@@ -35,6 +36,8 @@ import ErrorAlert from '../../components/common/ErrorAlert';
 import resumeService from '../../services/api/resumeService';
 import { RootState } from '../../store';
 import { getLandingPathByRole } from '../../utils/roleLanding';
+import { createApiError, handleApiError } from '../../services/utils/errorHandler';
+import type { ApiError } from '../../services/utils/errorHandler';
 
 interface AnalysisResult {
   id: number;
@@ -48,7 +51,6 @@ interface AnalysisResult {
   content_score: number;
   keyword_score: number;
   ats_score: number;
-  extracted_text: string;
   detected_keywords: string[];
   missing_keywords: string[];
   industry_keywords: string[];
@@ -91,8 +93,8 @@ const ResumeAnalysisPage: React.FC = () => {
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [feedback, setFeedback] = useState<FeedbackResult | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
+  const [downloadError, setDownloadError] = useState<ApiError | null>(null);
   const isStudent = user?.role === 'student';
   const basePath = isStudent ? '/student/resumes' : '/resumes';
   const dashboardPath = getLandingPathByRole(user?.role);
@@ -113,7 +115,7 @@ const ResumeAnalysisPage: React.FC = () => {
           console.log('No feedback available yet');
         }
       } catch (err) {
-        setError('Failed to load analysis results');
+        setError(handleApiError(err));
         console.error('Analysis fetch error:', err);
       } finally {
         setLoading(false);
@@ -145,7 +147,7 @@ const ResumeAnalysisPage: React.FC = () => {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (err) {
-      setDownloadError('Failed to download resume');
+      setDownloadError(handleApiError(err));
     }
   };
 
@@ -162,7 +164,11 @@ const ResumeAnalysisPage: React.FC = () => {
   }
 
   if (error || !analysis) {
-    return <ErrorAlert message={error || 'Analysis not found'} />;
+    return (
+      <ErrorAlert
+        error={error || createApiError('Analysis not found', 'NOT_FOUND_ERROR')}
+      />
+    );
   }
 
   return (
@@ -185,8 +191,12 @@ const ResumeAnalysisPage: React.FC = () => {
           >
             Back to Resumes
           </Button>
-          {downloadError && <ErrorAlert message={downloadError} />}
+          {downloadError && <ErrorAlert error={downloadError} />}
         </Box>
+
+        <Alert severity="info" sx={{ mb: 3 }}>
+          AI analysis is provided for informational purposes only and does not constitute professional career advice.
+        </Alert>
 
         {/* Overall Score Card */}
         <Card sx={{ mb: 3 }}>

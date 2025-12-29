@@ -20,6 +20,7 @@ import {
   Assessment,
   Work as WorkIcon,
   Download,
+  Policy,
 } from '@mui/icons-material';
 
 const drawerWidth = 260;

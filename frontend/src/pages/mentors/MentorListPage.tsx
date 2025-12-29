@@ -27,6 +27,7 @@ import MentorCard from '../../components/mentors/MentorCard';
 
 import { MentorFilters } from '../../services/api/mentorService';
 import { getUserRole, canViewFullMentorList } from '../../utils/permissions';
+import { createApiError } from '../../services/utils/errorHandler';
 
 const MentorListPage: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -93,7 +94,7 @@ const MentorListPage: React.FC = () => {
   };
 
   if (loading) return <LoadingSpinner message="Loading mentors..." />;
-  if (error) return <ErrorAlert message={error} />;
+  if (error) return <ErrorAlert error={createApiError(error)} />;
 
 
   return (

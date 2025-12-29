@@ -8,7 +8,7 @@ interface LoginResponse {
 }
 
 interface LoginCredentials {
-  login: string;
+  identifier: string;
   password: string;
 }
 
@@ -19,10 +19,13 @@ class AuthService {
   async login(credentials: LoginCredentials): Promise<LoginResponse> {
     try {
       const response = await apiClient.post('/users/login/', credentials);
-      const { access, refresh, user } = response.data;
+      const { user, tokens } = response.data;
+      const { access, refresh } = tokens || {};
       
       // Store tokens
-      localStorage.setItem('access_token', access);
+      if (access) {
+        localStorage.setItem('access_token', access);
+      }
       if (refresh) {
         localStorage.setItem('refresh_token', refresh);
       }

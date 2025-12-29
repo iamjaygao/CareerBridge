@@ -13,9 +13,9 @@ export const preloadPopularData = async (): Promise<void> => {
   try {
     // Preload popular jobs, skills, industries
     await Promise.all([
-      apiClient.get('/search/popular-jobs/').catch(() => null),
-      apiClient.get('/search/popular-skills/').catch(() => null),
-      apiClient.get('/search/popular-industries/').catch(() => null),
+      apiClient.get('/search/popular/jobs/').catch(() => null),
+      apiClient.get('/search/popular/skills/').catch(() => null),
+      apiClient.get('/search/popular/industries/').catch(() => null),
     ]);
   } catch (error) {
     // Silently fail - this is just preloading
@@ -43,7 +43,7 @@ export const searchAll = async (query: string): Promise<SearchResult> => {
  */
 export const getPopularJobs = async (): Promise<string[]> => {
   try {
-    const response = await apiClient.get('/search/popular-jobs/');
+    const response = await apiClient.get('/search/popular/jobs/');
     return response.data;
   } catch (error) {
     console.error('Failed to get popular jobs:', error);
@@ -56,7 +56,7 @@ export const getPopularJobs = async (): Promise<string[]> => {
  */
 export const getPopularSkills = async (): Promise<string[]> => {
   try {
-    const response = await apiClient.get('/search/popular-skills/');
+    const response = await apiClient.get('/search/popular/skills/');
     return response.data;
   } catch (error) {
     console.error('Failed to get popular skills:', error);
@@ -69,7 +69,7 @@ export const getPopularSkills = async (): Promise<string[]> => {
  */
 export const getPopularIndustries = async (): Promise<string[]> => {
   try {
-    const response = await apiClient.get('/search/popular-industries/');
+    const response = await apiClient.get('/search/popular/industries/');
     return response.data;
   } catch (error) {
     console.error('Failed to get popular industries:', error);
@@ -114,4 +114,3 @@ export default {
   getPopularIndustries,
   fetchWithRetry,
 };
-

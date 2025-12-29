@@ -26,6 +26,8 @@ import appointmentService from '../../services/api/appointmentService';
 import apiClient from '../../services/api/client';
 import { Appointment } from '../../types';
 import { format } from 'date-fns';
+import type { ApiError } from '../../services/utils/errorHandler';
+import { handleApiError } from '../../services/utils/errorHandler';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -52,7 +54,7 @@ const AppointmentListPage: React.FC = () => {
   const { isAuthenticated } = useSelector((state: RootState) => state.auth);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
   const [tabValue, setTabValue] = useState(0);
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
@@ -131,8 +133,8 @@ const AppointmentListPage: React.FC = () => {
       });
       
       setAppointments(transformedAppointments);
-    } catch (err: any) {
-      setError(err?.response?.data?.error || 'Failed to load appointments');
+    } catch (err) {
+      setError(handleApiError(err));
       console.error('Failed to fetch appointments:', err);
     } finally {
       setLoading(false);
@@ -197,7 +199,7 @@ const AppointmentListPage: React.FC = () => {
     }
 
     if (error) {
-      return <ErrorAlert message={error} />;
+      return <ErrorAlert error={error} />;
     }
   }
 

@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { useParams } from 'react-router-dom';
 import {
   Container,
   Grid,
@@ -8,12 +8,10 @@ import {
   Typography,
   Box,
   Rating,
-  Chip,
   Button,
   Paper,
   Tabs,
   Tab,
-  Alert,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -31,6 +29,8 @@ import MentorSidebarCard from '../../components/mentors/MentorSidebarCard';
 import apiClient from '../../services/api/client';
 
 import { MentorDetail, MentorService } from '../../types';
+import { createApiError, handleApiError } from '../../services/utils/errorHandler';
+import type { ApiError } from '../../services/utils/errorHandler';
 
 /* =====================
    Helpers
@@ -72,12 +72,11 @@ interface UISlot {
 
 const MentorDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  const { showSuccess, showError } = useNotification();
+  const { showError } = useNotification();
 
   const [mentor, setMentor] = useState<MentorDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
 
   const [tabValue, setTabValue] = useState(0);
   const [bookingDialogOpen, setBookingDialogOpen] = useState(false);
@@ -99,8 +98,8 @@ const MentorDetailPage: React.FC = () => {
       setLoading(true);
       const data = await mentorService.getMentorById(Number(id));
       setMentor(data);
-    } catch {
-      setError('Failed to load mentor details');
+    } catch (err) {
+      setError(handleApiError(err));
     } finally {
       setLoading(false);
     }
@@ -265,34 +264,70 @@ const MentorDetailPage: React.FC = () => {
     }
   };
 
+  const services = mentor?.services ?? [];
+  const reviews: MentorReview[] = mentor?.reviews ?? [];
+  const activeServices = services.filter(s => s.is_active !== false);
+  const primaryService =
+    mentor?.primary_service_id &&
+    activeServices.find(s => s.id === mentor.primary_service_id);
+  const orderedServices = primaryService
+    ? [primaryService, ...activeServices.filter(s => s.id !== primaryService.id)]
+    : activeServices;
+  const pageTitle =
+    mentor?.display_name ??
+    (
+      `${mentor?.user?.first_name ?? ''} ${mentor?.user?.last_name ?? ''}`.trim() || 'Mentor'
+    );
+
+  const selectedService = useMemo(() => {
+    if (selectedServiceId) {
+      return services.find(service => service.id === selectedServiceId);
+    }
+    return primaryService ?? orderedServices[0];
+  }, [orderedServices, primaryService, selectedServiceId, services]);
+
+  const timezoneLabel = useMemo(() => {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone;
+    } catch {
+      return 'your local time';
+    }
+  }, []);
+
+  const slotGroups = useMemo(() => {
+    return uiSlots.reduce<Record<string, UISlot[]>>((acc, uiSlot) => {
+      const start = parseWallTime(uiSlot.start_time);
+      const dateStr = format(start, 'EEEE, MMM dd');
+      if (!acc[dateStr]) acc[dateStr] = [];
+      acc[dateStr].push(uiSlot);
+      return acc;
+    }, {});
+  }, [uiSlots]);
+
+  const bioText = mentor?.bio
+    ? mentor.bio.replace(/^###\s*/gm, '')
+    : 'No bio available yet.';
+
   /* =====================
      Guards
   ===================== */
 
   if (loading) return <LoadingSpinner />;
-  if (error || !mentor) return <ErrorAlert message={error || 'Mentor not found'} />;
-
-  const services = mentor.services ?? [];
-  const reviews: MentorReview[] = mentor.reviews ?? [];
-  const activeServices = services.filter(s => s.is_active !== false);
-
-  if (activeServices.length === 0) {
-    return <ErrorAlert message="This mentor has no active services available." />;
+  if (error || !mentor) {
+    return (
+      <ErrorAlert
+        error={error || createApiError('Mentor not found', 'NOT_FOUND_ERROR')}
+      />
+    );
   }
 
-  const primaryService =
-    mentor.primary_service_id &&
-    activeServices.find(s => s.id === mentor.primary_service_id);
-
-  const orderedServices = primaryService
-    ? [primaryService, ...activeServices.filter(s => s.id !== primaryService.id)]
-    : activeServices;
-
-  const pageTitle =
-    mentor.display_name ??
-    (
-      `${mentor.user.first_name ?? ''} ${mentor.user.last_name ?? ''}`.trim() || 'Mentor'
+  if (activeServices.length === 0) {
+    return (
+      <ErrorAlert
+        error={createApiError('This mentor has no active services available.', 'NOT_FOUND_ERROR')}
+      />
     );
+  }
   /* =====================
      Render
   ===================== */
@@ -369,8 +404,8 @@ const MentorDetailPage: React.FC = () => {
 
                 <Box sx={{ mt: 3 }}>
                   {tabValue === 0 && (
-                    <Typography sx={{ whiteSpace: 'pre-line' }}> 
-                      {mentor.bio.replace(/^###\s*/gm, '')}
+                    <Typography sx={{ whiteSpace: 'pre-line' }}>
+                      {bioText}
                     </Typography>
                   )}
 
@@ -394,7 +429,7 @@ const MentorDetailPage: React.FC = () => {
                                 size="small"
                                 onClick={() => handleServiceContinue(service)}
                               >
-                                Continue
+                                Book this session
                               </Button>
                             </Box>
                           </Paper>
@@ -405,10 +440,13 @@ const MentorDetailPage: React.FC = () => {
 
                   {tabValue === 2 && (
                     <Box>
-                      {mentor.review_count < 3 ? (
-                        <Typography color="text.secondary">
+                      {mentor.trust_label && (
+                        <Typography color="text.secondary" sx={{ mb: 2 }}>
                           {mentor.trust_label}
                         </Typography>
+                      )}
+                      {reviews.length === 0 ? (
+                        <Typography color="text.secondary">No reviews yet.</Typography>
                       ) : (
                         reviews.map((review: MentorReview) => (
                           <Paper key={review.id} sx={{ p: 2, mb: 2 }}>
@@ -430,9 +468,23 @@ const MentorDetailPage: React.FC = () => {
       </Container>
 
       {/* ===== Booking Dialog ===== */}
-      <Dialog open={bookingDialogOpen} onClose={() => setBookingDialogOpen(false)} fullWidth maxWidth="md">
+        <Dialog open={bookingDialogOpen} onClose={() => setBookingDialogOpen(false)} fullWidth maxWidth="md">
         <DialogTitle>Book Session</DialogTitle>
         <DialogContent>
+          {selectedService && (
+            <Paper sx={{ p: 2, mb: 2 }}>
+              <Typography fontWeight={700}>{selectedService.title}</Typography>
+              {selectedService.description && (
+                <Typography color="text.secondary">{selectedService.description}</Typography>
+              )}
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
+                <Typography color="primary">{selectedService.display_price}</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Times shown in {timezoneLabel}
+                </Typography>
+              </Box>
+            </Paper>
+          )}
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Button
               variant={weekOffset === 0 ? 'contained' : 'outlined'}
@@ -460,34 +512,42 @@ const MentorDetailPage: React.FC = () => {
               <Typography color="text.secondary">No available slots this week</Typography>
             </Box>
           ) : (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, maxHeight: 400, overflow: 'auto' }}>
-              {uiSlots.map((uiSlot) => {
-                const start = parseWallTime(uiSlot.start_time);
-                const end = parseWallTime(uiSlot.end_time);
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 400, overflow: 'auto' }}>
+              {Object.entries(slotGroups).map(([dateLabel, slots]) => (
+                <Box key={dateLabel}>
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                    {dateLabel}
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    {slots.map((uiSlot) => {
+                      const start = parseWallTime(uiSlot.start_time);
+                      const end = parseWallTime(uiSlot.end_time);
 
-                const dateStr = format(start, 'MMM dd');
-                const startTimeStr = format(start, 'HH:mm');
-                const endTimeStr = format(end, 'HH:mm');
+                      const startTimeStr = format(start, 'HH:mm');
+                      const endTimeStr = format(end, 'HH:mm');
 
-                return (
-                  <Button
-                    key={`${uiSlot.parent_slot_id}-${uiSlot.start_time}`}
-                    variant="outlined"
-                    fullWidth
-                    onClick={() => handleSlotClick(uiSlot)}
-                    disabled={disabledSlots.has(uiSlot.parent_slot_id)}
-                    sx={{
-                      justifyContent: 'flex-start',
-                      textTransform: 'none',
-                      py: 1.5,
-                    }}
-                  >
-                    <Typography>
-                      {dateStr} • {startTimeStr} – {endTimeStr}
-                    </Typography>
-                  </Button>
-                );
-              })}
+                      return (
+                        <Button
+                          key={`${uiSlot.parent_slot_id}-${uiSlot.start_time}`}
+                          variant="outlined"
+                          fullWidth
+                          onClick={() => handleSlotClick(uiSlot)}
+                          disabled={disabledSlots.has(uiSlot.parent_slot_id)}
+                          sx={{
+                            justifyContent: 'flex-start',
+                            textTransform: 'none',
+                            py: 1.5,
+                          }}
+                        >
+                          <Typography>
+                            {startTimeStr} – {endTimeStr}
+                          </Typography>
+                        </Button>
+                      );
+                    })}
+                  </Box>
+                </Box>
+              ))}
             </Box>
           )}
         </DialogContent>

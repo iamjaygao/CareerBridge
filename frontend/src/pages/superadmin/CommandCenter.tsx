@@ -30,6 +30,9 @@ import { DashboardStats } from '../../types';
 import { getLandingPathByRole } from '../../utils/roleLanding';
 import { KPICard, AlertPanel, SparklineChart, QuickActions } from '../../components/dashboard';
 import type { AlertItem, QuickAction } from '../../components/dashboard';
+import ErrorAlert from '../../components/common/ErrorAlert';
+import { createApiError, handleApiError } from '../../services/utils/errorHandler';
+import type { ApiError } from '../../services/utils/errorHandler';
 
 const CommandCenter: React.FC = () => {
   const navigate = useNavigate();
@@ -37,7 +40,7 @@ const CommandCenter: React.FC = () => {
   const { isSuperAdmin } = useRole();
   const [dashboardData, setDashboardData] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
 
   // Redirect if not superadmin
   useEffect(() => {
@@ -61,7 +64,7 @@ const CommandCenter: React.FC = () => {
         setDashboardData(data);
       } catch (error: any) {
         console.error('Failed to fetch dashboard stats:', error);
-        setError(error?.response?.data?.detail || 'Failed to load dashboard data');
+        setError(handleApiError(error));
       } finally {
         setLoading(false);
       }
@@ -86,7 +89,10 @@ const CommandCenter: React.FC = () => {
     return (
       <Container maxWidth="xl" sx={{ py: 4 }}>
         <Paper sx={{ p: 3 }}>
-          <Typography color="error">{error || 'Failed to load dashboard data'}</Typography>
+          <ErrorAlert
+            error={error || createApiError('Failed to load dashboard data', 'NOT_FOUND_ERROR')}
+            overrideMessage="Failed to load dashboard data."
+          />
         </Paper>
       </Container>
     );

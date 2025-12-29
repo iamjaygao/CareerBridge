@@ -28,13 +28,15 @@ import LoadingSpinner from '../../components/common/LoadingSpinner';
 import ErrorAlert from '../../components/common/ErrorAlert';
 import chatService, { ChatRoom } from '../../services/api/chatService';
 import { RootState } from '../../store';
+import type { ApiError } from '../../services/utils/errorHandler';
+import { handleApiError } from '../../services/utils/errorHandler';
 
 const ChatListPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useSelector((state: RootState) => state.auth);
   const [chatRooms, setChatRooms] = useState<ChatRoom[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
 
   useEffect(() => {
     loadChatRooms();
@@ -46,7 +48,7 @@ const ChatListPage: React.FC = () => {
       const rooms = await chatService.getChatRooms();
       setChatRooms(rooms);
     } catch (err) {
-      setError('Failed to load chat rooms');
+      setError(handleApiError(err));
       console.error('Error loading chat rooms:', err);
     } finally {
       setLoading(false);
@@ -86,7 +88,7 @@ const ChatListPage: React.FC = () => {
   }
 
   if (error) {
-    return <ErrorAlert message={error} />;
+    return <ErrorAlert error={error} />;
   }
 
   return (

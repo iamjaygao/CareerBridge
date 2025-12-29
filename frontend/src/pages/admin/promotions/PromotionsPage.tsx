@@ -24,7 +24,6 @@ import {
   Select,
   MenuItem,
   Grid,
-  Alert,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -33,7 +32,10 @@ import {
   ContentCopy as CopyIcon,
 } from '@mui/icons-material';
 import LoadingSpinner from '../../../components/common/LoadingSpinner';
+import ErrorAlert from '../../../components/common/ErrorAlert';
 import adminService from '../../../services/api/adminService';
+import { handleApiError } from '../../../services/utils/errorHandler';
+import type { ApiError } from '../../../services/utils/errorHandler';
 
 interface Promotion {
   id: number;
@@ -50,7 +52,7 @@ interface Promotion {
 
 const PromotionsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingPromotion, setEditingPromotion] = useState<Promotion | null>(null);
@@ -97,11 +99,7 @@ const PromotionsPage: React.FC = () => {
         
         setPromotions(normalizedPromotions);
       } catch (err: any) {
-        const errorMessage = err?.response?.data?.detail 
-          || err?.response?.data?.error
-          || err?.message 
-          || 'Failed to load promotions';
-        setError(errorMessage);
+        setError(handleApiError(err));
         console.error('Failed to fetch promotions:', err);
         setPromotions([]);
       } finally {
@@ -273,9 +271,7 @@ const PromotionsPage: React.FC = () => {
       </Box>
 
       {error && (
-        <Alert severity="error" sx={{ mb: 3 }}>
-          {error}
-        </Alert>
+        <ErrorAlert error={error} overrideMessage="Failed to load promotions." />
       )}
 
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
@@ -472,4 +468,3 @@ const PromotionsPage: React.FC = () => {
 };
 
 export default PromotionsPage;
-

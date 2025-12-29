@@ -1,5 +1,7 @@
 import time
 import json
+import re
+from typing import Optional
 from decimal import Decimal
 from django.core.cache import cache
 from django.utils import timezone
@@ -9,6 +11,9 @@ from careerbridge.external_services.ai_services.openai_service import openai_ser
 
 class ResumeAnalysisService:
     """Service class for resume analysis operations"""
+
+    MAX_PROMPT_CHARS = 8000
+    MAX_STORED_CHARS = 1500
     
     @staticmethod
     def analyze_resume(resume_id, industry=None, job_title=None):
@@ -23,19 +28,20 @@ class ResumeAnalysisService:
 
             # 1. 提取简历文本（假设resume有extracted_text字段或需OCR/解析）
             # 这里简化为直接读取resume.file内容（实际应做PDF解析）
-            resume_text = None
-            if hasattr(resume, 'extracted_text') and resume.extracted_text:
-                resume_text = resume.extracted_text
-            else:
-                # 简化：如有file字段，尝试读取文本
-                try:
-                    with resume.file.open('r') as f:
-                        resume_text = f.read()
-                except Exception:
-                    resume_text = resume.title  # fallback
+            extraction_fallback_used = False
+            resume_text = ResumeAnalysisService._extract_resume_text(resume)
+            if not resume_text:
+                resume_text = resume.title
+                extraction_fallback_used = True
+
+            minimized_text = ResumeAnalysisService._minimize_resume_text(resume_text)
+            stored_text = ResumeAnalysisService._truncate_text(
+                ResumeAnalysisService._redact_pii(resume_text),
+                ResumeAnalysisService.MAX_STORED_CHARS
+            )
 
             # 2. 调用OpenAI分析
-            ai_result = openai_service.analyze_resume(resume_text or resume.title)
+            ai_result = openai_service.analyze_resume(minimized_text or resume.title)
             processing_time = time.time() - start_time
 
             # 3. 解析AI结果，映射到ResumeAnalysis字段
@@ -45,7 +51,7 @@ class ResumeAnalysisService:
                 'content_score': Decimal(str(ai_result.get('skill_analysis', {}).get('technical_skills', []).__len__() * 10 or 70)),
                 'keyword_score': Decimal(str(ai_result.get('ats_compatibility', {}).get('score', 70))),
                 'ats_score': Decimal(str(ai_result.get('ats_compatibility', {}).get('score', 70))),
-                'extracted_text': resume_text or '',
+                'extracted_text': stored_text or '',
                 'detected_keywords': ai_result.get('skill_analysis', {}).get('technical_skills', []),
                 'missing_keywords': ai_result.get('skill_analysis', {}).get('missing_skills', []),
                 'industry_keywords': ai_result.get('ats_compatibility', {}).get('issues', []),
@@ -68,6 +74,7 @@ class ResumeAnalysisService:
                 resume=resume,
                 **analysis_data
             )
+            analysis.fallback_used = extraction_fallback_used
 
             # 5. 创建反馈（AI返回的summary/strengths/weaknesses/suggestions）
             feedback_data = {
@@ -100,6 +107,77 @@ class ResumeAnalysisService:
             resume.status = 'failed'
             resume.save()
             raise e
+
+    @staticmethod
+    def _truncate_text(text: str, limit: int) -> str:
+        if not text:
+            return ""
+        return text[:limit]
+
+    @staticmethod
+    def _redact_pii(text: str) -> str:
+        if not text:
+            return ""
+        redacted = text
+        redacted = re.sub(r'[\w\.-]+@[\w\.-]+\.\w+', '[REDACTED_EMAIL]', redacted)
+        redacted = re.sub(r'(\+?\d[\d\-\(\) ]{7,}\d)', '[REDACTED_PHONE]', redacted)
+        redacted = re.sub(r'(?im)^(address|location|地址)[:\\s].*$', '[REDACTED_ADDRESS]', redacted)
+        redacted = re.sub(r'https?://\\S+', '[REDACTED_URL]', redacted)
+        return redacted
+
+    @staticmethod
+    def _minimize_resume_text(text: str) -> str:
+        redacted = ResumeAnalysisService._redact_pii(text)
+        return ResumeAnalysisService._truncate_text(redacted, ResumeAnalysisService.MAX_PROMPT_CHARS)
+
+    @staticmethod
+    def _extract_resume_text(resume: Resume) -> Optional[str]:
+        if hasattr(resume, 'extracted_text') and resume.extracted_text:
+            return resume.extracted_text
+
+        if not resume.file:
+            return None
+
+        file_type = (resume.file_type or '').lower()
+
+        if file_type == 'pdf':
+            return ResumeAnalysisService._extract_pdf_text(resume)
+        if file_type in ('docx', 'doc'):
+            return ResumeAnalysisService._extract_docx_text(resume)
+
+        return None
+
+    @staticmethod
+    def _extract_pdf_text(resume: Resume) -> Optional[str]:
+        try:
+            from PyPDF2 import PdfReader
+        except Exception:
+            return None
+
+        try:
+            with resume.file.open('rb') as f:
+                reader = PdfReader(f)
+                pages = [page.extract_text() or '' for page in reader.pages]
+                text = '\n'.join(pages).strip()
+                return text or None
+        except Exception:
+            return None
+
+    @staticmethod
+    def _extract_docx_text(resume: Resume) -> Optional[str]:
+        try:
+            import docx
+        except Exception:
+            return None
+
+        try:
+            with resume.file.open('rb') as f:
+                document = docx.Document(f)
+                paragraphs = [para.text for para in document.paragraphs if para.text]
+                text = '\n'.join(paragraphs).strip()
+                return text or None
+        except Exception:
+            return None
     
     @staticmethod
     def _generate_mock_analysis(resume, industry=None, job_title=None):

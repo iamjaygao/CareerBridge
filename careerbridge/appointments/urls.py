@@ -12,6 +12,8 @@ urlpatterns = [
     # Appointment related
     path('appointments/', views.AppointmentListView.as_view(), name='appointment-list'),
     path('appointments/<int:pk>/', views.AppointmentDetailView.as_view(), name='appointment-detail'),
+    path('appointments/<int:pk>/cancel/', views.AppointmentCancelView.as_view(), name='appointment-cancel'),
+    path('appointments/<int:pk>/rate/', views.AppointmentRateView.as_view(), name='appointment-rate'),
     
     # Mentor appointment management
     path('mentor/appointments/', views.MentorAppointmentListView.as_view(), name='mentor-appointment-list'),

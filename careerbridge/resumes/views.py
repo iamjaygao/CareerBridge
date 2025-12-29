@@ -6,11 +6,16 @@ from django.utils import timezone
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from django.core.exceptions import PermissionDenied
+import logging
+from rest_framework.throttling import UserRateThrottle
+from rest_framework.settings import api_settings
+from django.http import FileResponse
 
 from .models import (
     Resume, ResumeAnalysis, ResumeFeedback, ResumeComparison,
     ResumeTemplate, ResumeExport, JobDescription, ResumeJobMatch,
-    KeywordMatch, UserSubscription, InvitationCode
+    KeywordMatch, UserSubscription, InvitationCode,
+    UserDataConsent, LegalDisclaimer, UserDisclaimerConsent
 )
 from .serializers import (
     ResumeSerializer, ResumeCreateSerializer, ResumeAnalysisSerializer,
@@ -21,7 +26,9 @@ from .serializers import (
     ResumeAnalysisResultSerializer, JobDescriptionSerializer, ResumeJobMatchSerializer,
     KeywordMatchSerializer, UserSubscriptionSerializer,
     InvitationCodeSerializer,
-    ExternalJobCrawlRequestSerializer, ExternalResumeMatchRequestSerializer
+    ExternalJobCrawlRequestSerializer, ExternalResumeMatchRequestSerializer,
+    UserDataConsentSerializer, LegalDisclaimerSerializer,
+    UserDisclaimerConsentSerializer, DataDeletionRequestSerializer
 )
 from .services import (
     ResumeAnalysisService, ResumeSearchService, ResumeStatsService,
@@ -29,6 +36,7 @@ from .services import (
 )
 # JDManager functionality moved to external service
 from .tier_service import TierFactory, TierService
+from .data_management import DataConsentManager, LegalComplianceManager
 from .referral_service import ReferralService, PricingService
 from .external_services import ExternalServiceManager
 from .models import ExternalServiceIntegration
@@ -37,6 +45,34 @@ from .models import DataDeletionRequest, DataExportJob
 import secrets
 from notifications.services.dispatcher import notify
 from notifications.services.rules import NotificationType
+from careerbridge.external_services.utils import ExternalServiceError, RateLimitError, AuthenticationError
+
+logger = logging.getLogger(__name__)
+
+
+def _get_client_ip(request) -> str:
+    forwarded = request.META.get('HTTP_X_FORWARDED_FOR')
+    if forwarded:
+        return forwarded.split(',')[0].strip()
+    return request.META.get('REMOTE_ADDR', '')
+
+
+def _require_student(request) -> None:
+    if getattr(request.user, 'role', None) != 'student':
+        raise PermissionDenied("Student role required")
+
+
+class BurstRateThrottle(UserRateThrottle):
+    scope = 'burst'
+
+
+class AIAnalysisRateThrottle(UserRateThrottle):
+    scope = 'ai_analysis'
+    rate = '10/day'
+
+    def get_rate(self):
+        rates = getattr(api_settings, 'DEFAULT_THROTTLE_RATES', {}) or {}
+        return rates.get(self.scope, self.rate)
 
 class ResumeListView(generics.ListCreateAPIView):
     """Resume List and Create View with tier support"""
@@ -123,10 +159,22 @@ class ResumeDetailView(generics.RetrieveUpdateDestroyAPIView):
     def delete(self, request, *args, **kwargs):
         return super().delete(request, *args, **kwargs)
 
+class ResumeDownloadView(generics.GenericAPIView):
+    """Download a resume file"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        resume = get_object_or_404(Resume, id=kwargs.get('pk'), user=request.user)
+        if not resume.file:
+            return Response({'error': 'Resume file not found'}, status=status.HTTP_404_NOT_FOUND)
+        filename = resume.file.name.split('/')[-1]
+        return FileResponse(resume.file.open('rb'), as_attachment=True, filename=filename)
+
 class ResumeAnalysisView(generics.CreateAPIView):
     """Analyze a resume using AI"""
     serializer_class = ResumeAnalysisRequestSerializer
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [AIAnalysisRateThrottle]
     
     @swagger_auto_schema(
         operation_description="Analyze a resume using AI",
@@ -144,6 +192,10 @@ class ResumeAnalysisView(generics.CreateAPIView):
         resume_id = serializer.validated_data['resume_id']
         industry = serializer.validated_data.get('industry')
         job_title = serializer.validated_data.get('job_title')
+        consent = serializer.validated_data.get('consent', False)
+        consent_version = serializer.validated_data.get('consent_version', '1.0')
+        ip_address = _get_client_ip(request)
+        user_agent = request.META.get('HTTP_USER_AGENT', '')
         
         # Check if resume exists and belongs to user
         resume = get_object_or_404(Resume, id=resume_id, user=request.user)
@@ -156,6 +208,55 @@ class ResumeAnalysisView(generics.CreateAPIView):
                 'analysis': ResumeAnalysisSerializer(resume.analysis).data,
                 'feedback': ResumeFeedbackSerializer(resume.analysis.feedback).data
             }, status=status.HTTP_200_OK)
+
+        # Check consent requirements
+        required_disclaimers = LegalComplianceManager.get_required_disclaimers(request.user)
+        if consent:
+            DataConsentManager.grant_consent(
+                request.user,
+                'data_processing',
+                ip_address=ip_address,
+                user_agent=user_agent,
+                consent_version=consent_version
+            )
+            for disclaimer in required_disclaimers:
+                LegalComplianceManager.record_disclaimer_consent(
+                    request.user,
+                    disclaimer,
+                    ip_address=ip_address,
+                    user_agent=user_agent
+                )
+            required_disclaimers = []
+
+        missing_data_consent = not DataConsentManager.has_consent(request.user, 'data_processing')
+        if missing_data_consent or required_disclaimers:
+            return Response(
+                {
+                    'error': 'Consent required before resume analysis',
+                    'missing_data_processing_consent': missing_data_consent,
+                    'required_disclaimers': [
+                        {
+                            'type': disclaimer.disclaimer_type,
+                            'title': disclaimer.title,
+                            'version': disclaimer.version
+                        }
+                        for disclaimer in required_disclaimers
+                    ],
+                },
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Check tier quota
+        tier_service = TierService(request.user)
+        if not tier_service.can_analyze_resume():
+            logger.info(
+                "Resume analysis blocked: quota exceeded",
+                extra={"user_id": request.user.id, "resume_id": resume_id}
+            )
+            return Response(
+                {'error': 'Monthly analysis limit reached. Upgrade to Premium for unlimited analyses.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
         
         try:
             # Perform analysis
@@ -167,12 +268,33 @@ class ResumeAnalysisView(generics.CreateAPIView):
                 'analysis': ResumeAnalysisSerializer(analysis).data,
                 'feedback': ResumeFeedbackSerializer(analysis.feedback).data,
                 'processing_time': analysis.processing_time,
-                'analysis_status': 'completed'
+                'analysis_status': 'completed_with_fallback' if getattr(analysis, 'fallback_used', False) else 'completed'
             }
+
+            tier_service.increment_analysis_count()
             
             return Response(result_data, status=status.HTTP_200_OK)
             
+        except ExternalServiceError as e:
+            status_code = status.HTTP_502_BAD_GATEWAY
+            if isinstance(e, RateLimitError):
+                status_code = status.HTTP_429_TOO_MANY_REQUESTS
+            elif isinstance(e, AuthenticationError):
+                status_code = status.HTTP_502_BAD_GATEWAY
+
+            logger.exception(
+                "Resume analysis external service failed",
+                extra={"user_id": request.user.id, "resume_id": resume_id, "service": e.service}
+            )
+            return Response(
+                {'error': e.message, 'service': e.service},
+                status=status_code
+            )
         except Exception as e:
+            logger.exception(
+                "Resume analysis failed",
+                extra={"user_id": request.user.id, "resume_id": resume_id}
+            )
             return Response({
                 'error': str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
@@ -194,6 +316,19 @@ class ResumeAnalysisDetailView(generics.RetrieveAPIView):
     def get(self, request, *args, **kwargs):
         return super().get(request, *args, **kwargs)
 
+class ResumeAnalysisByResumeView(generics.RetrieveAPIView):
+    """Get analysis results by resume id"""
+    serializer_class = ResumeAnalysisSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self):
+        resume_id = self.kwargs.get('resume_id')
+        return get_object_or_404(
+            ResumeAnalysis,
+            resume_id=resume_id,
+            resume__user=self.request.user
+        )
+
 class ResumeFeedbackView(generics.RetrieveAPIView):
     """Get feedback for a resume analysis"""
     serializer_class = ResumeFeedbackSerializer
@@ -211,10 +346,18 @@ class ResumeFeedbackView(generics.RetrieveAPIView):
     def get(self, request, *args, **kwargs):
         return super().get(request, *args, **kwargs)
 
-from rest_framework.throttling import UserRateThrottle
+class ResumeFeedbackByResumeView(generics.RetrieveAPIView):
+    """Get feedback by resume id"""
+    serializer_class = ResumeFeedbackSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
-class BurstRateThrottle(UserRateThrottle):
-    scope = 'burst'
+    def get_object(self):
+        resume_id = self.kwargs.get('resume_id')
+        return get_object_or_404(
+            ResumeFeedback,
+            analysis__resume_id=resume_id,
+            analysis__resume__user=self.request.user
+        )
 
 class ExternalJobCrawlerView(generics.CreateAPIView):
     """Trigger external job crawling and store results"""
@@ -248,6 +391,14 @@ class ExternalJobCrawlerView(generics.CreateAPIView):
                 status=status.HTTP_200_OK
             )
 
+        except ExternalServiceError as e:
+            status_code = status.HTTP_502_BAD_GATEWAY
+            if isinstance(e, RateLimitError):
+                status_code = status.HTTP_429_TOO_MANY_REQUESTS
+            return Response(
+                {'error': e.message, 'service': e.service, 'fallback': True},
+                status=status_code
+            )
         except Exception:
             return Response(
                 {'error': 'External service unavailable', 'fallback': True},
@@ -295,6 +446,14 @@ class ExternalResumeMatcherView(generics.CreateAPIView):
                 status=status.HTTP_200_OK
             )
 
+        except ExternalServiceError as e:
+            status_code = status.HTTP_502_BAD_GATEWAY
+            if isinstance(e, RateLimitError):
+                status_code = status.HTTP_429_TOO_MANY_REQUESTS
+            return Response(
+                {'error': e.message, 'service': e.service, 'fallback': True},
+                status=status_code
+            )
         except Exception:
             return Response(
                 {'error': 'External service unavailable', 'fallback': True},
@@ -302,7 +461,7 @@ class ExternalResumeMatcherView(generics.CreateAPIView):
             )
 class ExternalServicesHealthView(generics.GenericAPIView):
     """Health check for external service integrations (ResumeMatcher, JobCrawler)"""
-    permission_classes = [permissions.AllowAny]  # Allow public access for health checks
+    permission_classes = [permissions.IsAuthenticated]
 
     @swagger_auto_schema(
         operation_description="Check health/status of configured external services",
@@ -1454,9 +1613,135 @@ class DataDeletionRequestView(generics.CreateAPIView):
 
     @swagger_auto_schema(operation_description="Create a data deletion request")
     def post(self, request, *args, **kwargs):
+        _require_student(request)
         tok = secrets.token_hex(16)
         req = DataDeletionRequest.objects.create(user=request.user, token=tok)
         return Response({'request_id': req.id, 'token': req.token, 'status': req.status})
+
+
+class DataDeletionRequestListView(generics.ListAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = DataDeletionRequestSerializer
+
+    def get_queryset(self):
+        _require_student(self.request)
+        return DataDeletionRequest.objects.filter(user=self.request.user).order_by('-requested_at')
+
+
+class LegalDisclaimerListView(generics.ListAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = LegalDisclaimerSerializer
+
+    def get_queryset(self):
+        _require_student(self.request)
+        return LegalDisclaimer.objects.filter(is_active=True).order_by('-effective_date')
+
+
+class LegalDisclaimerDetailView(generics.RetrieveAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = LegalDisclaimerSerializer
+    lookup_field = 'disclaimer_type'
+
+    def get_object(self):
+        _require_student(self.request)
+        return get_object_or_404(
+            LegalDisclaimer,
+            disclaimer_type=self.kwargs['disclaimer_type'],
+            is_active=True
+        )
+
+
+class DataConsentView(generics.GenericAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        _require_student(request)
+        data_consents = UserDataConsent.objects.filter(user=request.user)
+        disclaimer_consents = UserDisclaimerConsent.objects.filter(user=request.user).select_related('disclaimer')
+        required = LegalComplianceManager.get_required_disclaimers(request.user)
+
+        return Response({
+            'data_consents': UserDataConsentSerializer(data_consents, many=True).data,
+            'disclaimer_consents': UserDisclaimerConsentSerializer(disclaimer_consents, many=True).data,
+            'required_disclaimers': LegalDisclaimerSerializer(required, many=True).data,
+        })
+
+    @swagger_auto_schema(
+        operation_description="Grant data processing consent and optional disclaimer consents",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'consent_type': openapi.Schema(type=openapi.TYPE_STRING, description="Consent type"),
+                'consent_version': openapi.Schema(type=openapi.TYPE_STRING, description="Consent version"),
+                'disclaimer_types': openapi.Schema(
+                    type=openapi.TYPE_ARRAY,
+                    items=openapi.Items(type=openapi.TYPE_STRING),
+                    description="Disclaimer types to record consent for"
+                ),
+            },
+        )
+    )
+    def post(self, request, *args, **kwargs):
+        _require_student(request)
+        consent_type = request.data.get('consent_type', 'data_processing')
+        consent_version = request.data.get('consent_version', '1.0')
+        disclaimer_types = request.data.get('disclaimer_types', [])
+
+        ip_address = _get_client_ip(request)
+        user_agent = request.META.get('HTTP_USER_AGENT', '')
+
+        DataConsentManager.grant_consent(
+            request.user,
+            consent_type,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            consent_version=consent_version
+        )
+
+        if disclaimer_types:
+            for disclaimer_type in disclaimer_types:
+                disclaimer = LegalComplianceManager.get_active_disclaimer(disclaimer_type)
+                if disclaimer:
+                    LegalComplianceManager.record_disclaimer_consent(
+                        request.user,
+                        disclaimer,
+                        ip_address=ip_address,
+                        user_agent=user_agent
+                    )
+
+        return self.get(request, *args, **kwargs)
+
+
+class RevokeConsentView(generics.GenericAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="Revoke data processing or disclaimer consent",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'consent_type': openapi.Schema(type=openapi.TYPE_STRING, description="Consent type to revoke"),
+                'disclaimer_type': openapi.Schema(type=openapi.TYPE_STRING, description="Disclaimer type to revoke"),
+            },
+        )
+    )
+    def post(self, request, *args, **kwargs):
+        _require_student(request)
+        consent_type = request.data.get('consent_type')
+        disclaimer_type = request.data.get('disclaimer_type')
+
+        if consent_type:
+            DataConsentManager.revoke_consent(request.user, consent_type)
+
+        if disclaimer_type:
+            disclaimer = LegalComplianceManager.get_active_disclaimer(disclaimer_type)
+            if disclaimer:
+                UserDisclaimerConsent.objects.filter(
+                    user=request.user,
+                    disclaimer=disclaimer
+                ).delete()
+
+        return Response({'status': 'ok'})
 
 
 class DataDeletionVerificationView(generics.GenericAPIView):
@@ -1464,6 +1749,7 @@ class DataDeletionVerificationView(generics.GenericAPIView):
 
     @swagger_auto_schema(operation_description="Verify a data deletion request by token")
     def post(self, request, request_id, token, *args, **kwargs):
+        _require_student(request)
         req = get_object_or_404(DataDeletionRequest, id=request_id, user=request.user)
         if req.token != token:
             return Response({'error': 'Invalid token'}, status=status.HTTP_400_BAD_REQUEST)
@@ -1477,6 +1763,7 @@ class DataDeletionStatusView(generics.RetrieveAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
+        _require_student(request)
         latest = DataDeletionRequest.objects.filter(user=request.user).order_by('-requested_at').first()
         if not latest:
             return Response({'status': 'none'})
@@ -1487,6 +1774,7 @@ class PrivacyRightsView(generics.GenericAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
+        _require_student(request)
         return Response({'rights': ['access', 'rectification', 'erasure', 'portability', 'restriction', 'objection']})
 
 
@@ -1494,6 +1782,7 @@ class DataExportView(generics.CreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
+        _require_student(request)
         job = DataExportJob.objects.create(user=request.user)
         try:
             from .tasks import build_user_data_export
@@ -1508,6 +1797,7 @@ class DataExportStatusView(generics.RetrieveAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
+        _require_student(request)
         job = DataExportJob.objects.filter(user=request.user).order_by('-requested_at').first()
         if not job:
             return Response({'status': 'none'})
@@ -1534,7 +1824,7 @@ class DataExportStatusView(generics.RetrieveAPIView):
 # JobCrawler API proxy views
 class JobCrawlerSearchView(generics.GenericAPIView):
     """Direct proxy to JobCrawler search endpoint"""
-    permission_classes = [permissions.AllowAny]  # Allow public access for testing
+    permission_classes = [permissions.IsAuthenticated]
     
     def get(self, request, *args, **kwargs):
         # Extract query parameters
@@ -1557,7 +1847,7 @@ class JobCrawlerSearchView(generics.GenericAPIView):
 
 class JobCrawlerTrendingView(generics.GenericAPIView):
     """Direct proxy to JobCrawler trending jobs endpoint"""
-    permission_classes = [permissions.AllowAny]  # Allow public access for testing
+    permission_classes = [permissions.IsAuthenticated]
     
     def get(self, request, *args, **kwargs):
         try:
@@ -1570,7 +1860,7 @@ class JobCrawlerTrendingView(generics.GenericAPIView):
 
 class JobCrawlerSalaryView(generics.GenericAPIView):
     """Direct proxy to JobCrawler salary data endpoint"""
-    permission_classes = [permissions.AllowAny]  # Allow public access for testing
+    permission_classes = [permissions.IsAuthenticated]
     
     def get(self, request, *args, **kwargs):
         job_title = request.GET.get('job_title', 'Software Engineer')
@@ -1590,7 +1880,7 @@ class JobCrawlerSalaryView(generics.GenericAPIView):
 
 class JobCrawlerSkillsView(generics.GenericAPIView):
     """Direct proxy to JobCrawler skills data endpoint"""
-    permission_classes = [permissions.AllowAny]  # Allow public access for testing
+    permission_classes = [permissions.IsAuthenticated]
     
     def get(self, request, *args, **kwargs):
         job_title = request.GET.get('job_title', 'Data Scientist')

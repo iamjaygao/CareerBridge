@@ -1,9 +1,11 @@
+import os
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from .models import (
     Resume, ResumeAnalysis, ResumeFeedback,
     ResumeComparison, ResumeTemplate, ResumeExport,
-    JobDescription, ResumeJobMatch, KeywordMatch, UserSubscription, InvitationCode
+    JobDescription, ResumeJobMatch, KeywordMatch, UserSubscription, InvitationCode,
+    UserDataConsent, LegalDisclaimer, UserDisclaimerConsent, DataDeletionRequest
 )
 
 User = get_user_model()
@@ -70,6 +72,32 @@ class ResumeCreateSerializer(serializers.ModelSerializer):
         if file_extension not in allowed_types:
             raise serializers.ValidationError("Only PDF, DOC, and DOCX files are allowed")
 
+        header = value.read(8)
+        value.seek(0)
+        if file_extension == 'pdf' and not header.startswith(b'%PDF-'):
+            raise serializers.ValidationError("Invalid PDF file signature")
+        if file_extension == 'docx' and not header.startswith(b'PK'):
+            raise serializers.ValidationError("Invalid DOCX file signature")
+        if file_extension == 'doc' and not header.startswith(b'\xD0\xCF\x11\xE0'):
+            raise serializers.ValidationError("Invalid DOC file signature")
+
+        if os.environ.get('CLAMAV_ENABLED', '').lower() == 'true':
+            try:
+                import clamd
+            except Exception:
+                raise serializers.ValidationError("Virus scanner not available")
+
+            try:
+                scanner = clamd.ClamdUnixSocket()
+                scan_result = scanner.instream(value)
+                value.seek(0)
+                if scan_result and scan_result.get('stream', [None, 'OK'])[1] != 'OK':
+                    raise serializers.ValidationError("File failed virus scan")
+            except serializers.ValidationError:
+                raise
+            except Exception:
+                raise serializers.ValidationError("Virus scan failed")
+
         return value
 
     def create(self, validated_data):
@@ -91,7 +119,7 @@ class ResumeAnalysisSerializer(serializers.ModelSerializer):
         model = ResumeAnalysis
         fields = (
             'id', 'resume', 'overall_score', 'structure_score', 'content_score',
-            'keyword_score', 'ats_score', 'extracted_text', 'detected_keywords',
+            'keyword_score', 'ats_score', 'detected_keywords',
             'missing_keywords', 'industry_keywords', 'technical_skills', 'soft_skills',
             'skill_gaps', 'experience_years', 'job_titles', 'companies',
             'education_level', 'institutions', 'certifications', 'analysis_version',
@@ -211,6 +239,8 @@ class ResumeAnalysisRequestSerializer(serializers.Serializer):
     resume_id = serializers.IntegerField(help_text="ID of the resume to analyze")
     industry = serializers.CharField(max_length=50, required=False, help_text="Target industry for analysis")
     job_title = serializers.CharField(max_length=100, required=False, help_text="Target job title for analysis")
+    consent = serializers.BooleanField(required=False, default=False, help_text="User consent to data processing and AI analysis")
+    consent_version = serializers.CharField(max_length=10, required=False, default="1.0", help_text="Consent policy version")
 
 class ResumeSearchSerializer(serializers.Serializer):
     """Serializer for resume search requests"""
@@ -426,4 +456,36 @@ class InvitationCodeSerializer(serializers.ModelSerializer):
             'id', 'inviter', 'inviter_username', 'invitee', 'invitee_username',
             'code', 'is_used', 'is_expired', 'inviter_reward_days',
             'invitee_reward_days', 'created_at', 'used_at', 'expires_at'
-        ] 
+        ]
+
+
+class UserDataConsentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserDataConsent
+        fields = (
+            'id', 'consent_type', 'is_granted', 'granted_at',
+            'revoked_at', 'consent_version', 'ip_address', 'user_agent'
+        )
+
+
+class LegalDisclaimerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LegalDisclaimer
+        fields = (
+            'id', 'disclaimer_type', 'title', 'content', 'version',
+            'effective_date', 'requires_consent'
+        )
+
+
+class UserDisclaimerConsentSerializer(serializers.ModelSerializer):
+    disclaimer = LegalDisclaimerSerializer(read_only=True)
+
+    class Meta:
+        model = UserDisclaimerConsent
+        fields = ('id', 'disclaimer', 'consented_at', 'ip_address', 'user_agent')
+
+
+class DataDeletionRequestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DataDeletionRequest
+        fields = ('id', 'status', 'requested_at', 'verified_at', 'processed_at')

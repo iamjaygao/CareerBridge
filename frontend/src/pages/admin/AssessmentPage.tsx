@@ -20,11 +20,14 @@ import { useSelector } from 'react-redux';
 import { RootState } from '../../store';
 import adminService from '../../services/api/adminService';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import ErrorAlert from '../../components/common/ErrorAlert';
+import { handleApiError } from '../../services/utils/errorHandler';
+import type { ApiError } from '../../services/utils/errorHandler';
 
 const AssessmentPage: React.FC = () => {
   const { user } = useSelector((state: RootState) => state.auth);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
   const [stats, setStats] = useState({
     totalAssessments: 0,
     totalResumes: 0,
@@ -59,11 +62,7 @@ const AssessmentPage: React.FC = () => {
         
         setAssessments(assessmentsList);
       } catch (err: any) {
-        const errorMessage = err?.response?.data?.detail 
-          || err?.response?.data?.error
-          || err?.message 
-          || 'Failed to load assessment data';
-        setError(errorMessage);
+        setError(handleApiError(err));
         console.error('Failed to fetch assessment data:', err);
       } finally {
         setLoading(false);
@@ -80,9 +79,7 @@ const AssessmentPage: React.FC = () => {
   if (error) {
     return (
       <Container maxWidth="xl" sx={{ py: 4 }}>
-        <Alert severity="error" sx={{ mb: 3 }}>
-          {error}
-        </Alert>
+        <ErrorAlert error={error} overrideMessage="Failed to load assessment data." />
       </Container>
     );
   }
@@ -170,4 +167,3 @@ const AssessmentPage: React.FC = () => {
 };
 
 export default AssessmentPage;
-

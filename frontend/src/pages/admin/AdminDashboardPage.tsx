@@ -9,7 +9,6 @@ import {
   Box,
   Chip,
   LinearProgress,
-  Alert,
   Button,
   Tabs,
   Tab,
@@ -33,6 +32,9 @@ import { useSelector } from 'react-redux';
 import { RootState } from '../../store';
 import { hasAdminAccess } from '../../utils/adminPermissions';
 import { hasFinancialAccess } from '../../utils/roleHelpers';
+import ErrorAlert from '../../components/common/ErrorAlert';
+import { handleApiError } from '../../services/utils/errorHandler';
+import type { ApiError } from '../../services/utils/errorHandler';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -188,7 +190,7 @@ const AdminDashboardPage: React.FC = () => {
   const { user } = useSelector((state: RootState) => state.auth);
   const [tabValue, setTabValue] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
   const [dashboardStats, setDashboardStats] = useState<AdminDashboardStats | null>(null);
   const [systemHealth, setSystemHealth] = useState<AdminSystemHealth | null>(null);
   const [aiStats, setAiStats] = useState<any>(null);
@@ -210,7 +212,7 @@ const AdminDashboardPage: React.FC = () => {
         setSystemHealth(health);
         setAiStats(assessmentStats);
       } catch (err) {
-        setError('Failed to load dashboard data. Please check your connection and try again.');
+        setError(handleApiError(err));
         console.error('Dashboard error:', err);
         // Do not set mock data - let error state display
       } finally {
@@ -248,9 +250,7 @@ const AdminDashboardPage: React.FC = () => {
   if (error) {
     return (
       <Box>
-        <Alert severity="error" sx={{ mt: 2 }}>
-          {error}
-        </Alert>
+        <ErrorAlert error={error} overrideMessage="Failed to load dashboard data." />
       </Box>
     );
   }

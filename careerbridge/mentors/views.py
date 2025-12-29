@@ -249,7 +249,7 @@ class StripeConnectCreateAccountView(APIView):
     def post(self, request):
         stripe.api_key = getattr(settings, 'STRIPE_SECRET_KEY', None)
         if not stripe.api_key:
-            return Response({'error': 'Stripe not configured'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({'error': 'Stripe not configured', 'service': 'stripe'}, status=status.HTTP_502_BAD_GATEWAY)
 
         profile = getattr(request.user, 'mentor_profile', None)
         if not profile:
@@ -258,10 +258,13 @@ class StripeConnectCreateAccountView(APIView):
         if profile.stripe_account_id:
             return Response({'account_id': profile.stripe_account_id}, status=status.HTTP_200_OK)
 
-        acct = stripe.Account.create(type='standard')
-        profile.stripe_account_id = acct['id']
-        profile.save()
-        return Response({'account_id': acct['id']}, status=status.HTTP_200_OK)
+        try:
+            acct = stripe.Account.create(type='standard')
+            profile.stripe_account_id = acct['id']
+            profile.save()
+            return Response({'account_id': acct['id']}, status=status.HTTP_200_OK)
+        except stripe.error.StripeError as e:
+            return Response({'error': str(e), 'service': 'stripe'}, status=status.HTTP_502_BAD_GATEWAY)
 
 class StripeConnectCreateAccountLinkView(APIView):
     """Create an onboarding account link for the mentor's Stripe account"""
@@ -278,7 +281,7 @@ class StripeConnectCreateAccountLinkView(APIView):
     def post(self, request):
         stripe.api_key = getattr(settings, 'STRIPE_SECRET_KEY', None)
         if not stripe.api_key:
-            return Response({'error': 'Stripe not configured'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({'error': 'Stripe not configured', 'service': 'stripe'}, status=status.HTTP_502_BAD_GATEWAY)
 
         profile = getattr(request.user, 'mentor_profile', None)
         if not profile or not profile.stripe_account_id:
@@ -287,13 +290,16 @@ class StripeConnectCreateAccountLinkView(APIView):
         return_url = request.query_params.get('return_url') or request.build_absolute_uri('/')
         refresh_url = request.query_params.get('refresh_url') or request.build_absolute_uri('/settings')
 
-        link = stripe.AccountLink.create(
-            account=profile.stripe_account_id,
-            refresh_url=refresh_url,
-            return_url=return_url,
-            type='account_onboarding'
-        )
-        return Response({'url': link['url']}, status=status.HTTP_200_OK)
+        try:
+            link = stripe.AccountLink.create(
+                account=profile.stripe_account_id,
+                refresh_url=refresh_url,
+                return_url=return_url,
+                type='account_onboarding'
+            )
+            return Response({'url': link['url']}, status=status.HTTP_200_OK)
+        except stripe.error.StripeError as e:
+            return Response({'error': str(e), 'service': 'stripe'}, status=status.HTTP_502_BAD_GATEWAY)
 
 class StripeConnectStatusView(APIView):
     """Return current mentor's Stripe Connect/KYC status"""

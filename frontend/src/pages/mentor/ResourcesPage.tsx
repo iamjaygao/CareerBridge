@@ -16,6 +16,8 @@ import {
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import ErrorAlert from '../../components/common/ErrorAlert';
 import apiClient from '../../services/api/client';
+import { handleApiError } from '../../services/utils/errorHandler';
+import type { ApiError } from '../../services/utils/errorHandler';
 
 interface Resource {
   id: number;
@@ -28,7 +30,7 @@ interface Resource {
 const MentorResourcesPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [resources, setResources] = useState<Resource[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
 
   useEffect(() => {
     const fetchResources = async () => {
@@ -58,7 +60,7 @@ const MentorResourcesPage: React.FC = () => {
         });
         setResources(mapped);
       } catch (err: any) {
-        setError(err?.response?.data?.error || 'Failed to load mentor resources');
+        setError(handleApiError(err));
       } finally {
         setLoading(false);
       }
@@ -72,7 +74,7 @@ const MentorResourcesPage: React.FC = () => {
   }
 
   if (error) {
-    return <ErrorAlert message={error} />;
+    return <ErrorAlert error={error} />;
   }
 
   return (

@@ -23,6 +23,8 @@ import ErrorAlert from '../../components/common/ErrorAlert';
 import { useNotification } from '../../components/common/NotificationProvider';
 import appointmentService from '../../services/api/appointmentService';
 import apiClient from '../../services/api/client';
+import type { ApiError } from '../../services/utils/errorHandler';
+import { handleApiError, createApiError } from '../../services/utils/errorHandler';
 
 const parseWallTime = (iso: string): Date => {
   return new Date(iso);
@@ -80,7 +82,7 @@ const RescheduleAppointmentPage: React.FC = () => {
   
   const [loading, setLoading] = useState(true);
   const [submitLoading, setSubmitLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
   const [appointment, setAppointment] = useState<any>(null);
   const [availableSlots, setAvailableSlots] = useState<TimeSlot[]>([]);
   const [uiSlots, setUiSlots] = useState<UISlot[]>([]);
@@ -126,7 +128,7 @@ const RescheduleAppointmentPage: React.FC = () => {
       setAppointment(data);
       
       if (data.status !== 'confirmed') {
-        setError('Only confirmed appointments can be rescheduled');
+        setError(createApiError('Only confirmed appointments can be rescheduled', 'VALIDATION_ERROR'));
         return;
       }
 
@@ -136,8 +138,8 @@ const RescheduleAppointmentPage: React.FC = () => {
       if (data.mentor?.id) {
         fetchAvailableSlots(data.mentor.id, weekOffset, serviceId);
       }
-    } catch (err: any) {
-      setError(err?.response?.data?.error || 'Failed to load appointment');
+    } catch (err) {
+      setError(handleApiError(err));
     } finally {
       setLoading(false);
     }
@@ -254,15 +256,15 @@ const RescheduleAppointmentPage: React.FC = () => {
   }
 
   if (error) {
-    return <ErrorAlert message={error} />;
+    return <ErrorAlert error={error} />;
   }
 
   if (!appointment) {
-    return <ErrorAlert message="Appointment not found" />;
+    return <ErrorAlert error={createApiError('Appointment not found', 'NOT_FOUND_ERROR')} />;
   }
 
   if (appointment.status !== 'confirmed') {
-    return <ErrorAlert message="Only confirmed appointments can be rescheduled" />;
+    return <ErrorAlert error={createApiError('Only confirmed appointments can be rescheduled', 'VALIDATION_ERROR')} />;
   }
 
   const mentorName = appointment.mentor?.user

@@ -19,6 +19,7 @@ import {
   Article,
   Support,
   Assessment,
+  Policy,
 } from '@mui/icons-material';
 
 const drawerWidth = 260;

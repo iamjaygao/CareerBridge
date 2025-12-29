@@ -14,6 +14,8 @@ from ..utils import (
     retry_on_failure,
     log_api_call,
     ExternalServiceError,
+    RateLimitError,
+    AuthenticationError,
     sanitize_api_key,
 )
 
@@ -76,6 +78,13 @@ class OpenAIService:
             analysis_text = response.choices[0].message.content
             return self._parse_analysis_response(analysis_text)
         except Exception as e:
+            error_text = str(e).lower()
+            if "rate" in error_text or "429" in error_text:
+                logger.warning("OpenAI rate limit encountered")
+                raise RateLimitError("OpenAI rate limit exceeded", "openai")
+            if "auth" in error_text or "key" in error_text or "401" in error_text:
+                logger.error("OpenAI authentication failed")
+                raise AuthenticationError("OpenAI authentication failed", "openai")
             logger.error(f"OpenAI resume analysis failed: {e}")
             raise ExternalServiceError(f"Resume analysis failed: {e}", "openai")
 

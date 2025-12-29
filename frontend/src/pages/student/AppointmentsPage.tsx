@@ -27,12 +27,14 @@ import appointmentService from '../../services/api/appointmentService';
 import apiClient from '../../services/api/client';
 import { Appointment } from '../../types';
 import { format } from 'date-fns';
+import { handleApiError } from '../../services/utils/errorHandler';
+import type { ApiError } from '../../services/utils/errorHandler';
 
 const StudentAppointmentsPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
   const [tabValue, setTabValue] = useState(0);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [statusFilter, setStatusFilter] = useState('all');
@@ -126,7 +128,7 @@ const StudentAppointmentsPage: React.FC = () => {
       
       setAppointments(transformedAppointments);
     } catch (err: any) {
-      setError(err?.response?.data?.error || 'Failed to load appointments');
+      setError(handleApiError(err));
       console.error('Failed to fetch appointments:', err);
     } finally {
       setLoading(false);
@@ -208,7 +210,7 @@ const StudentAppointmentsPage: React.FC = () => {
   }
 
   if (error) {
-    return <ErrorAlert message={error} />;
+    return <ErrorAlert error={error} />;
   }
 
   let displayedAppointments = tabValue === 0 ? upcomingAppointments : pastAppointments;

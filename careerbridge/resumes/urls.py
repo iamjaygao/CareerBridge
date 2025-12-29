@@ -7,11 +7,14 @@ urlpatterns = [
     # Resume management
     path('', views.ResumeListView.as_view(), name='resume-list'),
     path('<int:pk>/', views.ResumeDetailView.as_view(), name='resume-detail'),
+    path('<int:pk>/download/', views.ResumeDownloadView.as_view(), name='resume-download'),
 
     # Resume analysis
     path('analyze/', views.ResumeAnalysisView.as_view(), name='resume-analyze'),
     path('analysis/<int:pk>/', views.ResumeAnalysisDetailView.as_view(), name='analysis-detail'),
+    path('<int:resume_id>/analysis/', views.ResumeAnalysisByResumeView.as_view(), name='analysis-by-resume'),
     path('feedback/<int:pk>/', views.ResumeFeedbackView.as_view(), name='feedback-detail'),
+    path('<int:resume_id>/feedback/', views.ResumeFeedbackByResumeView.as_view(), name='feedback-by-resume'),
 
     # Search and filtering
     path('search/', views.ResumeSearchView.as_view(), name='resume-search'),
@@ -62,7 +65,7 @@ urlpatterns = [
     path('subscription/', views.UserSubscriptionView.as_view(), name='subscription'),
     path('keyword-match/', views.KeywordMatchView.as_view(), name='keyword-match'),
     path('premium-analysis/', views.PremiumAnalysisView.as_view(), name='premium-analysis'),
-    path('feedback/<int:pk>/', views.FeedbackView.as_view(), name='feedback'),
+    path('matches/<int:pk>/feedback/', views.FeedbackView.as_view(), name='match-feedback'),
     
     # Enterprise functionality
     # path('api-configs/', views.ExternalAPIConfigView.as_view(), name='api-configs'),  # Removed - moved to external services
@@ -78,14 +81,15 @@ urlpatterns = [
     path('subscription/upgrade/', views.SubscriptionUpgradeView.as_view(), name='subscription-upgrade'),
     path('free-days/use/', views.FreeDaysUsageView.as_view(), name='free-days-usage'),
 
-    # Legal compliance and data management - TODO: Implement these views
-    # path('legal/disclaimers/', views.LegalDisclaimerListView.as_view(), name='disclaimer-list'),
-    # path('legal/disclaimers/<str:disclaimer_type>/', views.LegalDisclaimerDetailView.as_view(), name='disclaimer-detail'),
-    # path('legal/consent/', views.DataConsentView.as_view(), name='data-consent'),
-    # path('legal/consent/revoke/', views.RevokeConsentView.as_view(), name='revoke-consent'),
+    # Legal compliance and data management
+    path('legal/disclaimers/', views.LegalDisclaimerListView.as_view(), name='disclaimer-list'),
+    path('legal/disclaimers/<str:disclaimer_type>/', views.LegalDisclaimerDetailView.as_view(), name='disclaimer-detail'),
+    path('legal/consent/', views.DataConsentView.as_view(), name='data-consent'),
+    path('legal/consent/revoke/', views.RevokeConsentView.as_view(), name='revoke-consent'),
     
     # Data deletion
     path('data/deletion/request/', views.DataDeletionRequestView.as_view(), name='data-deletion-request'),
+    path('data/deletion/requests/', views.DataDeletionRequestListView.as_view(), name='data-deletion-requests'),
     path('data/deletion/verify/<int:request_id>/<str:token>/', views.DataDeletionVerificationView.as_view(), name='data-deletion-verify'),
     path('data/deletion/status/', views.DataDeletionStatusView.as_view(), name='data-deletion-status'),
     

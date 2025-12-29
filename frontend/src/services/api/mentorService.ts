@@ -95,7 +95,7 @@ class MentorService {
    */
   async updateMentorProfile(mentorId: number, data: any): Promise<any> {
     try {
-      const response = await apiClient.put(`/mentors/${mentorId}/`, data);
+      const response = await apiClient.put('/mentors/profile/update/', data);
       return response.data;
     } catch (error) {
       console.error('Failed to update mentor profile:', error);
