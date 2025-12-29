@@ -32,7 +32,7 @@ const MentorListPage: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
 
-  const { mentors: mentorList, loading, error, filters } = useSelector(
+  const { mentors: mentorList, loading, error, filters,count } = useSelector(
     (state: RootState) => state.mentors
   );
   const { isAuthenticated, user } = useSelector(
@@ -62,12 +62,15 @@ const MentorListPage: React.FC = () => {
     severity: 'success',
   });
 
+  const PAGE_SIZE = 6;
+  const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
+
   /* =========================
      Data fetching
   ========================= */
   useEffect(() => {
     if (canViewFull) {
-      dispatch(fetchMentors({ ...filters, page }));
+      dispatch(fetchMentors({ ...filters, page,limit: 6}));
     } else {
       if (filters.primary_track) {
         dispatch(fetchMentors({ ...filters, track: filters.primary_track, limit: 6 }));
@@ -233,8 +236,12 @@ const MentorListPage: React.FC = () => {
         <Box sx={{ display: 'flex', justifyContent: 'center', mt: 5 }}>
           <Pagination
             page={page}
-            onChange={(_, p) => setPage(p)}
-            count={10}
+            count={totalPages}
+            onChange={(_, p) => {
+              if (p <= totalPages) {
+                setPage(p);
+              }
+            }}
             color="primary"
           />
         </Box>

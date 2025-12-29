@@ -319,14 +319,18 @@ const MentorCard: React.FC<MentorCardProps> = ({
           alignItems="center" 
           gap={1}
         >
-          {rating !== null && review_count > 0 && (
+          {rating !== null && review_count > 0 ? (
             <>
               <Rating value={rating} precision={0.5} readOnly size="small" />
               <Typography variant="caption" color="text.secondary">
                 {rating.toFixed(1)} ({review_count})
               </Typography>
             </>
-          )}
+          ) : trust_label ? (
+            <Typography variant="caption" color="text.secondary">
+              {trust_label}
+            </Typography>
+          ) : null}
         </Box>
 
         {/* Spacer to push footer down */}
@@ -374,7 +378,7 @@ const MentorCard: React.FC<MentorCardProps> = ({
             fontWeight: 600,
             fontSize: '0.65rem',
             px: 2.5,
-            width: '150px',
+            width: '165px',
             height: '40px',
             '& .MuiButton-label': {
               overflow: 'hidden',
@@ -382,7 +386,7 @@ const MentorCard: React.FC<MentorCardProps> = ({
               display: '-webkit-box',
               WebkitLineClamp: 2,
               WebkitBoxOrient: 'vertical',
-              lineHeight: 1.15,
+              lineHeight: 1.13,
               textAlign: 'center',
             },
           }}
