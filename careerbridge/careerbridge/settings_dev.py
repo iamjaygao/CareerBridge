@@ -62,10 +62,3 @@ CSRF_COOKIE_SECURE = False
 STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY', 'sk_test_your_stripe_secret_key')
 STRIPE_PUBLISHABLE_KEY = os.environ.get('STRIPE_PUBLISHABLE_KEY', 'pk_test_your_stripe_publishable_key')
 STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET', 'whsec_your_stripe_webhook_secret')
-
-PAYPAL_CLIENT_ID = os.environ.get('PAYPAL_CLIENT_ID', 'your_paypal_client_id')
-PAYPAL_CLIENT_SECRET = os.environ.get('PAYPAL_CLIENT_SECRET', 'your_paypal_client_secret')
-PAYPAL_MODE = os.environ.get('PAYPAL_MODE', 'sandbox')  # or 'live'
-
-# Add payments app to INSTALLED_APPS
-INSTALLED_APPS += ['payments'] 

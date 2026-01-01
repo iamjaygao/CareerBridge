@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     
     # CORS
     CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:8001"]
-    ALLOWED_HOSTS: List[str] = ["*"]
+    ALLOWED_HOSTS: List[str] = ["localhost", "127.0.0.1"]
     
     # Scraping
     SCRAPER_TIMEOUT: int = 30

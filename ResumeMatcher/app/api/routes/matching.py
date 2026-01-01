@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 import structlog
 
+from app.api.dependencies import verify_api_key
 from app.core.database import get_db
 from app.services.matching_service import MatchingService
 from app.schemas.matching import (
@@ -14,7 +15,7 @@ from app.schemas.matching import (
     BatchMatchResponse, MatchAnalysisResponse, FeedbackRequest
 )
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_api_key)])
 logger = structlog.get_logger()
 
 @router.post("/", response_model=MatchResponse)

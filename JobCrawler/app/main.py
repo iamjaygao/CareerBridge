@@ -2,7 +2,7 @@
 Job Crawler API Service - Main Application
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from contextlib import asynccontextmanager
@@ -13,6 +13,7 @@ from app.core.database import engine, Base
 from app.api.routes import jobs, market, health
 from app.services.crawler import CrawlerService
 from app.utils.logging import setup_logging
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 # Setup logging
 setup_logging()
@@ -79,8 +80,9 @@ async def root():
 @app.get("/metrics")
 async def metrics():
     """Prometheus metrics endpoint"""
-    # TODO: Implement metrics collection
-    return {"status": "metrics endpoint"}
+    if not settings.ENABLE_METRICS:
+        raise HTTPException(status_code=404, detail="Metrics disabled")
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 if __name__ == "__main__":
     import uvicorn

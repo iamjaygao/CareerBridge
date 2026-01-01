@@ -6,10 +6,11 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 import structlog
 
+from app.api.dependencies import verify_api_key
 from app.core.database import get_db
 from app.services.analytics_service import AnalyticsService
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_api_key)])
 logger = structlog.get_logger()
 
 @router.get("/accuracy")

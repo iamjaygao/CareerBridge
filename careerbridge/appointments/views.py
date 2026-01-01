@@ -889,6 +889,70 @@ def lock_slot(request):
             )
 
     # ------------------------------------------------------------------
+    # RELEASE FLOW (payment failure / user abort)
+    # ------------------------------------------------------------------
+    if appointment_id and action == 'release':
+        try:
+            with transaction.atomic():
+                appointment = Appointment.objects.select_for_update().get(
+                    id=appointment_id,
+                    user=request.user
+                )
+                slot = appointment.time_slot
+
+                if appointment.status in ['cancelled', 'expired']:
+                    return Response({
+                        'appointment': {
+                            'id': appointment.id,
+                            'status': appointment.status,
+                            'is_paid': appointment.is_paid,
+                            'scheduled_start': appointment.scheduled_start,
+                            'scheduled_end': appointment.scheduled_end,
+                            'time_slot_id': slot.id if slot else None,
+                            'mentor_id': appointment.mentor.id,
+                            'price': str(appointment.price),
+                            'currency': appointment.currency,
+                        }
+                    }, status=status.HTTP_200_OK)
+
+                if appointment.is_paid or appointment.status in ['confirmed', 'completed']:
+                    return Response(
+                        {'error': 'Cannot release a paid or confirmed appointment'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                appointment.status = 'expired'
+                appointment.cancelled_by = 'system'
+                appointment.cancellation_reason = 'payment_failed'
+                appointment.save(update_fields=['status', 'cancelled_by', 'cancellation_reason'])
+
+                if slot:
+                    slot.is_available = True
+                    slot.reserved_until = None
+                    slot.reserved_appointment = None
+                    slot.save(update_fields=['is_available', 'reserved_until', 'reserved_appointment'])
+                    _sync_slot_bookings(slot)
+
+                return Response({
+                    'appointment': {
+                        'id': appointment.id,
+                        'status': appointment.status,
+                        'is_paid': appointment.is_paid,
+                        'scheduled_start': appointment.scheduled_start,
+                        'scheduled_end': appointment.scheduled_end,
+                        'time_slot_id': slot.id if slot else None,
+                        'mentor_id': appointment.mentor.id,
+                        'price': str(appointment.price),
+                        'currency': appointment.currency,
+                    }
+                }, status=status.HTTP_200_OK)
+        except Appointment.DoesNotExist:
+            return Response(
+                {'error': 'Appointment not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+    # ------------------------------------------------------------------
     # RESCHEDULE FLOW
     # ------------------------------------------------------------------
     if appointment_id and time_slot_id and service_id:

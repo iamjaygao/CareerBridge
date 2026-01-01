@@ -7,11 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 import structlog
 
+from app.api.dependencies import verify_api_key
 from app.core.database import get_db
 from app.services.market_service import MarketService
 
 logger = structlog.get_logger()
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_api_key)])
 
 @router.get("/salary")
 async def get_salary_data(

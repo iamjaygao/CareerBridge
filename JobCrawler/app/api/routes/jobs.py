@@ -7,12 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 import structlog
 
+from app.api.dependencies import verify_api_key
 from app.core.database import get_db
 from app.services.job_service import JobService
 from app.schemas.job import JobResponse, JobSearchResponse, JobRecommendationResponse, TrendingJobResponse
 
 logger = structlog.get_logger()
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_api_key)])
 
 @router.get("/search", response_model=JobSearchResponse)
 async def search_jobs(

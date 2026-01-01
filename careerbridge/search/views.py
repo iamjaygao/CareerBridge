@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.db.models import Count, Q
 from collections import Counter
+from django.core.cache import cache
 import json
 from typing import Dict, List
 
@@ -232,6 +233,9 @@ def search_all(request):
     except Exception:
         results['resumes'] = []
 
+    if request.user.is_authenticated:
+        _track_search_history(request.user.id, query)
+
     return Response(results)
 
 
@@ -314,12 +318,57 @@ def trending_searches(request):
 @api_view(['GET'])
 def search_filters(request):
     """Return available filter options for search UI"""
+    industries: List[str] = []
+    skills: List[str] = []
+    locations: List[str] = []
+    experience_levels: List[str] = []
+
+    try:
+        from mentors.models import MentorProfile
+        mentor_industries = MentorProfile.objects.exclude(
+            industry__isnull=True
+        ).exclude(industry='').values_list('industry', flat=True)
+        industries.extend(list(mentor_industries))
+    except Exception:
+        pass
+
+    try:
+        from resumes.models import JobDescription
+        job_industries = JobDescription.objects.exclude(
+            industry__isnull=True
+        ).exclude(industry='').values_list('industry', flat=True)
+        industries.extend(list(job_industries))
+    except Exception:
+        pass
+
+    try:
+        from resumes.models import ResumeAnalysis
+        analyses = ResumeAnalysis.objects.values('technical_skills', 'soft_skills')
+        for analysis in analyses:
+            for field in ['technical_skills', 'soft_skills']:
+                value = analysis.get(field)
+                if isinstance(value, list):
+                    skills.extend(value)
+                elif isinstance(value, str):
+                    try:
+                        parsed = json.loads(value)
+                        if isinstance(parsed, list):
+                            skills.extend(parsed)
+                    except Exception:
+                        continue
+    except Exception:
+        pass
+
+    def _normalize(items: List[str]) -> List[str]:
+        cleaned = [str(item).strip() for item in items if item]
+        return sorted({item for item in cleaned if item})
+
     return Response({
-        'types': [],
-        'industries': [],
-        'skills': [],
-        'locations': [],
-        'experience_levels': [],
+        'types': ['mentors', 'jobs', 'resumes'],
+        'industries': _normalize(industries)[:20],
+        'skills': _normalize(skills)[:20],
+        'locations': _normalize(locations)[:20],
+        'experience_levels': _normalize(experience_levels)[:20],
         'price_ranges': [],
         'availability': [],
     })
@@ -329,7 +378,21 @@ def search_filters(request):
 def search_history(request):
     """Placeholder search history endpoint"""
     if request.method == 'GET':
-        return Response([])
+        if not request.user.is_authenticated:
+            return Response([])
+        return Response(cache.get(_history_cache_key(request.user.id), []))
+
+    if not request.user.is_authenticated:
+        return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+
+    if request.method == 'POST':
+        query = (request.data.get('query') or '').strip()
+        if not query:
+            return Response({'error': 'query is required'}, status=status.HTTP_400_BAD_REQUEST)
+        _track_search_history(request.user.id, query)
+        return Response({'status': 'ok'})
+
+    cache.delete(_history_cache_key(request.user.id))
     return Response({'status': 'ok'})
 
 
@@ -342,3 +405,20 @@ def search_analytics(request):
         'search_trends': [],
         'no_results_queries': [],
     })
+
+
+def _history_cache_key(user_id: int) -> str:
+    return f"search_history:{user_id}"
+
+
+def _track_search_history(user_id: int, query: str) -> None:
+    key = _history_cache_key(user_id)
+    history = cache.get(key, [])
+    if not isinstance(history, list):
+        history = []
+    query = query.strip()
+    if not query:
+        return
+    history = [item for item in history if item.get('query') != query]
+    history.insert(0, {'query': query})
+    cache.set(key, history[:20], timeout=7 * 24 * 60 * 60)
