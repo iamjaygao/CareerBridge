@@ -164,7 +164,7 @@ class AppointmentService {
       '/appointments/time-slots/',
       { params }
     );
-    return response.data;
+    return response.data?.results || response.data || [];
   }
 
   /**

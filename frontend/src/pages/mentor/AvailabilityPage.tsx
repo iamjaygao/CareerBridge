@@ -48,6 +48,13 @@ const MentorAvailabilityPage: React.FC = () => {
   const [removedSlotIds, setRemovedSlotIds] = useState<number[]>([]);
   const [weekRange, setWeekRange] = useState<{ start: Date; end: Date } | null>(null);
   const [weekOffset, setWeekOffset] = useState(0);
+  const normalizeArray = <T,>(value: any, fallbackKeys: string[] = []): T[] => {
+    if (Array.isArray(value)) return value;
+    for (const key of fallbackKeys) {
+      if (Array.isArray(value?.[key])) return value[key];
+    }
+    return [];
+  };
 
   const formatDate = (date: Date) => {
     const yyyy = date.getFullYear();
@@ -97,8 +104,10 @@ const MentorAvailabilityPage: React.FC = () => {
         }
         setMentorId(mentorProfileId);
 
-        const services = await mentorService.getMyServices(mentorProfileId);
-        const primaryService = services.find((service: any) => service.id === profile?.primary_service_id) || services[0];
+        const servicesResponse = await mentorService.getMyServices(mentorProfileId);
+        const services = normalizeArray<any>(servicesResponse, ['results', 'services']);
+        const primaryService =
+          services.find((service: any) => service.id === profile?.primary_service_id) || services[0];
         const price = primaryService?.price_per_hour || primaryService?.fixed_price || 0;
         setSlotPrice(Number(price));
 

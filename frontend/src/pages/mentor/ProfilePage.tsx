@@ -86,6 +86,13 @@ const MentorProfilePage: React.FC = () => {
 
   const [expertiseInput, setExpertiseInput] = useState('');
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
+  const normalizeArray = <T,>(value: any, fallbackKeys: string[] = []): T[] => {
+    if (Array.isArray(value)) return value;
+    for (const key of fallbackKeys) {
+      if (Array.isArray(value?.[key])) return value[key];
+    }
+    return [];
+  };
   const parsePosition = (position: string) => {
     if (!position) {
       return { title: '', company: '' };
@@ -167,7 +174,7 @@ const MentorProfilePage: React.FC = () => {
       try {
         setServicesLoading(true);
         const servicesData = await mentorService.getMyServices(mentorProfile.id);
-        setServices(servicesData || []);
+        setServices(normalizeArray<MentorServiceType>(servicesData, ['results', 'services']));
       } catch (error) {
         console.error('Failed to fetch services:', error);
         showError('Failed to load services');

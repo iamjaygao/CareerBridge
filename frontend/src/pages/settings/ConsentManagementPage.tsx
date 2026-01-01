@@ -66,6 +66,14 @@ const ConsentManagementPage: React.FC = () => {
   const [deletionRequests, setDeletionRequests] = useState<DeletionRequest[]>([]);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
 
+  const normalizeArray = <T,>(value: any, fallbackKeys: string[] = []): T[] => {
+    if (Array.isArray(value)) return value;
+    for (const key of fallbackKeys) {
+      if (Array.isArray(value?.[key])) return value[key];
+    }
+    return [];
+  };
+
   const loadData = async () => {
     setLoading(true);
     setError(null);
@@ -75,11 +83,11 @@ const ConsentManagementPage: React.FC = () => {
         resumeService.getLegalDisclaimers(),
         resumeService.listDataDeletionRequests(),
       ]);
-      setDataConsents(consents.data_consents || []);
-      setDisclaimerConsents(consents.disclaimer_consents || []);
-      setRequiredDisclaimers(consents.required_disclaimers || []);
-      setActiveDisclaimers(disclaimers || []);
-      setDeletionRequests(deletions || []);
+      setDataConsents(normalizeArray<DataConsent>(consents?.data_consents));
+      setDisclaimerConsents(normalizeArray<DisclaimerConsent>(consents?.disclaimer_consents));
+      setRequiredDisclaimers(normalizeArray<LegalDisclaimer>(consents?.required_disclaimers));
+      setActiveDisclaimers(normalizeArray<LegalDisclaimer>(disclaimers, ['results', 'disclaimers']));
+      setDeletionRequests(normalizeArray<DeletionRequest>(deletions, ['results']));
     } catch (err: any) {
       setError(err?.message || 'Failed to load consent data');
     } finally {

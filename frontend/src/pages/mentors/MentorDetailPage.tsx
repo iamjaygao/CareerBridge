@@ -173,7 +173,7 @@ const MentorDetailPage: React.FC = () => {
         },
       });
       
-      const slots = response.data || [];
+      const slots = response.data?.results || response.data || [];
       setAvailableSlots(slots);
       setUiSlots(splitSlotsIntoHours(slots));
       setSlotsLoaded(true);
@@ -259,6 +259,11 @@ const MentorDetailPage: React.FC = () => {
   
       window.location.href = checkoutResponse.data.checkout_url;
     } catch (error: any) {
+      try {
+        await sessionService.releaseSlot({ appointment_id: appointmentId, action: 'release' });
+      } catch {
+        // Best-effort release; lock expiry is the fallback.
+      }
       // Show distinct error message for payment step failures
       showError('Slot locked, but failed to start payment. Please try again.');
     }

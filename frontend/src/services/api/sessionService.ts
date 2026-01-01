@@ -15,12 +15,21 @@ export interface LockSlotPayload {
   description?: string;
 }
 
+export interface ReleaseSlotPayload {
+  appointment_id: number;
+  action: 'release';
+}
+
 class SessionService {
   async createSession(data: CreateSessionPayload): Promise<any> {
     return apiClient.post('/appointments/appointments/', data);
   }
 
   async lockSlot(data: LockSlotPayload): Promise<any> {
+    return apiClient.post('/appointments/lock-slot/', data);
+  }
+
+  async releaseSlot(data: ReleaseSlotPayload): Promise<any> {
     return apiClient.post('/appointments/lock-slot/', data);
   }
 
