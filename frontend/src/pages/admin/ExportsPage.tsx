@@ -23,6 +23,8 @@ import ErrorAlert from '../../components/common/ErrorAlert';
 import { handleApiError } from '../../services/utils/errorHandler';
 import type { ApiError } from '../../services/utils/errorHandler';
 
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8001/api/v1';
+
 interface ExportItem {
   id: number;
   name: string;
@@ -189,7 +191,7 @@ const ExportsPage: React.FC = () => {
                           <Button
                             size="small"
                             startIcon={<DownloadIcon />}
-                            href={`/api/v1/adminpanel/exports/${item.id}/download/`}
+                            href={`${API_BASE_URL}/adminpanel/exports/${item.id}/download/`}
                           >
                             Download
                           </Button>

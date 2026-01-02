@@ -1,5 +1,6 @@
 // services/api/sessionService.ts
 import apiClient from './client';
+import { OS_API } from '../../os/apiPaths';
 
 export interface CreateSessionPayload {
   time_slot_id: number;
@@ -22,15 +23,15 @@ export interface ReleaseSlotPayload {
 
 class SessionService {
   async createSession(data: CreateSessionPayload): Promise<any> {
-    return apiClient.post('/appointments/appointments/', data);
+    return apiClient.post(`${OS_API.DECISION_SLOTS}appointments/`, data);
   }
 
   async lockSlot(data: LockSlotPayload): Promise<any> {
-    return apiClient.post('/appointments/lock-slot/', data);
+    return apiClient.post(`${OS_API.DECISION_SLOTS}lock-slot/`, data);
   }
 
   async releaseSlot(data: ReleaseSlotPayload): Promise<any> {
-    return apiClient.post('/appointments/lock-slot/', data);
+    return apiClient.post(`${OS_API.DECISION_SLOTS}lock-slot/`, data);
   }
 
   async getAvailableSlots(
@@ -38,7 +39,7 @@ class SessionService {
     date: string,
     serviceId?: number
   ): Promise<any> {
-    return apiClient.get(`/mentors/${mentorId}/availability/slots/`, {
+    return apiClient.get(`${OS_API.HUMAN_LOOP}${mentorId}/availability/slots/`, {
       params: {
         date,
         service_id: serviceId,

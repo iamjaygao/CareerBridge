@@ -172,7 +172,8 @@ const RescheduleAppointmentPage: React.FC = () => {
 
       if (serviceId) params.service_id = serviceId;
 
-      const response = await apiClient.get('/appointments/time-slots/', { params });
+      const { OS_API } = await import('../../os/apiPaths');
+      const response = await apiClient.get(`${OS_API.DECISION_SLOTS}time-slots/`, { params });
       const slots = response.data || [];
       setAvailableSlots(slots);
       setUiSlots(splitSlotsIntoHours(slots));

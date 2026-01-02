@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { PaginatedResponse } from '../../types';
 import apiClient from '../../services/api/client';
+import { OS_API } from '../../os/apiPaths';
 
 // Backend notification interface - matches NotificationListSerializer
 interface BackendNotification {
@@ -25,7 +26,7 @@ export const fetchNotifications = createAsyncThunk(
   'notifications/fetchNotifications',
   async (params: { is_read?: boolean } | undefined, { rejectWithValue }) => {
     try {
-      const response = await apiClient.get<PaginatedResponse<BackendNotification>>('/notifications/', {
+      const response = await apiClient.get<PaginatedResponse<BackendNotification>>(OS_API.SIGNAL_DELIVERY, {
         params,
       });
       return response;
@@ -39,7 +40,7 @@ export const markNotificationAsRead = createAsyncThunk(
   'notifications/markAsRead',
   async (notificationIds: number[], { rejectWithValue }) => {
     try {
-      const response = await apiClient.post<{ message: string }>('/notifications/mark-read/', {
+      const response = await apiClient.post<{ message: string }>(`${OS_API.SIGNAL_DELIVERY}mark-read/`, {
         notification_ids: notificationIds,
       });
       return { notificationIds, message: response.data.message };
@@ -53,7 +54,7 @@ export const getUnreadCount = createAsyncThunk(
   'notifications/getUnreadCount',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await apiClient.get<{ unread_count: number }>('/notifications/unread-count/');
+      const response = await apiClient.get<{ unread_count: number }>(`${OS_API.SIGNAL_DELIVERY}unread-count/`);
       return response.data.unread_count;
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.error || 'Failed to get unread count');
@@ -65,7 +66,7 @@ export const deleteNotification = createAsyncThunk(
   'notifications/deleteNotification',
   async (notificationId: number, { rejectWithValue }) => {
     try {
-      await apiClient.delete(`/notifications/${notificationId}/delete/`);
+      await apiClient.delete(`${OS_API.SIGNAL_DELIVERY}${notificationId}/delete/`);
       return notificationId;
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.error || 'Failed to delete notification');

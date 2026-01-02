@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import apiClient from '../../services/api/client';
+import { OS_API } from '../../os/apiPaths';
 
 interface Resume {
   id: number;
@@ -32,7 +33,7 @@ const initialState: ResumeState = {
 };
 
 export const fetchResumes = createAsyncThunk('resumes/fetchAll', async () => {
-  const response = await apiClient.get('/resumes/');
+  const response = await apiClient.get(OS_API.ATS_SIGNALS);
   return response.data.results || response.data;
 });
 
@@ -43,7 +44,7 @@ export const uploadResume = createAsyncThunk(
     formData.append('file', data.file);
     formData.append('title', data.title);
     
-    const response = await apiClient.post('/resumes/', formData, {
+    const response = await apiClient.post(OS_API.ATS_SIGNALS, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -53,14 +54,14 @@ export const uploadResume = createAsyncThunk(
 );
 
 export const deleteResume = createAsyncThunk('resumes/delete', async (id: number) => {
-  await apiClient.delete(`/resumes/${id}/`);
+  await apiClient.delete(`${OS_API.ATS_SIGNALS}${id}/`);
   return id;
 });
 
 export const analyzeResume = createAsyncThunk(
   'resumes/analyze',
   async (id: number) => {
-    const response = await apiClient.post('/resumes/analyze/', {
+    const response = await apiClient.post(`${OS_API.ATS_SIGNALS}analyze/`, {
       resume_id: id,
     });
     return response.data;

@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import apiClient from '../../services/api/client';
+import { OS_API } from '../../os/apiPaths';
 
 interface Appointment {
   id: number;
@@ -35,20 +36,20 @@ const initialState: AppointmentState = {
 };
 
 export const fetchAppointments = createAsyncThunk('appointments/fetchAll', async (filters?: any) => {
-  const response = await apiClient.get('/appointments/appointments/', { params: filters });
+  const response = await apiClient.get(`${OS_API.DECISION_SLOTS}appointments/`, { params: filters });
   return response.data.results || response.data;
 });
 
 export const createAppointment = createAsyncThunk(
   'appointments/create',
   async (data: { mentor: number; date: string; time: string; notes?: string }) => {
-    const response = await apiClient.post('/appointments/appointments/', data);
+    const response = await apiClient.post(`${OS_API.DECISION_SLOTS}appointments/`, data);
     return response.data;
   }
 );
 
 export const cancelAppointment = createAsyncThunk('appointments/cancel', async (id: number) => {
-  const response = await apiClient.post(`/appointments/appointments/${id}/cancel/`, {});
+  const response = await apiClient.post(`${OS_API.DECISION_SLOTS}appointments/${id}/cancel/`, {});
   return response.data;
 });
 
@@ -56,7 +57,7 @@ export const submitFeedback = createAsyncThunk(
   'appointments/submitFeedback',
   async (data: { appointmentId: number; rating: number; comment?: string }) => {
     const response = await apiClient.post(
-      `/appointments/appointments/${data.appointmentId}/feedback/`,
+      `${OS_API.DECISION_SLOTS}appointments/${data.appointmentId}/feedback/`,
       {
         rating: data.rating,
         comment: data.comment,

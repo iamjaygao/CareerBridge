@@ -167,7 +167,8 @@ const BookingDialog: React.FC<BookingDialogProps> = ({
         const dateStr = format(formData.date!, 'yyyy-MM-dd');
 
         // ✅ backend urls.py has: path('time-slots/', ...)
-        const resp = await apiClient.get('/appointments/time-slots/', {
+        const { OS_API } = await import('../../os/apiPaths');
+        const resp = await apiClient.get(`${OS_API.DECISION_SLOTS}time-slots/`, {
           params: { mentor: mentor.id, date: dateStr },
         });
 

@@ -3,6 +3,7 @@ import apiClient from '../../services/api/client';
 import { getUserFacingErrorMessage } from '../../services/utils/errorHandler';
 import { Mentor } from '../../types';
 import type { MentorFilters } from '../../types';
+import { OS_API } from '../../os/apiPaths';
 
 /**
  * Redux State
@@ -40,7 +41,7 @@ export const fetchMentors = createAsyncThunk<
   any
 >('mentors/fetchAll', async (filters = {}, { rejectWithValue }) => {
   try {
-    const response = await apiClient.get('/mentors/', {
+    const response = await apiClient.get(OS_API.HUMAN_LOOP, {
       params: filters,
     });
 
@@ -92,7 +93,7 @@ export const fetchMentors = createAsyncThunk<
 export const fetchMentorById = createAsyncThunk<Mentor, number>(
   'mentors/fetchById',
   async (id: number) => {
-    const response = await apiClient.get<Mentor>(`/mentors/${id}/`);
+    const response = await apiClient.get<Mentor>(`${OS_API.HUMAN_LOOP}${id}/`);
     return response.data;
   }
 );

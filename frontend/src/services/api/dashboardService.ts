@@ -1,4 +1,5 @@
 import apiClient from './client';
+import { OS_API } from '../../os/apiPaths';
 
 export interface DashboardStats {
   totalResumes: number;
@@ -72,7 +73,7 @@ class DashboardService {
    */
   async getUpcomingAppointments(limit: number = 5): Promise<any[]> {
     try {
-      const response = await apiClient.get('/appointments/appointments/', {
+      const response = await apiClient.get(`${OS_API.DECISION_SLOTS}appointments/`, {
         params: {
           status: 'confirmed',
           upcoming: true,
@@ -91,7 +92,7 @@ class DashboardService {
    */
   async getRecentResumes(limit: number = 5): Promise<any[]> {
     try {
-      const response = await apiClient.get('/resumes/', {
+      const response = await apiClient.get(OS_API.ATS_SIGNALS, {
         params: { limit, ordering: '-created_at' },
       });
       return response.data.results || response.data;

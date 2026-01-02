@@ -1,4 +1,5 @@
 import apiClient from './client';
+import { OS_API } from '../../os/apiPaths';
 
 class MentorService {
   /**
@@ -6,7 +7,7 @@ class MentorService {
    */
   async getMentors(params?: any): Promise<any> {
     try {
-      const response = await apiClient.get('/mentors/', { params });
+      const response = await apiClient.get(OS_API.HUMAN_LOOP, { params });
       return response.data;
     } catch (error) {
       console.error('Failed to get mentors:', error);
@@ -19,7 +20,7 @@ class MentorService {
    */
   async getMentorById(id: number): Promise<any> {
     try {
-      const response = await apiClient.get(`/mentors/${id}/`);
+      const response = await apiClient.get(`${OS_API.HUMAN_LOOP}${id}/`);
       return response.data;
     } catch (error) {
       console.error('Failed to get mentor:', error);
@@ -36,7 +37,7 @@ class MentorService {
       if (serviceId) {
         params.service_id = serviceId;
       }
-      const response = await apiClient.get(`/mentors/${mentorId}/availability/`, {
+      const response = await apiClient.get(`${OS_API.HUMAN_LOOP}${mentorId}/availability/`, {
         params,
       });
       return response.data;
@@ -51,7 +52,7 @@ class MentorService {
    */
   async getMentorReviews(mentorId: number): Promise<any> {
     try {
-      const response = await apiClient.get(`/mentors/${mentorId}/reviews/`);
+      const response = await apiClient.get(`${OS_API.HUMAN_LOOP}${mentorId}/reviews/`);
       return response.data;
     } catch (error) {
       console.error('Failed to get mentor reviews:', error);
@@ -64,7 +65,7 @@ class MentorService {
    */
   async getMentorPayments(): Promise<any> {
     try {
-      const response = await apiClient.get('/mentors/payments/');
+      const response = await apiClient.get(`${OS_API.HUMAN_LOOP}payments/`);
       return response.data;
     } catch (error) {
       console.error('Failed to get mentor payments:', error);
@@ -82,7 +83,7 @@ class MentorService {
     availability?: any;
   }): Promise<any> {
     try {
-      const response = await apiClient.post('/mentors/apply/', data);
+      const response = await apiClient.post(`${OS_API.HUMAN_LOOP}apply/`, data);
       return response.data;
     } catch (error) {
       console.error('Failed to apply as mentor:', error);
@@ -95,7 +96,7 @@ class MentorService {
    */
   async updateMentorProfile(mentorId: number, data: any): Promise<any> {
     try {
-      const response = await apiClient.put('/mentors/profile/update/', data);
+      const response = await apiClient.put(`${OS_API.HUMAN_LOOP}profile/update/`, data);
       return response.data;
     } catch (error) {
       console.error('Failed to update mentor profile:', error);
@@ -110,7 +111,7 @@ class MentorService {
     try {
       // Try to get via profile update endpoint (if it supports GET)
       // Otherwise, this might need a dedicated endpoint
-      const response = await apiClient.get('/mentors/profile/update/');
+      const response = await apiClient.get(`${OS_API.HUMAN_LOOP}profile/update/`);
       return response.data;
     } catch (error) {
       console.error('Failed to get mentor profile:', error);
@@ -123,7 +124,7 @@ class MentorService {
    */
   async updateMyProfile(data: any): Promise<any> {
     try {
-      const response = await apiClient.patch('/mentors/profile/update/', data);
+      const response = await apiClient.patch(`${OS_API.HUMAN_LOOP}profile/update/`, data);
       return response.data;
     } catch (error) {
       console.error('Failed to update mentor profile:', error);
@@ -136,7 +137,7 @@ class MentorService {
    */
   async getStripeStatus(): Promise<any> {
     try {
-      const response = await apiClient.get('/mentors/connect/status/');
+      const response = await apiClient.get(`${OS_API.HUMAN_LOOP}connect/status/`);
       return response.data;
     } catch (error) {
       console.error('Failed to get Stripe status:', error);
@@ -162,7 +163,7 @@ class MentorService {
    */
   async createStripeAccount(): Promise<any> {
     try {
-      const response = await apiClient.post('/mentors/connect/create-account/');
+      const response = await apiClient.post(`${OS_API.HUMAN_LOOP}connect/create-account/`);
       return response.data;
     } catch (error) {
       console.error('Failed to create Stripe account:', error);
@@ -175,7 +176,7 @@ class MentorService {
    */
   async createStripeAccountLink(returnUrl: string, refreshUrl: string): Promise<any> {
     try {
-      const response = await apiClient.post('/mentors/connect/account-link/', null, {
+      const response = await apiClient.post(`${OS_API.HUMAN_LOOP}connect/account-link/`, null, {
         params: {
           return_url: returnUrl,
           refresh_url: refreshUrl,
@@ -193,7 +194,7 @@ class MentorService {
    */
   async getMyServices(mentorId: number): Promise<any> {
     try {
-      const response = await apiClient.get(`/mentors/${mentorId}/services/`);
+      const response = await apiClient.get(`${OS_API.HUMAN_LOOP}${mentorId}/services/`);
       return response.data;
     } catch (error) {
       console.error('Failed to get mentor services:', error);
@@ -206,7 +207,7 @@ class MentorService {
    */
   async createMentorService(mentorId: number, data: any): Promise<any> {
     try {
-      const response = await apiClient.post(`/mentors/${mentorId}/services/`, data);
+      const response = await apiClient.post(`${OS_API.HUMAN_LOOP}${mentorId}/services/`, data);
       return response.data;
     } catch (error) {
       console.error('Failed to create mentor service:', error);
@@ -219,7 +220,7 @@ class MentorService {
    */
   async updateMentorService(serviceId: number, data: any): Promise<any> {
     try {
-      const response = await apiClient.patch(`/mentors/services/${serviceId}/update/`, data);
+      const response = await apiClient.patch(`${OS_API.HUMAN_LOOP}services/${serviceId}/update/`, data);
       return response.data;
     } catch (error) {
       console.error('Failed to update mentor service:', error);

@@ -1,0 +1,60 @@
+"""
+GateAI AI Governance Kernel (.cursorrules v3)
+
+GateAI is an AI Operating System.
+Cursor is a controlled OS compiler.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Section A: KERNEL IMMUTABILITY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. NO FEATURE INJECTION
+
+2. OS CORE IS KERNEL CODE
+- ats_signals
+- human_loop
+- decision_slots
+- signal_delivery
+
+3. ENGINE LAYERS ARE PLUGGABLE
+All engines live under /api/engines/*
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Section B: ENGINE PLUG-IN SPEC
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+4. All engines MUST inherit BaseEngine.
+
+5. Input/Output Isolation
+
+6. No Direct DB Access
+
+7. Resilience (fallback_logic required)
+
+8. Hallucination Guard
+
+9. Cost Awareness
+
+10. Traceability
+
+Rule 14: AUTOMATED CONTRACT TESTING
+- Every engine MUST define a Pydantic schema.
+- All outputs MUST pass schema validation.
+
+Rule 15: SIGNAL INTEGRITY
+- Every engine output MUST be anchored to a DecisionSlot ID.
+- No floating signals allowed.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Section C: WORKFLOW COMMANDS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+MODE [MAINTENANCE]
+MODE [EVOLUTION]
+
+Rule 13: DOCUMENTATION SYNC
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+END OF KERNEL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"""

@@ -1,4 +1,5 @@
 import apiClient from './client';
+import { OS_API } from '../../os/apiPaths';
 
 export interface Notification {
   id: number;
@@ -37,7 +38,7 @@ export const getNotifications = async (params?: {
   priority?: string;
   limit?: number;
 }): Promise<PaginatedNotifications> => {
-  const response = await apiClient.get<PaginatedNotifications>('/notifications/', { params });
+  const response = await apiClient.get<PaginatedNotifications>(OS_API.SIGNAL_DELIVERY, { params });
   return response.data;
 };
 
@@ -45,7 +46,7 @@ export const getNotifications = async (params?: {
  * Get a single notification by ID
  */
 export const getNotification = async (id: number): Promise<Notification> => {
-  const response = await apiClient.get<Notification>(`/notifications/${id}/`);
+  const response = await apiClient.get<Notification>(`${OS_API.SIGNAL_DELIVERY}${id}/`);
   return response.data;
 };
 
@@ -53,7 +54,7 @@ export const getNotification = async (id: number): Promise<Notification> => {
  * Mark one or more notifications as read
  */
 export const markNotificationsAsRead = async (notificationIds: number[]): Promise<{ message: string }> => {
-  const response = await apiClient.post<{ message: string }>('/notifications/mark-read/', {
+  const response = await apiClient.post<{ message: string }>(`${OS_API.SIGNAL_DELIVERY}mark-read/`, {
     notification_ids: notificationIds,
   });
   return response.data;
@@ -63,7 +64,7 @@ export const markNotificationsAsRead = async (notificationIds: number[]): Promis
  * Mark all notifications as read
  */
 export const markAllNotificationsAsRead = async (): Promise<{ message: string }> => {
-  const response = await apiClient.post<{ message: string }>('/notifications/mark-all-read/');
+  const response = await apiClient.post<{ message: string }>(`${OS_API.SIGNAL_DELIVERY}mark-all-read/`);
   return response.data;
 };
 
@@ -71,14 +72,14 @@ export const markAllNotificationsAsRead = async (): Promise<{ message: string }>
  * Delete a notification
  */
 export const deleteNotification = async (id: number): Promise<void> => {
-  await apiClient.delete(`/notifications/${id}/delete/`);
+  await apiClient.delete(`${OS_API.SIGNAL_DELIVERY}${id}/delete/`);
 };
 
 /**
  * Delete all notifications
  */
 export const deleteAllNotifications = async (): Promise<{ message: string }> => {
-  const response = await apiClient.post<{ message: string }>('/notifications/delete-all/');
+  const response = await apiClient.post<{ message: string }>(`${OS_API.SIGNAL_DELIVERY}delete-all/`);
   return response.data;
 };
 
@@ -86,7 +87,7 @@ export const deleteAllNotifications = async (): Promise<{ message: string }> => 
  * Get unread notification count
  */
 export const getUnreadNotificationCount = async (): Promise<number> => {
-  const response = await apiClient.get<{ unread_count: number }>('/notifications/unread-count/');
+  const response = await apiClient.get<{ unread_count: number }>(`${OS_API.SIGNAL_DELIVERY}unread-count/`);
   return response.data.unread_count;
 };
 

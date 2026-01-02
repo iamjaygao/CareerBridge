@@ -165,7 +165,8 @@ const MentorDetailPage: React.FC = () => {
       sunday.setDate(monday.getDate() + 6);
       sunday.setHours(23, 59, 59, 999);
       
-      const response = await apiClient.get('/appointments/time-slots/', {
+      const { OS_API } = await import('../../os/apiPaths');
+      const response = await apiClient.get(`${OS_API.DECISION_SLOTS}time-slots/`, {
         params: {
           mentor_id: mentor.id,
           from: format(monday, 'yyyy-MM-dd'),

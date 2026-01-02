@@ -1,4 +1,5 @@
 import apiClient from './client';
+import { OS_API } from '../../os/apiPaths';
 
 export interface Resume {
   id: number;
@@ -17,7 +18,7 @@ class ResumeService {
    */
   async getResumes(): Promise<Resume[]> {
     try {
-      const response = await apiClient.get('/resumes/');
+      const response = await apiClient.get(OS_API.ATS_SIGNALS);
       return response.data.results || response.data;
     } catch (error) {
       console.error('Failed to get resumes:', error);
@@ -30,7 +31,7 @@ class ResumeService {
    */
   async getResume(id: number): Promise<Resume> {
     try {
-      const response = await apiClient.get(`/resumes/${id}/`);
+      const response = await apiClient.get(`${OS_API.ATS_SIGNALS}${id}/`);
       return response.data;
     } catch (error) {
       console.error('Failed to get resume:', error);
@@ -47,7 +48,7 @@ class ResumeService {
       formData.append('file', file);
       formData.append('title', title);
 
-      const response = await apiClient.post('/resumes/', formData, {
+      const response = await apiClient.post(OS_API.ATS_SIGNALS, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -64,7 +65,7 @@ class ResumeService {
    */
   async deleteResume(id: number): Promise<void> {
     try {
-      await apiClient.delete(`/resumes/${id}/`);
+      await apiClient.delete(`${OS_API.ATS_SIGNALS}${id}/`);
     } catch (error) {
       console.error('Failed to delete resume:', error);
       throw error;
@@ -82,7 +83,7 @@ class ResumeService {
     consentVersion: string = '1.0'
   ): Promise<any> {
     try {
-      const response = await apiClient.post('/resumes/analyze/', {
+      const response = await apiClient.post(`${OS_API.ATS_SIGNALS}analyze/`, {
         resume_id: id,
         industry,
         job_title: jobTitle,
@@ -101,7 +102,7 @@ class ResumeService {
    */
   async getResumeAnalysis(id: number): Promise<any> {
     try {
-      const response = await apiClient.get(`/resumes/${id}/analysis/`);
+      const response = await apiClient.get(`${OS_API.ATS_SIGNALS}${id}/analysis/`);
       return response.data;
     } catch (error) {
       console.error('Failed to get resume analysis:', error);
@@ -121,7 +122,7 @@ class ResumeService {
    */
   async getFeedback(id: number): Promise<any> {
     try {
-      const response = await apiClient.get(`/resumes/${id}/feedback/`);
+      const response = await apiClient.get(`${OS_API.ATS_SIGNALS}${id}/feedback/`);
       return response.data;
     } catch (error) {
       console.error('Failed to get resume feedback:', error);
@@ -134,7 +135,7 @@ class ResumeService {
    */
   async getJobRecommendations(resumeId: number, limit = 3): Promise<any[]> {
     try {
-      const response = await apiClient.get('/resumes/recommendations/', {
+      const response = await apiClient.get(`${OS_API.ATS_SIGNALS}recommendations/`, {
         params: { resume_id: resumeId, limit },
       });
       return response.data.recommendations || response.data.results || response.data || [];
@@ -149,7 +150,7 @@ class ResumeService {
    */
   async getTrendingJobs(): Promise<any> {
     try {
-      const response = await apiClient.get('/resumes/jobs/trending/');
+      const response = await apiClient.get(`${OS_API.ATS_SIGNALS}jobs/trending/`);
       return response.data;
     } catch (error) {
       console.error('Failed to get trending jobs:', error);
@@ -162,7 +163,7 @@ class ResumeService {
    */
   async getSalaryData(jobTitle: string, location?: string): Promise<any> {
     try {
-      const response = await apiClient.get('/resumes/market/salary/', {
+      const response = await apiClient.get(`${OS_API.ATS_SIGNALS}market/salary/`, {
         params: { job_title: jobTitle, location },
       });
       return response.data;
@@ -177,7 +178,7 @@ class ResumeService {
    */
   async getSkillDemand(jobTitle: string, location?: string): Promise<any> {
     try {
-      const response = await apiClient.get('/resumes/market/skills/', {
+      const response = await apiClient.get(`${OS_API.ATS_SIGNALS}market/skills/`, {
         params: { job_title: jobTitle, location },
       });
       return response.data;
@@ -192,7 +193,7 @@ class ResumeService {
    */
   async downloadResume(id: number): Promise<Blob> {
     try {
-      const response = await apiClient.get(`/resumes/${id}/download/`, {
+      const response = await apiClient.get(`${OS_API.ATS_SIGNALS}${id}/download/`, {
         responseType: 'blob',
       });
       return response.data;
@@ -203,17 +204,17 @@ class ResumeService {
   }
 
   async getLegalDisclaimers(): Promise<any[]> {
-    const response = await apiClient.get('/resumes/legal/disclaimers/');
+    const response = await apiClient.get(`${OS_API.ATS_SIGNALS}legal/disclaimers/`);
     return response.data;
   }
 
   async getLegalDisclaimer(type: string): Promise<any> {
-    const response = await apiClient.get(`/resumes/legal/disclaimers/${type}/`);
+    const response = await apiClient.get(`${OS_API.ATS_SIGNALS}legal/disclaimers/${type}/`);
     return response.data;
   }
 
   async getConsents(): Promise<any> {
-    const response = await apiClient.get('/resumes/legal/consent/');
+    const response = await apiClient.get(`${OS_API.ATS_SIGNALS}legal/consent/`);
     return response.data;
   }
 
@@ -222,22 +223,22 @@ class ResumeService {
     consent_version?: string;
     disclaimer_types?: string[];
   }): Promise<any> {
-    const response = await apiClient.post('/resumes/legal/consent/', payload);
+    const response = await apiClient.post(`${OS_API.ATS_SIGNALS}legal/consent/`, payload);
     return response.data;
   }
 
   async revokeConsent(payload: { consent_type?: string; disclaimer_type?: string }): Promise<any> {
-    const response = await apiClient.post('/resumes/legal/consent/revoke/', payload);
+    const response = await apiClient.post(`${OS_API.ATS_SIGNALS}legal/consent/revoke/`, payload);
     return response.data;
   }
 
   async requestDataDeletion(): Promise<any> {
-    const response = await apiClient.post('/resumes/data/deletion/request/');
+    const response = await apiClient.post(`${OS_API.ATS_SIGNALS}data/deletion/request/`);
     return response.data;
   }
 
   async listDataDeletionRequests(): Promise<any[]> {
-    const response = await apiClient.get('/resumes/data/deletion/requests/');
+    const response = await apiClient.get(`${OS_API.ATS_SIGNALS}data/deletion/requests/`);
     return response.data;
   }
 }

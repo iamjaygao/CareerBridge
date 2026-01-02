@@ -1,0 +1,4 @@
+"""
+ATS Signals tests package.
+"""
+

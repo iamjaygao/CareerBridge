@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { assertNoLegacyApi } from '../../os/assertNoLegacyApi';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8001/api/v1';
 
@@ -22,6 +23,12 @@ apiClient.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    
+    // GateAI OS: Warn about legacy API paths in development
+    if (config.url) {
+      assertNoLegacyApi(config.url);
+    }
+    
     return config;
   },
   (error) => {

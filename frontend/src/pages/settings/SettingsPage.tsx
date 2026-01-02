@@ -58,7 +58,8 @@ const SettingsPage: React.FC = () => {
   React.useEffect(() => {
     (async () => {
       try {
-        const res = await fetch('/api/v1/mentors/connect/status/');
+        const { OS_API } = await import('../../os/apiPaths');
+        const res = await fetch(`${OS_API.HUMAN_LOOP}connect/status/`);
         if (res.ok) {
           const data = await res.json();
           setKycStatus(data);
@@ -317,21 +318,24 @@ const SettingsPage: React.FC = () => {
                   </Button>
                   <Button variant="outlined" onClick={async () => {
                     setPrivacyMsg(null);
-                    const res = await fetch('/api/v1/resumes/data/deletion/request/', { method: 'POST' });
+                    const { OS_API } = await import('../../os/apiPaths');
+                    const res = await fetch(`${OS_API.ATS_SIGNALS}data/deletion/request/`, { method: 'POST' });
                     const data = await res.json();
                     if (!res.ok) return setPrivacyMsg(data.error || 'Failed to request deletion');
                     setPrivacyMsg(`Deletion requested. Token: ${data.token}`);
                   }}>Request Deletion</Button>
                   <Button variant="outlined" onClick={async () => {
                     setPrivacyMsg(null);
-                    const res = await fetch('/api/v1/resumes/privacy/export/', { method: 'POST' });
+                    const { OS_API } = await import('../../os/apiPaths');
+                    const res = await fetch(`${OS_API.ATS_SIGNALS}privacy/export/`, { method: 'POST' });
                     const data = await res.json();
                     if (!res.ok) return setPrivacyMsg(data.error || 'Failed to request export');
                     setPrivacyMsg('Export job started. Check status shortly.');
                   }}>Request Export</Button>
                   <Button variant="contained" onClick={async () => {
                     setPrivacyMsg(null);
-                    const res = await fetch('/api/v1/resumes/privacy/export/status/');
+                    const { OS_API } = await import('../../os/apiPaths');
+                    const res = await fetch(`${OS_API.ATS_SIGNALS}privacy/export/status/`);
                     const data = await res.json();
                     if (!res.ok) return setPrivacyMsg('Failed to fetch export status');
                     if (data.status === 'completed' && data.download_url) {
@@ -367,17 +371,19 @@ const SettingsPage: React.FC = () => {
               )}
               <Box sx={{ display: 'flex', gap: 2 }}>
                 <Button variant="outlined" onClick={async () => {
-                  const res = await fetch('/api/v1/mentors/connect/create-account/', { method: 'POST' });
+                  const { OS_API } = await import('../../os/apiPaths');
+                  const res = await fetch(`${OS_API.HUMAN_LOOP}connect/create-account/`, { method: 'POST' });
                   const data = await res.json();
                   if (!res.ok) return alert(data.error || 'Failed to create account');
                   alert(`Account ID: ${data.account_id}`);
                 }}>Create/Fetch Account</Button>
                 <Button variant="contained" onClick={async () => {
+                  const { OS_API } = await import('../../os/apiPaths');
                   const params = new URLSearchParams({
                     return_url: window.location.origin + '/settings',
                     refresh_url: window.location.origin + '/settings'
                   });
-                  const res = await fetch(`/api/v1/mentors/connect/account-link/?${params}`, { method: 'POST' });
+                  const res = await fetch(`${OS_API.HUMAN_LOOP}connect/account-link/?${params}`, { method: 'POST' });
                   const data = await res.json();
                   if (!res.ok) return alert(data.error || 'Failed to create account link');
                   window.location.href = data.url;

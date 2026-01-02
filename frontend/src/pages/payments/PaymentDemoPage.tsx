@@ -3,6 +3,8 @@ import { loadStripe, Stripe } from '@stripe/stripe-js';
 import { Elements, useStripe, useElements, CardElement } from '@stripe/react-stripe-js';
 import { Alert, CircularProgress } from '@mui/material';
 
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8001/api/v1';
+
 const CheckoutInner: React.FC = () => {
   const stripe = useStripe();
   const elements = useElements();
@@ -17,7 +19,7 @@ const CheckoutInner: React.FC = () => {
     setError(null);
     setSuccess(null);
     try {
-      const res = await fetch('/api/v1/payments/create-intent/', {
+      const res = await fetch(`${API_BASE_URL}/payments/create-intent/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mentor_id: 1, payment_type: 'appointment', amount: 10.0, currency: 'USD', provider: 'stripe', description: 'Demo payment' })
