@@ -8,8 +8,8 @@ from django.db.models import Q, F
 from django.db import transaction
 from datetime import datetime, timedelta
 
-from .models import TimeSlot, Appointment, AppointmentRequest
-from .serializers import (
+from appointments.models import TimeSlot, Appointment, AppointmentRequest
+from appointments.serializers import (
     TimeSlotSerializer, AppointmentSerializer, AppointmentRequestSerializer,
     AppointmentUpdateSerializer, TimeSlotCreateSerializer
 )
@@ -17,7 +17,9 @@ from signal_delivery.models import Notification
 from signal_delivery.services.dispatcher import notify
 from signal_delivery.services.rules import NotificationType
 from django.contrib.auth import get_user_model
-from payments.services import schedule_payout_for_appointment
+
+# Kernel event system (Day 1 isolation)
+from gateai.kernel_events import emit_kernel_event
 
 def _sync_slot_bookings(slot):
     if not slot:
@@ -486,7 +488,11 @@ class MentorAppointmentStatusView(APIView):
                             'action': 'review_appointment',
                         },
                     )
-                schedule_payout_for_appointment(appointment)
+                # Day 1: Kernel event replaces direct payment execution
+                emit_kernel_event(
+                    "APPOINTMENT_COMPLETED",
+                    {"appointment_id": appointment.id}
+                )
 
             return Response(AppointmentSerializer(appointment).data)
 
@@ -562,7 +568,11 @@ class MentorAppointmentStatusView(APIView):
                             'action': 'review_appointment',
                         },
                     )
-                schedule_payout_for_appointment(appointment)
+                # Day 1: Kernel event replaces direct payment execution
+                emit_kernel_event(
+                    "APPOINTMENT_COMPLETED",
+                    {"appointment_id": appointment.id}
+                )
             
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -1274,7 +1284,7 @@ def lock_slot(request):
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def appointment_lock_status(request, appointment_id):
-    from decision_slots.models import Appointment
+    from appointments.models import Appointment
     from django.utils import timezone
 
     appointment = get_object_or_404(

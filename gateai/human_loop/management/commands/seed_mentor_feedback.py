@@ -6,7 +6,7 @@ from django.core.management.base import BaseCommand
 from django.db.models import Avg, Count
 from django.utils import timezone
 
-from decision_slots.models import Appointment, TimeSlot
+from appointments.models import Appointment, TimeSlot
 from human_loop.models import MentorProfile, MentorReview, MentorService
 
 

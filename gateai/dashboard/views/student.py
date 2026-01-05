@@ -79,7 +79,7 @@ class DashboardView(APIView):
 
 def get_student_dashboard_stats(user):
     # 延迟 import：减少循环依赖风险（你这么写是对的）
-    from decision_slots.models import Appointment
+    from appointments.models import Appointment
     from ats_signals.models import Resume
 
     return {

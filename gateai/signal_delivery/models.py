@@ -94,7 +94,7 @@ class Notification(models.Model):
     priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='normal')
     
     # Related objects
-    related_appointment = models.ForeignKey('decision_slots.Appointment', on_delete=models.SET_NULL, null=True, blank=True)
+    related_appointment = models.ForeignKey('appointments.Appointment', on_delete=models.SET_NULL, null=True, blank=True)
     related_resume = models.ForeignKey('ats_signals.Resume', on_delete=models.SET_NULL, null=True, blank=True)
     related_mentor = models.ForeignKey('human_loop.MentorProfile', on_delete=models.SET_NULL, null=True, blank=True)
     

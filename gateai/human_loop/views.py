@@ -411,7 +411,7 @@ class MentorAvailabilitySlotsView(APIView):
                     ).exists()
                     
                     # Check TimeSlot holds from decision_slots app
-                    from decision_slots.models import TimeSlot
+                    from appointments.models import Appointment, TimeSlot
                     now = timezone.now()
                     conflicting_timeslot = TimeSlot.objects.filter(
                         mentor=mentor,

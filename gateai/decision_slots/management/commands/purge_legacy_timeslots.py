@@ -6,7 +6,7 @@ from django.core.management.base import BaseCommand
 from django.db.models import F
 from datetime import timedelta
 
-from decision_slots.models import TimeSlot, Appointment
+from appointments.models import TimeSlot, Appointment
 
 
 class Command(BaseCommand):

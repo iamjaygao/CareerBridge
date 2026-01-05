@@ -64,7 +64,7 @@ def build_export_rows(export_type, filters, date_from=None, date_to=None):
         return rows
 
     if export_type == 'appointments':
-        from decision_slots.models import Appointment
+        from appointments.models import Appointment
 
         queryset = Appointment.objects.select_related('user', 'mentor__user').all()
         if date_from:

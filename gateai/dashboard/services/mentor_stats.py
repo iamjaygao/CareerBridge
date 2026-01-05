@@ -1,5 +1,5 @@
 def get_mentor_dashboard_stats(user):
-    from decision_slots.models import Appointment
+    from appointments.models import Appointment
 
     return {
         "upcomingSessions": Appointment.objects.filter(

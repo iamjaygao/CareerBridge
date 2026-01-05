@@ -39,7 +39,7 @@ from .serializers import (
     ContentItemSerializer,
     SystemSettingsSerializer
 )
-from decision_slots.serializers import AppointmentUpdateSerializer
+from appointments.serializers import AppointmentUpdateSerializer
 from .permissions import IsAdminOrStaff, IsAdminUser, IsAdminOrSuperAdmin, user_has_role
 from .permissions_system import IsSuperAdminOnly
 from .export_utils import build_export_rows, write_export_file
@@ -393,7 +393,7 @@ def get_dashboard_metrics():
     
     # Import models
     from human_loop.models import MentorProfile, MentorApplication
-    from decision_slots.models import Appointment
+    from appointments.models import Appointment
     from payments.models import Payment
     try:
         from ats_signals.models import Resume
@@ -1779,7 +1779,7 @@ class AppointmentManagementView(generics.GenericAPIView):
     
     def get(self, request):
         """Get all appointments with filters"""
-        from decision_slots.models import Appointment
+        from appointments.models import Appointment
         from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 
         # Get query parameters
@@ -1859,7 +1859,7 @@ class AppointmentManagementDetailView(generics.RetrieveUpdateAPIView):
     serializer_class = AppointmentUpdateSerializer
 
     def get_queryset(self):
-        from decision_slots.models import Appointment
+        from appointments.models import Appointment
 
         return Appointment.objects.select_related('user', 'mentor__user', 'time_slot').all()
 
@@ -1880,7 +1880,7 @@ class AppointmentManagementDetailView(generics.RetrieveUpdateAPIView):
             appointment.save(update_fields=['cancelled_by', 'cancellation_reason'])
 
         if appointment.time_slot:
-            from decision_slots.models import Appointment as AppointmentModel
+            from appointments.models import Appointment as AppointmentModel
 
             slot = appointment.time_slot
             booked_count = AppointmentModel.objects.filter(
@@ -1930,7 +1930,7 @@ class StaffAppointmentListView(generics.GenericAPIView):
     permission_classes = [IsAdminOrStaff]
 
     def get(self, request):
-        from decision_slots.models import Appointment
+        from appointments.models import Appointment
 
         status = request.query_params.get('status')
         mentor_id = request.query_params.get('mentor_id')
@@ -1969,7 +1969,7 @@ class StaffAppointmentDetailView(generics.RetrieveUpdateAPIView):
     serializer_class = AppointmentUpdateSerializer
 
     def get_queryset(self):
-        from decision_slots.models import Appointment
+        from appointments.models import Appointment
 
         return Appointment.objects.select_related('user', 'mentor__user', 'time_slot').all()
 
@@ -1990,7 +1990,7 @@ class StaffAppointmentDetailView(generics.RetrieveUpdateAPIView):
             appointment.save(update_fields=['cancelled_by', 'cancellation_reason'])
 
         if appointment.time_slot:
-            from decision_slots.models import Appointment as AppointmentModel
+            from appointments.models import Appointment as AppointmentModel
 
             slot = appointment.time_slot
             booked_count = AppointmentModel.objects.filter(

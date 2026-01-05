@@ -82,7 +82,7 @@ class Payment(models.Model):
     # Basic information
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='payments')
     mentor = models.ForeignKey('human_loop.MentorProfile', on_delete=models.CASCADE, null=True, blank=True, related_name='received_payments')
-    appointment = models.ForeignKey('decision_slots.Appointment', on_delete=models.CASCADE, null=True, blank=True, related_name='payments')
+    appointment = models.ForeignKey('appointments.Appointment', on_delete=models.CASCADE, null=True, blank=True, related_name='payments')
     
     # Payment details
     payment_type = models.CharField(max_length=20, choices=PAYMENT_TYPE_CHOICES, default='appointment')

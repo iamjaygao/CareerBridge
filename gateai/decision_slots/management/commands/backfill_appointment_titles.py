@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand
 
-from decision_slots.models import Appointment
+from appointments.models import Appointment
 
 
 class Command(BaseCommand):

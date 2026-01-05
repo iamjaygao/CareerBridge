@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand
 from django.db.models import Avg, Count
 
-from decision_slots.models import Appointment
+from appointments.models import Appointment
 from human_loop.models import MentorReview, MentorProfile
 
 

@@ -1,5 +1,5 @@
 def get_student_dashboard_stats(user):
-    from decision_slots.models import Appointment
+    from appointments.models import Appointment
     from ats_signals.models import Resume
 
     return {

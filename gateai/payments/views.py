@@ -52,7 +52,7 @@ def create_payment_intent(request):
             
             # Add mentor or appointment if provided
             if serializer.validated_data.get('appointment_id'):
-                from decision_slots.models import Appointment
+                from appointments.models import Appointment
 
                 appointment = get_object_or_404(
                     Appointment,
@@ -165,7 +165,7 @@ def create_checkout_session(request):
         )
     
     try:
-        from decision_slots.models import Appointment
+        from appointments.models import Appointment
         appointment = get_object_or_404(Appointment, id=appointment_id, user=request.user)
 
         if appointment.time_slot:
@@ -935,7 +935,7 @@ def _finalize_paid_appointment(payment: Payment):
     """
     import logging
     logger = logging.getLogger(__name__)
-    from decision_slots.models import Appointment, TimeSlot
+    from appointments.models import Appointment, TimeSlot
 
     payment_id = payment.id
 

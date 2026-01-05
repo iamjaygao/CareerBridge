@@ -4,7 +4,7 @@ from django.db.models import Count
 import os
 
 from payments.models import Payment
-from decision_slots.models import Appointment
+from appointments.models import Appointment
 from signal_delivery.services.dispatcher import notify
 from signal_delivery.services.rules import NotificationType
 from django.contrib.auth import get_user_model
