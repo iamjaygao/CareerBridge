@@ -86,6 +86,9 @@ urlpatterns = [
     path('api/v1/chat/', include('chat.urls')), # Real-time chat
     path('api/v1/search/', include('search.urls')), # Search functionality
 
+    # GateAI Kernel Syscalls
+    path('kernel/', include('kernel.urls')),
+
     # Reserved engine namespaces (not yet implemented)
     # See docs/GATEAI_OS_CONTRACT.md for details
     path('api/engines/signal-core/', include('gateai.engines.signal_core_urls')), # Reserved: Signal Core Engine

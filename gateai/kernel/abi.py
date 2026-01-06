@@ -277,6 +277,20 @@ def classify_failure(
                 internal_reason=internal_reason,
                 http_hint=400,
             )
+            
+        if error_code == KernelErrorCode.KERNEL_GENERIC_FAILURE:
+            # Day-3 Alignment: Generic failures (like atomic context violations) 
+            # are retryable to prevent persistent state pollution.
+            return KernelOutcome(
+                abi_version=ABI_VERSION,
+                outcome_code=KernelOutcomeCode.FAILED_RETRYABLE,
+                retryable=True,
+                terminal=False,
+                public_message="Transient failure, retry recommended",
+                error_code=error_code,
+                internal_reason=internal_reason,
+                http_hint=503,
+            )
     
     # Priority 7: Fallback (unknown error)
     return KernelOutcome(

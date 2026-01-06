@@ -1,0 +1,300 @@
+{% load static %}
+{% verbatim %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GateAI Kernel Pulse</title>
+    <!-- React & Babel for zero-build implementation -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Tailwind for rapid premium layout -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #0d1117;
+            color: #c9d1d9;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+        }
+
+        .glass {
+            background: rgba(22, 27, 34, 0.7);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(48, 54, 61, 0.5);
+        }
+
+        .pulse-id {
+            color: #8b949e;
+            font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
+        }
+
+        .scroll-hide::-webkit-scrollbar {
+            display: none;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-4px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .row-animate {
+            animation: fadeIn 0.3s ease-out forwards;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo } = React;
+
+        // MANDATORY Outcome Mapping
+        const OUTCOME_CONFIG = {
+            OK: { color: "#238636", label: "OK", icon: "●" },
+            REPLAY: { color: "#238636", label: "REPLAY", icon: "●" },
+            CONFLICT: { color: "#d29922", label: "CONFLICT", icon: "▲" },
+            FAILED_RETRYABLE: { color: "#1f6feb", label: "FAILED_RETRYABLE", icon: "🌀" },
+            REJECTED: { color: "#f85149", label: "REJECTED", icon: "✖" },
+            FAILED_FATAL: { color: "#8e1519", label: "FAILED_FATAL", icon: "☠" }
+        };
+
+        const KernelPulseView = () => {
+            const [auditEvents, setAuditEvents] = useState([]);
+            const [locks, setLocks] = useState([]);
+            const lastIdRef = useRef(null);
+            const chartRef = useRef(null);
+            const chartInstance = useRef(null);
+
+            // 1. Audit Polling (1 second)
+            useEffect(() => {
+                const fetchAudit = async () => {
+                    const url = lastIdRef.current
+                        ? `/kernel/observability/audit?since_id=${lastIdRef.current}`
+                        : `/kernel/observability/audit?limit=50`;
+
+                    try {
+                        const res = await fetch(url);
+                        const data = await res.json();
+                        if (data.length > 0) {
+                            setAuditEvents(prev => {
+                                // Add new to top, keep unique, limit to 200
+                                const combined = [...data, ...prev];
+                                lastIdRef.current = combined[0]?.id;
+                                return combined.slice(0, 200);
+                            });
+                        }
+                    } catch (err) {
+                        console.error("Audit poll failed", err);
+                    }
+                };
+
+                const interval = setInterval(fetchAudit, 1000);
+                fetchAudit(); // Initial fetch
+                return () => clearInterval(interval);
+            }, []);
+
+            // 2. Lock Polling (3 seconds)
+            useEffect(() => {
+                const fetchLocks = async () => {
+                    try {
+                        const res = await fetch("/kernel/observability/locks?active_only=true");
+                        const data = await res.json();
+                        setLocks(data);
+                    } catch (err) {
+                        console.error("Lock poll failed", err);
+                    }
+                };
+
+                const interval = setInterval(fetchLocks, 3000);
+                fetchLocks();
+                return () => clearInterval(interval);
+            }, []);
+
+            // 3. Aggregate Outcomes for Pie Chart
+            const counts = useMemo(() => {
+                const stats = {};
+                auditEvents.forEach(e => {
+                    const code = e.outcome_code || "UNKNOWN";
+                    stats[code] = (stats[code] || 0) + 1;
+                });
+                return stats;
+            }, [auditEvents]);
+
+            // 4. Initialize/Update Chart
+            useEffect(() => {
+                if (!chartRef.current) return;
+
+                const labels = Object.keys(counts);
+                const data = Object.values(counts);
+                const colors = labels.map(l => OUTCOME_CONFIG[l]?.color || "#484f58");
+
+                if (chartInstance.current) {
+                    chartInstance.current.data.labels = labels;
+                    chartInstance.current.data.datasets[0].data = data;
+                    chartInstance.current.data.datasets[0].backgroundColor = colors;
+                    chartInstance.current.update('none'); // smooth update
+                } else {
+                    const ctx = chartRef.current.getContext('2d');
+                    chartInstance.current = new Chart(ctx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                data: data,
+                                backgroundColor: colors,
+                                borderWidth: 0,
+                                hoverOffset: 4
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'bottom',
+                                    labels: { color: '#c9d1d9', padding: 20, font: { size: 11 } }
+                                }
+                            }
+                        }
+                    });
+                }
+            }, [counts]);
+
+            return (
+                <div className="min-h-screen p-6 max-w-[1600px] mx-auto">
+                    <header className="flex justify-between items-center mb-8">
+                        <div>
+                            <h1 className="text-2xl font-bold text-white flex items-center gap-3">
+                                <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]"></span>
+                                GateAI Kernel Pulse
+                            </h1>
+                            <p className="text-sm text-gray-400 mt-1">Real-time observability sandbox • Read-only</p>
+                        </div>
+                        <div className="text-xs font-mono bg-gray-800/50 px-3 py-1 rounded border border-gray-700 text-gray-300">
+                            ABI v3.0 / Deterministic Truth
+                        </div>
+                    </header>
+
+                    <div className="grid grid-cols-12 gap-6">
+                        {/* LEFT PANEL: Audit Stream */}
+                        <div className="col-span-12 lg:col-span-8 flex flex-col h-[700px] glass rounded-xl overflow-hidden shadow-2xl">
+                            <div className="px-4 py-3 border-b border-gray-800 bg-gray-900/40 flex justify-between items-center">
+                                <span className="text-sm font-semibold uppercase tracking-wider text-gray-400">Kernel Audit Stream</span>
+                                <span className="text-[10px] font-mono p-1 bg-green-900/30 text-green-400 rounded">LIVE POLLING (1s)</span>
+                            </div>
+                            <div className="flex-1 overflow-y-auto scroll-hide p-4">
+                                <table className="w-full text-left text-sm">
+                                    <thead className="sticky top-0 bg-[#0d1117] z-10">
+                                        <tr className="text-gray-500 text-[10px] uppercase font-bold border-b border-gray-800">
+                                            <th className="pb-2 w-28">Timestamp</th>
+                                            <th className="pb-2 w-32">Syscall</th>
+                                            <th className="pb-2 w-20 text-center">Outcome</th>
+                                            <th className="pb-2">Resource ID</th>
+                                            <th className="pb-2 text-right">Trace ID</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {auditEvents.map(event => {
+                                            const cfg = OUTCOME_CONFIG[event.outcome_code] || { color: "#484f58", icon: "?" };
+                                            return (
+                                                <tr key={event.id} className="border-b border-gray-800/50 hover:bg-gray-800/20 row-animate">
+                                                    <td className="py-3 font-mono text-[11px] text-gray-500">
+                                                        {event.created_at.split('T')[1].slice(0, 12)}
+                                                    </td>
+                                                    <td className="py-3 font-semibold text-gray-300">
+                                                        {event.syscall_name}
+                                                    </td>
+                                                    <td className="py-3 text-center">
+                                                        <span
+                                                            className="inline-flex items-center justify-center w-6 h-6 rounded-md"
+                                                            style={{ color: cfg.color }}
+                                                            title={event.outcome_code}
+                                                        >
+                                                            {cfg.icon}
+                                                        </span>
+                                                    </td>
+                                                    <td className="py-3">
+                                                        <span className="pulse-id mr-2">{event.resource_id_hash}</span>
+                                                        <span className="text-xs text-gray-600">{event.resource_type}</span>
+                                                    </td>
+                                                    <td className="py-3 text-right font-mono text-[9px] text-gray-600">
+                                                        {event.trace_id.slice(-8)}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                        {auditEvents.length === 0 && (
+                                            <tr>
+                                                <td colSpan="5" className="py-20 text-center text-gray-600 italic">Waiting for kernel events...</td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        {/* RIGHT PANEL: Stats & Locks */}
+                        <div className="col-span-12 lg:col-span-4 flex flex-col gap-6">
+                            {/* Outcome Distribution */}
+                            <div className="h-[340px] glass rounded-xl flex flex-col p-4 shadow-xl">
+                                <div className="text-sm font-semibold uppercase tracking-wider text-gray-400 mb-4">Outcome Distribution</div>
+                                <div className="flex-1 relative">
+                                    <canvas ref={chartRef}></canvas>
+                                </div>
+                            </div>
+
+                            {/* Active Locks Snapshot */}
+                            <div className="flex-1 glass rounded-xl flex flex-col overflow-hidden shadow-xl min-h-[340px]">
+                                <div className="px-4 py-3 border-b border-gray-800 bg-gray-900/40 flex justify-between items-center">
+                                    <span className="text-sm font-semibold uppercase tracking-wider text-gray-400">Current Locks</span>
+                                    <span className="text-[10px] font-mono p-1 bg-blue-900/30 text-blue-400 rounded">SNAP (3s)</span>
+                                </div>
+                                <div className="flex-1 overflow-y-auto scroll-hide p-4">
+                                    {locks.length > 0 ? (
+                                        <div className="space-y-3">
+                                            {locks.map((lock, idx) => (
+                                                <div key={`${lock.resource_type}:${lock.resource_id}`} className="flex justify-between items-center bg-gray-800/30 p-2 rounded border border-gray-800">
+                                                    <div>
+                                                        <div className="text-xs font-mono text-cyan-400">#{String(lock.resource_id % 1000).padStart(3, '0')}</div>
+                                                        <div className="text-[10px] text-gray-500 uppercase">{lock.resource_type}</div>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <div className="text-[10px] text-gray-400">Owner {lock.owner_id}</div>
+                                                        <div className="text-[9px] font-mono text-gray-600">
+                                                            {lock.expires_at ? new Date(lock.expires_at).toLocaleTimeString() : 'PERSISTENT'}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="py-10 text-center text-gray-600 italic text-sm">No active locks detected</div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<KernelPulseView />);
+    </script>
+</body>
+
+</html>
+{% endverbatim %}
