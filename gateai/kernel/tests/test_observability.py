@@ -157,3 +157,58 @@ class KernelObservabilityTestCase(TransactionTestCase):
         response = self.client.get("/kernel/observability/pulse")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "GateAI Kernel Pulse")
+
+    def test_compliance_monitor_endpoint_schema(self):
+        """Verify compliance endpoint returns correct schema."""
+        response = self.client.get("/kernel/observability/compliance")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("window_ms", data)
+        self.assertIn("checked", data)
+        self.assertIn("violations", data)
+
+    def test_compliance_monitor_rapid_retry_detection(self):
+        """Verify compliance endpoint detects rapid retry violations."""
+        now = timezone.now()
+        
+        # 1. Create two audit events for SAME resource and SAME correlation ID
+        # but within a 500ms window.
+        trace_id = uuid.uuid4()
+        
+        # Event 1: CONFLICT
+        audit1 = KernelAuditLog.objects.create(
+            event_id=trace_id,
+            event_type="SYS_CLAIM",
+            payload={
+                "request": {"resource_type": "APPOINTMENT", "resource_id": 100, "owner_id": 55},
+                "abi": {"outcome_code": "CONFLICT"}
+            }
+        )
+        # Manually backdate created_at to bypass auto_now_add
+        KernelAuditLog.objects.filter(id=audit1.id).update(created_at=now - timezone.timedelta(milliseconds=500))
+        
+        # Event 2: CONFLICT (Retry)
+        audit2 = KernelAuditLog.objects.create(
+            event_type="SYS_CLAIM",
+            payload={
+                "request": {"resource_type": "APPOINTMENT", "resource_id": 100, "owner_id": 55},
+                "abi": {"outcome_code": "CONFLICT"}
+            }
+        )
+        # Event 2 defaults to current time via auto_now_add (close to 'now')
+        
+        # 2. Check compliance monitor
+        # Use a window larger than 500ms to catch it
+        response = self.client.get("/kernel/observability/compliance?window_ms=1000")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        
+        self.assertEqual(data["checked"], 2)
+        self.assertEqual(len(data["violations"]), 1)
+        
+        violation = data["violations"][0]
+        self.assertEqual(violation["outcome_code"], "CONFLICT")
+        self.assertEqual(violation["resource_id"], 100)
+        # Delta should be ~500ms
+        self.assertGreaterEqual(violation["delta_ms"], 450)
+        self.assertLessEqual(violation["delta_ms"], 1000)

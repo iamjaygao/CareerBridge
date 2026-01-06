@@ -74,6 +74,7 @@
         const KernelPulseView = () => {
             const [auditEvents, setAuditEvents] = useState([]);
             const [locks, setLocks] = useState([]);
+            const [violations, setViolations] = useState([]);
             const lastIdRef = useRef(null);
             const chartRef = useRef(null);
             const chartInstance = useRef(null);
@@ -120,6 +121,23 @@
 
                 const interval = setInterval(fetchLocks, 3000);
                 fetchLocks();
+                return () => clearInterval(interval);
+            }, []);
+
+            // 2b. Compliance Polling (2 seconds)
+            useEffect(() => {
+                const fetchCompliance = async () => {
+                    try {
+                        const res = await fetch("/kernel/observability/compliance");
+                        const data = await res.json();
+                        setViolations(data.violations || []);
+                    } catch (err) {
+                        console.error("Compliance poll failed", err);
+                    }
+                };
+
+                const interval = setInterval(fetchCompliance, 2000);
+                fetchCompliance();
                 return () => clearInterval(interval);
             }, []);
 
@@ -257,7 +275,7 @@
                             </div>
 
                             {/* Active Locks Snapshot */}
-                            <div className="flex-1 glass rounded-xl flex flex-col overflow-hidden shadow-xl min-h-[340px]">
+                            <div className="h-[280px] glass rounded-xl flex flex-col overflow-hidden shadow-xl">
                                 <div className="px-4 py-3 border-b border-gray-800 bg-gray-900/40 flex justify-between items-center">
                                     <span className="text-sm font-semibold uppercase tracking-wider text-gray-400">Current Locks</span>
                                     <span className="text-[10px] font-mono p-1 bg-blue-900/30 text-blue-400 rounded">SNAP (3s)</span>
@@ -282,6 +300,45 @@
                                         </div>
                                     ) : (
                                         <div className="py-10 text-center text-gray-600 italic text-sm">No active locks detected</div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Compliance Monitor */}
+                            <div className="h-[250px] glass rounded-xl flex flex-col overflow-hidden shadow-xl border-t-2 border-t-red-900/20">
+                                <div className="px-4 py-3 border-b border-gray-800 bg-gray-900/40 flex justify-between items-center">
+                                    <span className="text-sm font-semibold uppercase tracking-wider text-gray-400">Compliance Monitor</span>
+                                    {violations.length > 0 ? (
+                                        <span className="text-[10px] font-mono p-1 bg-red-900/30 text-red-400 rounded flex items-center gap-1">
+                                            <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-ping"></span>
+                                            {violations.length} VIOLATIONS
+                                        </span>
+                                    ) : (
+                                        <span className="text-[10px] font-mono p-1 bg-green-900/30 text-green-400 rounded">HEALTHY</span>
+                                    )}
+                                </div>
+                                <div className="flex-1 overflow-y-auto scroll-hide p-4">
+                                    {violations.length > 0 ? (
+                                        <div className="space-y-2">
+                                            {violations.slice(0, 5).map((v, idx) => (
+                                                <div key={`${v.trace_id}:${idx}`} className="bg-red-900/10 border border-red-900/30 p-2 rounded text-[11px] row-animate">
+                                                    <div className="flex justify-between text-red-400 font-mono">
+                                                        <span>{v.resource_id_hash}</span>
+                                                        <span>{v.delta_ms}ms retry</span>
+                                                    </div>
+                                                    <div className="flex justify-between mt-1 items-center">
+                                                        <span className="text-gray-500 font-bold uppercase">{v.outcome_code}</span>
+                                                        <span className="text-[9px] text-gray-600 font-mono">CTX: {v.context_hash_tail || 'None'}</span>
+                                                    </div>
+                                                    <div className="text-[9px] text-gray-700 mt-1 flex justify-between">
+                                                        <span>OWNER: {v.owner_id || 'UNK'}</span>
+                                                        <span>TRC: {v.trace_id.slice(-6)}</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="py-10 text-center text-gray-600 italic text-sm">No rapid retry violations detected</div>
                                     )}
                                 </div>
                             </div>

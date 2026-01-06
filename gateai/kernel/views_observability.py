@@ -112,9 +112,121 @@ def lock_snapshot(request):
     return JsonResponse(results, safe=False)
 
 
+
+def compliance_monitor(request):
+    """
+    API 3: Compliance Monitor (Rapid Retry Detection)
+    GET /kernel/observability/compliance
+    """
+    try:
+        window_ms = int(request.GET.get("window_ms", 1500))
+    except ValueError:
+        window_ms = 1500
+    window_ms = min(max(window_ms, 100), 10000)
+
+    try:
+        limit = int(request.GET.get("limit", 200))
+    except ValueError:
+        limit = 200
+    limit = min(max(limit, 1), 500)
+
+    # 1. Query last limit records
+    queryset = KernelAuditLog.objects.all().order_by("-id")[:limit]
+    
+    # 2. Extract and sanitize records for comparison
+    records = []
+    for entry in queryset:
+        payload = entry.payload or {}
+        p_req = payload.get("request", {})
+        p_abi = payload.get("abi", {})
+        
+        resource_type = getattr(entry, "resource_type", None) or p_req.get("resource_type")
+        resource_id = getattr(entry, "resource_id", None) or p_req.get("resource_id")
+        outcome_code = getattr(entry, "outcome_code", None) or p_abi.get("outcome_code")
+        owner_id = p_req.get("owner_id")
+        trace_id = str(entry.event_id)
+        
+        # New: context_hash for decision attribution
+        context_hash = p_req.get("context_hash")
+        
+        # Resource Hash (re-use same logic as audit_stream)
+        try:
+            rid_val = int(resource_id)
+        except (ValueError, TypeError):
+            rid_val = zlib.crc32(str(resource_id).encode()) & 0xffffffff
+        resource_id_hash = f"#{rid_val % 1000:03d}"
+
+        records.append({
+            "id": entry.id,
+            "created_at": entry.created_at,
+            "resource_type": resource_type,
+            "resource_id": resource_id,
+            "resource_id_hash": resource_id_hash,
+            "outcome_code": outcome_code,
+            "owner_id": owner_id,
+            "trace_id": trace_id,
+            "context_hash": context_hash,
+        })
+
+    # 3. Detect Violations
+    violations = []
+    # Both CONFLICT and FAILED_RETRYABLE require wait/backoff
+    violation_outcome_codes = ["CONFLICT", "FAILED_RETRYABLE"]
+    
+    for i in range(len(records)):
+        r1 = records[i]
+        if r1["outcome_code"] not in violation_outcome_codes:
+            continue
+            
+        for j in range(i + 1, len(records)):
+            r2 = records[j]
+            if r2["outcome_code"] not in violation_outcome_codes:
+                continue
+                
+            # Identity Check
+            # Match resource + owner (attribution)
+            same_resource = (r1["resource_type"] == r2["resource_type"] and str(r1["resource_id"]) == str(r2["resource_id"]))
+            same_owner = (r1["owner_id"] == r2["owner_id"] and r1["owner_id"] is not None)
+            
+            # Context Check (Decision identity)
+            # If context_hash exists and is identical, it's definitely a retry of the same decision
+            same_context = (r1["context_hash"] == r2["context_hash"] and r1["context_hash"] is not None)
+            
+            if same_resource and (same_owner or same_context):
+                # Delta Check
+                delta = abs((r1["created_at"] - r2["created_at"]).total_seconds() * 1000)
+                
+                # REQUISITE: Violation if same resource + same owner/context AND delta < 1500
+                if delta <= window_ms:
+                    # Attribution metadata
+                    created_at_utc = r1["created_at"].astimezone(py_timezone.utc)
+                    created_at_iso = created_at_utc.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+                    
+                    violations.append({
+                        "status": "VIOLATION",
+                        "resource_type": r1["resource_type"],
+                        "resource_id": r1["resource_id"],
+                        "resource_id_hash": r1["resource_id_hash"],
+                        "outcome_code": r1["outcome_code"],
+                        "trace_id": r1["trace_id"],
+                        "owner_id": r1["owner_id"],
+                        "context_hash_tail": str(r1["context_hash"])[-8:] if r1["context_hash"] else None,
+                        "created_at": created_at_iso,
+                        "delta_ms": int(delta),
+                        "reason": "Kernel Law Violation: Rapid retry (<1500ms) with same context/owner"
+                    })
+                    break # Skip to next record after detecting violation for r1
+
+    return JsonResponse({
+        "window_ms": window_ms,
+        "checked": len(records),
+        "violations": violations
+    }, safe=False)
+
+
 def kernel_pulse(request):
     """
-    View: Kernel Pulse (Day-3 Sandbox)
+    View: Kernel Pulse (Day-4 Constitution)
     Serves the high-fidelity observability dashboard.
     Strictly READ-ONLY.
     """
