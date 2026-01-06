@@ -489,9 +489,17 @@ class MentorAppointmentStatusView(APIView):
                         },
                     )
                 # Day 1: Kernel event replaces direct payment execution
+                lock_boundary = appointment.time_slot.reserved_until or appointment.scheduled_end
                 emit_kernel_event(
                     "APPOINTMENT_COMPLETED",
-                    {"appointment_id": appointment.id}
+                    {
+                        "appointment_id": appointment.id,
+                        "decision_id": f"appointment:{appointment.id}",
+                        "resource_id": appointment.id,
+                        "owner_id": appointment.user_id,
+                        "action_type": "APPOINTMENT_COMPLETED",
+                        "lock_expires_at": lock_boundary.astimezone(timezone.utc).isoformat() if lock_boundary else None,
+                    }
                 )
 
             return Response(AppointmentSerializer(appointment).data)
@@ -569,9 +577,17 @@ class MentorAppointmentStatusView(APIView):
                         },
                     )
                 # Day 1: Kernel event replaces direct payment execution
+                lock_boundary = appointment.time_slot.reserved_until or appointment.scheduled_end
                 emit_kernel_event(
                     "APPOINTMENT_COMPLETED",
-                    {"appointment_id": appointment.id}
+                    {
+                        "appointment_id": appointment.id,
+                        "decision_id": f"appointment:{appointment.id}",
+                        "resource_id": appointment.id,
+                        "owner_id": appointment.user_id,
+                        "action_type": "APPOINTMENT_COMPLETED",
+                        "lock_expires_at": lock_boundary.astimezone(timezone.utc).isoformat() if lock_boundary else None,
+                    }
                 )
             
             return Response(serializer.data)

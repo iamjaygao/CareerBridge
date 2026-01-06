@@ -24,6 +24,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'adminpanel',
+    'kernel',
     'appointments',  # Domain models (Appointment, TimeSlot) - Day 1 isolation
     'decision_slots',  # OS Kernel (ResourceLock only)
     'payments',
