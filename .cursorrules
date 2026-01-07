@@ -58,3 +58,23 @@ Rule 13: DOCUMENTATION SYNC
 END OF KERNEL
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
+# === KERNEL SAFETY & DETERMINISM RULES (HARD) ===
+
+- This repository contains kernel-level code.
+- Do NOT invent or redesign system behavior.
+- Do NOT introduce heuristics, randomness, or arrival-time ordering.
+- Determinism is a hard requirement, not a preference.
+
+- Arbitration logic MUST be explicit, deterministic, and auditable.
+- Winner selection rules MUST be written exactly as specified.
+- Never silently "improve" throughput or availability.
+- Safety and correctness always override performance.
+
+- Do NOT refactor unrelated code when modifying kernel logic.
+- Minimal diff is mandatory for kernel changes.
+
+- If constraints conflict or cannot be satisfied:
+  STOP and explain the blocking reason instead of guessing.
+
+- No new code may directly modify ResourceLock / TimeSlot reservation state.
+- All future changes MUST go through kernel syscalls or events.
