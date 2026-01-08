@@ -41,6 +41,8 @@ urlpatterns = [
     path('analytics/platform/', views.PlatformAnalyticsView.as_view(), name='platform-analytics'),
     
     # Mentor profile management (for mentors only)
+    path('profile/status/', views.MentorProfileStatusView.as_view(), name='mentor-profile-status'),
+    path('profile/', views.MentorProfileCreateView.as_view(), name='mentor-profile-create'),
     path('profile/update/', views.MentorProfileUpdateView.as_view(), name='mentor-profile-update'),
     path('services/<int:pk>/update/', views.MentorServiceUpdateView.as_view(), name='mentor-service-update'),
     path('availability/<int:pk>/update/', views.MentorAvailabilityUpdateView.as_view(), name='mentor-availability-update'),

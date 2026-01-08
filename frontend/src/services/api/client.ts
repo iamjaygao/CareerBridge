@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { assertNoLegacyApi } from '../../os/assertNoLegacyApi';
+import { validateApiCall } from '../../os/probeGuard';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8001/api/v1';
 
@@ -27,6 +28,22 @@ apiClient.interceptors.request.use(
     // GateAI OS: Warn about legacy API paths in development
     if (config.url) {
       assertNoLegacyApi(config.url);
+    }
+    
+    // GateAI OS: Prevent write endpoints from being auto-probed
+    // This catches misuse where GET requests target write-only endpoints
+    if (config.url && config.method) {
+      try {
+        validateApiCall(config.url, config.method, 'apiClient');
+      } catch (error) {
+        // In production, log but don't break the app
+        if (process.env.NODE_ENV === 'production') {
+          console.error('[GateAI OS] Write endpoint probe blocked:', error);
+          return Promise.reject(error);
+        }
+        // In development, throw to alert developer
+        throw error;
+      }
     }
     
     return config;

@@ -35,6 +35,7 @@ interface Payout {
 const MentorEarningsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [onboardingMessage, setOnboardingMessage] = useState<string | null>(null);
   const [earnings, setEarnings] = useState({
     currentBalance: 0,
     monthlyEarnings: 0,
@@ -46,6 +47,21 @@ const MentorEarningsPage: React.FC = () => {
     const fetchPayments = async () => {
       try {
         setError(null);
+        setOnboardingMessage(null);
+        
+        // IMPORTANT: Check Stripe connection before requesting payout/earnings APIs
+        // Missing Stripe is an ONBOARDING STATE, not an error
+        // 403 from payment/earnings APIs is EXPECTED when Stripe is not connected
+        const connectStatus = await mentorService.getConnectStatus();
+        
+        if (!connectStatus?.is_connected) {
+          // Stripe not connected - this is an onboarding state (warning, not error)
+          setOnboardingMessage('Connect Stripe to view earnings and payouts. Complete your Stripe Connect setup to start receiving payments from students.');
+          setLoading(false);
+          return;
+        }
+        
+        // Stripe is connected - safe to fetch earnings data
         const payload = await mentorService.getMentorPayments();
         const list = Array.isArray(payload) ? payload : (payload?.results || []);
         const now = new Date();
@@ -112,8 +128,50 @@ const MentorEarningsPage: React.FC = () => {
     return <LoadingSpinner message="Loading earnings..." />;
   }
 
+  // Onboarding message (warning, not error)
+  if (onboardingMessage) {
+    return (
+      <Box>
+        <Box sx={{ mb: 4 }}>
+          <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
+            Earnings
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Track your earnings and payout history
+          </Typography>
+        </Box>
+        <Alert severity="warning">
+          {onboardingMessage}
+          <Box sx={{ mt: 2 }}>
+            <Button
+              variant="contained"
+              color="warning"
+              href="/mentor/profile"
+              sx={{ textTransform: 'none' }}
+            >
+              Set Up Stripe Connect
+            </Button>
+          </Box>
+        </Alert>
+      </Box>
+    );
+  }
+
+  // Real errors (e.g., network failures)
   if (error) {
-    return <Alert severity="error">{error}</Alert>;
+    return (
+      <Box>
+        <Box sx={{ mb: 4 }}>
+          <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
+            Earnings
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Track your earnings and payout history
+          </Typography>
+        </Box>
+        <Alert severity="error">{error}</Alert>
+      </Box>
+    );
   }
 
   return (

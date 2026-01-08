@@ -267,6 +267,23 @@ def _cleanup_expired_lock(resource_type: str, resource_id: Any) -> bool:
         return False
 
 
+# KERNEL INVARIANT:
+# ----------------
+# Arbitration MUST occur at most once per (resource_type, resource_id, context_hash).
+#
+# Once a winning idempotency record is written:
+#   - The decision is FINAL.
+#   - All subsequent sys_claim calls MUST short-circuit via idempotency replay.
+#   - No re-arbitration, no fairness re-evaluation, no retries.
+#
+# Any arbitration exception is treated as a deterministic terminal loss,
+# NOT a transient failure. This syscall is deliberately FAIL-CLOSED.
+#
+# Rationale:
+#   - Prevent arbitration storms
+#   - Prevent retry amplification
+#   - Preserve deterministic, auditable outcomes
+
 def sys_claim(payload: Dict[str, Any]) -> SyscallResult:
     """
     Kernel syscall: Claim a physical resource.
@@ -402,12 +419,14 @@ def sys_claim(payload: Dict[str, Any]) -> SyscallResult:
         
         try:
             with transaction.atomic():
+                # KERNEL NOTE: owner_id=0 indicates system/kernel-controlled lock
+                # Semantic owner_id (from payload) is preserved in logging only
                 lock = ResourceLock.objects.create(
                     decision_id=decision_id,
                     resource_type=resource_type,
                     resource_id=resource_id,
                     resource_key=resource_key,
-                    owner_id=owner_id,
+                    owner_id=0,  # System owner (DB expects int, not semantic string)
                     expires_at=expires_at,
                     status='active',
                 )

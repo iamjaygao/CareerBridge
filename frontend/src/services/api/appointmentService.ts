@@ -74,7 +74,7 @@ class AppointmentService {
     params?: AppointmentQuery
   ): Promise<any[]> {
     const response = await apiClient.get(
-      `${OS_API.DECISION_SLOTS}appointments/`,
+      `${OS_API.APPOINTMENTS}appointments/`,
       { params }
     );
     return response.data;
@@ -94,7 +94,7 @@ class AppointmentService {
    */
   async getAppointmentById(id: number): Promise<any> {
     const response = await apiClient.get(
-      `${OS_API.DECISION_SLOTS}appointments/${id}/`
+      `${OS_API.APPOINTMENTS}appointments/${id}/`
     );
     return response.data;
   }
@@ -104,7 +104,7 @@ class AppointmentService {
    */
   async getAppointmentStats(): Promise<any> {
     const response = await apiClient.get(
-      `${OS_API.DECISION_SLOTS}stats/`
+      `${OS_API.APPOINTMENTS}stats/`
     );
     return response.data;
   }
@@ -114,7 +114,7 @@ class AppointmentService {
    */
   async getMentorAppointments(): Promise<any[]> {
     const response = await apiClient.get(
-      `${OS_API.DECISION_SLOTS}mentor/appointments/`
+      `${OS_API.APPOINTMENTS}mentor/appointments/`
     );
     return response.data;
   }
@@ -127,7 +127,7 @@ class AppointmentService {
     data: { status?: string; meeting_link?: string; meeting_platform?: string; meeting_notes?: string }
   ): Promise<any> {
     const response = await apiClient.patch(
-      `${OS_API.DECISION_SLOTS}mentor/appointments/${id}/status/`,
+      `${OS_API.APPOINTMENTS}mentor/appointments/${id}/status/`,
       data
     );
     return response.data;
@@ -138,7 +138,7 @@ class AppointmentService {
    */
   async getAppointmentRequests(): Promise<any[]> {
     const response = await apiClient.get(
-      `${OS_API.DECISION_SLOTS}requests/`
+      `${OS_API.APPOINTMENTS}requests/`
     );
     return response.data;
   }
@@ -151,7 +151,7 @@ class AppointmentService {
     data: { status: 'accepted' | 'rejected'; response?: string; suggested_time_slots?: any[] }
   ): Promise<any> {
     const response = await apiClient.post(
-      `${OS_API.DECISION_SLOTS}requests/${id}/respond/`,
+      `${OS_API.APPOINTMENTS}requests/${id}/respond/`,
       data
     );
     return response.data;
@@ -207,7 +207,7 @@ class AppointmentService {
     reason?: string
   ): Promise<any> {
     const response = await apiClient.post(
-      `${OS_API.DECISION_SLOTS}appointments/${id}/cancel/`,
+      `${OS_API.APPOINTMENTS}appointments/${id}/cancel/`,
       { reason }
     );
     return response.data;
@@ -222,7 +222,7 @@ class AppointmentService {
     feedback?: string
   ): Promise<any> {
     const response = await apiClient.post(
-      `${OS_API.DECISION_SLOTS}appointments/${id}/rate/`,
+      `${OS_API.APPOINTMENTS}appointments/${id}/rate/`,
       { rating, feedback }
     );
     return response.data;
@@ -238,7 +238,7 @@ class AppointmentService {
    */
   async getAppointmentsLegacy(params?: any): Promise<any> {
     const response = await apiClient.get(
-      `${OS_API.DECISION_SLOTS}appointments/`,
+      `${OS_API.APPOINTMENTS}appointments/`,
       { params }
     );
     return response.data;
@@ -251,7 +251,7 @@ class AppointmentService {
     data: CreateAppointmentPayload
   ): Promise<any> {
     const response = await apiClient.post(
-      `${OS_API.DECISION_SLOTS}appointments/`,
+      `${OS_API.APPOINTMENTS}appointments/`,
       data
     );
     return response.data;

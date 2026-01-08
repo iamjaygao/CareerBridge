@@ -9,7 +9,6 @@ export function assertNoLegacyApi(url: string): void {
   const forbidden = [
     '/api/v1/resumes/',
     '/api/v1/mentors/',
-    '/api/v1/appointments/',
     '/api/v1/notifications/',
   ];
   

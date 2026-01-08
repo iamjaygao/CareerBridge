@@ -32,6 +32,7 @@ interface Feedback {
 const MentorFeedbackPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [onboardingMessage, setOnboardingMessage] = useState<string | null>(null);
   const [summary, setSummary] = useState({
     averageRating: 0,
     totalReviews: 0,
@@ -43,10 +44,18 @@ const MentorFeedbackPage: React.FC = () => {
     const fetchFeedback = async () => {
       try {
         setError(null);
+        setOnboardingMessage(null);
         const profile = await mentorService.getMyProfile();
-        const mentorId = profile?.id;
+        
+        // Check if profile exists (onboarding state)
+        if (!profile?.has_profile) {
+          setOnboardingMessage('Please create your mentor profile to view feedback.');
+          return;
+        }
+        
+        const mentorId = profile?.mentor_profile_id || profile?.id;
         if (!mentorId) {
-          setError('Mentor profile not found.');
+          setError('Mentor profile data is incomplete. Please contact support.');
           return;
         }
 
@@ -100,8 +109,38 @@ const MentorFeedbackPage: React.FC = () => {
     return <LoadingSpinner message="Loading feedback..." />;
   }
 
+  // Onboarding message (warning, not error)
+  if (onboardingMessage) {
+    return (
+      <Box>
+        <Box sx={{ mb: 4 }}>
+          <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
+            Feedback & Reviews
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            View feedback from your students
+          </Typography>
+        </Box>
+        <Alert severity="warning">{onboardingMessage}</Alert>
+      </Box>
+    );
+  }
+
+  // Real errors (e.g., network failures)
   if (error) {
-    return <Alert severity="error">{error}</Alert>;
+    return (
+      <Box>
+        <Box sx={{ mb: 4 }}>
+          <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
+            Feedback & Reviews
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            View feedback from your students
+          </Typography>
+        </Box>
+        <Alert severity="error">{error}</Alert>
+      </Box>
+    );
   }
 
   return (

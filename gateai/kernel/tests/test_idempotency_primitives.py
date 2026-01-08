@@ -5,7 +5,11 @@ Tests for kernel idempotency primitives - atomic claim operations.
 import uuid
 from django.test import TestCase, TransactionTestCase
 
-from kernel.idempotency_primitives import claim_idempotency_key, mark_key_failed
+from kernel.idempotency_primitives import (
+    claim_idempotency_key,
+    mark_key_failed,
+    mark_key_succeeded,
+)
 from kernel.models import KernelIdempotencyRecord
 
 
@@ -17,7 +21,7 @@ class IdempotencyClaimTestCase(TransactionTestCase):
     """
     
     def test_claim_new_key_succeeds(self):
-        """First claim of a new key should succeed."""
+        """First claim of a new key should succeed with IN_PROGRESS status."""
         key = f"test-key-{uuid.uuid4()}"
         event_id = str(uuid.uuid4())
         
@@ -31,7 +35,7 @@ class IdempotencyClaimTestCase(TransactionTestCase):
         
         self.assertTrue(claimed, "First claim should succeed")
         self.assertEqual(record.idempotency_key, key)
-        self.assertEqual(record.status, KernelIdempotencyRecord.STATUS_PROCESSED)
+        self.assertEqual(record.status, KernelIdempotencyRecord.STATUS_IN_PROGRESS)
         self.assertEqual(str(record.last_event_id), event_id)
     
     def test_claim_existing_key_rejected_no_exception(self):
@@ -126,6 +130,247 @@ class IdempotencyClaimTestCase(TransactionTestCase):
         """Marking a non-existent key as failed should return False gracefully."""
         success = mark_key_failed("nonexistent-key", "Test")
         self.assertFalse(success)
+    
+    def test_transient_failure_after_claim_no_false_replay(self):
+        """
+        CRITICAL: Transient failure after claim must NOT cause false REPLAY.
+        
+        Scenario:
+        1. First request claims key (status=IN_PROGRESS)
+        2. Request fails before marking SUCCEEDED
+        3. Second request must NOT treat this as successful replay
+        
+        Expected: Second request gets claimed=False with status=IN_PROGRESS (not SUCCESS)
+        """
+        key = f"test-key-{uuid.uuid4()}"
+        event_id_1 = str(uuid.uuid4())
+        event_id_2 = str(uuid.uuid4())
+        
+        # First claim succeeds
+        claimed1, record1 = claim_idempotency_key(
+            idempotency_key=key,
+            event_type="TEST_EVENT",
+            decision_id="test-decision-1",
+            context_hash="abc123",
+            event_id=event_id_1,
+        )
+        self.assertTrue(claimed1, "First claim should succeed")
+        self.assertEqual(record1.status, KernelIdempotencyRecord.STATUS_IN_PROGRESS)
+        
+        # Simulate transient failure: operation fails before marking succeeded
+        # (No call to mark_key_succeeded)
+        
+        # Second request (retry or duplicate)
+        claimed2, record2 = claim_idempotency_key(
+            idempotency_key=key,
+            event_type="TEST_EVENT",
+            decision_id="test-decision-1",
+            context_hash="abc123",
+            event_id=event_id_2,
+        )
+        
+        # CRITICAL ASSERTION: claimed=False but status is NOT a success state
+        self.assertFalse(claimed2, "Second claim should be rejected")
+        self.assertEqual(record2.status, KernelIdempotencyRecord.STATUS_IN_PROGRESS)
+        self.assertNotIn(
+            record2.status,
+            KernelIdempotencyRecord.SUCCESS_STATES,
+            "Status must NOT be in SUCCESS_STATES (operation never completed)",
+        )
+        
+        # Caller MUST NOT treat this as successful replay
+        # Caller should detect IN_PROGRESS and either fail or retry
+    
+    def test_succeeded_status_allows_safe_replay(self):
+        """
+        REPLAY is only safe when status=SUCCEEDED.
+        
+        Scenario:
+        1. First request claims key and succeeds (status=SUCCEEDED)
+        2. Second request gets claimed=False with status=SUCCEEDED
+        3. Caller can safely treat as REPLAY of completed operation
+        """
+        key = f"test-key-{uuid.uuid4()}"
+        event_id = str(uuid.uuid4())
+        
+        # First claim succeeds
+        claimed, record = claim_idempotency_key(
+            idempotency_key=key,
+            event_type="TEST_EVENT",
+            decision_id="test-decision-1",
+            context_hash="abc123",
+            event_id=event_id,
+        )
+        self.assertTrue(claimed)
+        self.assertEqual(record.status, KernelIdempotencyRecord.STATUS_IN_PROGRESS)
+        
+        # Mark as succeeded (operation completed successfully)
+        success = mark_key_succeeded(key, event_id)
+        self.assertTrue(success)
+        
+        # Second request (replay)
+        claimed2, record2 = claim_idempotency_key(
+            idempotency_key=key,
+            event_type="TEST_EVENT",
+            decision_id="test-decision-1",
+            context_hash="abc123",
+            event_id=str(uuid.uuid4()),
+        )
+        
+        # SAFE REPLAY: claimed=False AND status in SUCCESS_STATES
+        self.assertFalse(claimed2, "Second claim should be rejected")
+        self.assertEqual(record2.status, KernelIdempotencyRecord.STATUS_SUCCEEDED)
+        self.assertIn(
+            record2.status,
+            KernelIdempotencyRecord.SUCCESS_STATES,
+            "Status must be in SUCCESS_STATES for safe replay",
+        )
+        
+        # Caller can safely return cached result or no-op
+    
+    def test_idempotency_key_collision_semantic_mismatch(self):
+        """
+        CRITICAL: Detect idempotency key collision (same key, different operation).
+        
+        Scenario:
+        1. First request claims key with context_hash="abc123"
+        2. Second request uses SAME key but DIFFERENT context_hash="xyz789"
+        3. This is a deterministic CONFLICT (not a replay)
+        
+        Expected: Second request gets claimed=False with failure_reason=IDEMPOTENCY_KEY_COLLISION
+        """
+        key = f"test-key-{uuid.uuid4()}"
+        
+        # First claim
+        claimed1, record1 = claim_idempotency_key(
+            idempotency_key=key,
+            event_type="TEST_EVENT",
+            decision_id="test-decision-1",
+            context_hash="abc123",
+            event_id=str(uuid.uuid4()),
+        )
+        self.assertTrue(claimed1, "First claim should succeed")
+        
+        # Second claim with DIFFERENT context_hash (semantic collision)
+        claimed2, record2 = claim_idempotency_key(
+            idempotency_key=key,
+            event_type="TEST_EVENT",
+            decision_id="test-decision-1",
+            context_hash="xyz789",  # DIFFERENT
+            event_id=str(uuid.uuid4()),
+        )
+        
+        # COLLISION DETECTED
+        self.assertFalse(claimed2, "Second claim should be rejected")
+        self.assertEqual(record2.failure_reason, "IDEMPOTENCY_KEY_COLLISION")
+        
+        # Original record should still have original context_hash
+        record1.refresh_from_db()
+        self.assertEqual(record1.context_hash, "abc123", "Original context_hash must be preserved")
+    
+    def test_idempotency_key_collision_event_type_mismatch(self):
+        """Test collision detection with different event_type."""
+        key = f"test-key-{uuid.uuid4()}"
+        
+        # First claim
+        claimed1, record1 = claim_idempotency_key(
+            idempotency_key=key,
+            event_type="TEST_EVENT_A",
+            decision_id="test-decision-1",
+            context_hash="abc123",
+            owner_id="owner1",
+        )
+        self.assertTrue(claimed1)
+        
+        # Second claim with DIFFERENT event_type (collision)
+        claimed2, record2 = claim_idempotency_key(
+            idempotency_key=key,
+            event_type="TEST_EVENT_B",  # DIFFERENT
+            decision_id="test-decision-1",
+            context_hash="abc123",
+            owner_id="owner1",
+        )
+        
+        # COLLISION DETECTED
+        self.assertFalse(claimed2)
+        self.assertEqual(record2.failure_reason, "IDEMPOTENCY_KEY_COLLISION")
+    
+    def test_idempotency_key_collision_owner_id_mismatch(self):
+        """Test collision detection with different owner_id (semantic identity)."""
+        key = f"test-key-{uuid.uuid4()}"
+        
+        # First claim
+        claimed1, record1 = claim_idempotency_key(
+            idempotency_key=key,
+            event_type="TEST_EVENT",
+            decision_id="decision-A",
+            context_hash="abc123",
+            owner_id="owner-A",
+        )
+        self.assertTrue(claimed1)
+        
+        # Second claim with DIFFERENT owner_id (collision)
+        # Note: decision_id can differ (not part of semantic identity)
+        claimed2, record2 = claim_idempotency_key(
+            idempotency_key=key,
+            event_type="TEST_EVENT",
+            decision_id="decision-B",  # Can differ (not semantic identity)
+            context_hash="abc123",  # Same
+            owner_id="owner-B",  # DIFFERENT - collision!
+        )
+        
+        # COLLISION DETECTED (different owner_id = different semantic identity)
+        self.assertFalse(claimed2)
+        self.assertEqual(record2.failure_reason, "IDEMPOTENCY_KEY_COLLISION")
+    
+    def test_mark_key_failed_only_from_in_progress(self):
+        """mark_key_failed should only transition from IN_PROGRESS, not from terminal states."""
+        key = f"test-key-{uuid.uuid4()}"
+        
+        # Create key and mark as succeeded
+        claimed, record = claim_idempotency_key(
+            idempotency_key=key,
+            event_type="TEST_EVENT",
+            decision_id="test-decision-1",
+            context_hash="abc123",
+        )
+        self.assertTrue(claimed)
+        mark_key_succeeded(key)
+        
+        # Try to mark as failed (should be blocked)
+        result = mark_key_failed(key, "Should not work")
+        self.assertFalse(result, "Cannot transition from SUCCEEDED to FAILED")
+        
+        # Verify status unchanged
+        record.refresh_from_db()
+        self.assertEqual(record.status, KernelIdempotencyRecord.STATUS_SUCCEEDED)
+        self.assertNotEqual(record.failure_reason, "Should not work")
+    
+    def test_mark_key_succeeded_only_from_in_progress(self):
+        """mark_key_succeeded should validate state transitions."""
+        key = f"test-key-{uuid.uuid4()}"
+        
+        # Create key in IN_PROGRESS
+        claimed, record = claim_idempotency_key(
+            idempotency_key=key,
+            event_type="TEST_EVENT",
+            decision_id="test-decision-1",
+            context_hash="abc123",
+        )
+        self.assertTrue(claimed)
+        self.assertEqual(record.status, KernelIdempotencyRecord.STATUS_IN_PROGRESS)
+        
+        # Mark as succeeded (valid transition)
+        result = mark_key_succeeded(key)
+        self.assertTrue(result)
+        
+        # Verify status updated
+        record.refresh_from_db()
+        self.assertEqual(record.status, KernelIdempotencyRecord.STATUS_SUCCEEDED)
+        
+        # Try to mark as succeeded again (idempotent, should succeed)
+        result2 = mark_key_succeeded(key)
+        self.assertTrue(result2, "Idempotent SUCCEEDED -> SUCCEEDED should be allowed")
 
 
 class StateTransitionTestCase(TestCase):
@@ -150,18 +395,27 @@ class StateTransitionTestCase(TestCase):
         self.assertTrue(KernelAuditLog.is_valid_transition("REJECTED", "REJECTED"))
     
     def test_idempotency_record_terminal_state_blocks_failed(self):
-        """KernelIdempotencyRecord: PROCESSED/REJECTED cannot transition to FAILED."""
+        """KernelIdempotencyRecord: Terminal states cannot transition to any other state."""
         from kernel.models import KernelIdempotencyRecord
         
-        # Valid transitions
-        self.assertTrue(KernelIdempotencyRecord.is_valid_transition("FAILED", "PROCESSED"))
-        self.assertTrue(KernelIdempotencyRecord.is_valid_transition("FAILED", "REJECTED"))
+        # Valid transitions from non-terminal states
+        self.assertTrue(KernelIdempotencyRecord.is_valid_transition("IN_PROGRESS", "SUCCEEDED"))
+        self.assertTrue(KernelIdempotencyRecord.is_valid_transition("IN_PROGRESS", "FAILED"))
+        self.assertTrue(KernelIdempotencyRecord.is_valid_transition("IN_PROGRESS", "REJECTED"))
+        self.assertTrue(KernelIdempotencyRecord.is_valid_transition("FAILED", "SUCCEEDED"))
+        self.assertTrue(KernelIdempotencyRecord.is_valid_transition("FAILED", "IN_PROGRESS"))
         
-        # Terminal states cannot transition to FAILED
+        # Terminal states cannot transition to any other state
+        self.assertFalse(KernelIdempotencyRecord.is_valid_transition("SUCCEEDED", "FAILED"))
+        self.assertFalse(KernelIdempotencyRecord.is_valid_transition("SUCCEEDED", "IN_PROGRESS"))
         self.assertFalse(KernelIdempotencyRecord.is_valid_transition("PROCESSED", "FAILED"))
+        self.assertFalse(KernelIdempotencyRecord.is_valid_transition("PROCESSED", "IN_PROGRESS"))
         self.assertFalse(KernelIdempotencyRecord.is_valid_transition("REJECTED", "FAILED"))
+        self.assertFalse(KernelIdempotencyRecord.is_valid_transition("REJECTED", "IN_PROGRESS"))
         
-        # Idempotent updates allowed
+        # Idempotent updates allowed (same status)
+        self.assertTrue(KernelIdempotencyRecord.is_valid_transition("IN_PROGRESS", "IN_PROGRESS"))
+        self.assertTrue(KernelIdempotencyRecord.is_valid_transition("SUCCEEDED", "SUCCEEDED"))
         self.assertTrue(KernelIdempotencyRecord.is_valid_transition("PROCESSED", "PROCESSED"))
         self.assertTrue(KernelIdempotencyRecord.is_valid_transition("REJECTED", "REJECTED"))
         self.assertTrue(KernelIdempotencyRecord.is_valid_transition("FAILED", "FAILED"))

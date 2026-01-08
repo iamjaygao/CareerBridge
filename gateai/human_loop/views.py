@@ -28,7 +28,7 @@ from .models import (
 )
 
 from .serializers import (
-    MentorProfileSerializer, MentorProfileDetailSerializer,
+    MentorProfileSerializer, MentorProfileDetailSerializer, MentorProfileCreateSerializer,
     MentorServiceSerializer, MentorAvailabilitySerializer,
     MentorSessionSerializer, MentorSessionCreateSerializer,
     MentorReviewSerializer, MentorApplicationSerializer,
@@ -303,21 +303,49 @@ class StripeConnectCreateAccountLinkView(APIView):
             return Response({'error': str(e), 'service': 'stripe'}, status=status.HTTP_502_BAD_GATEWAY)
 
 class StripeConnectStatusView(APIView):
-    """Return current mentor's Stripe Connect/KYC status"""
+    """
+    READ-ONLY endpoint for Stripe Connect status.
+    
+    Safe for automatic frontend probing.
+    Returns connection status without mutations.
+    
+    GateAI OS Contract:
+    - This endpoint performs NO mutations
+    - This endpoint is safe for GET requests
+    - This endpoint can be auto-probed on page load
+    """
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        """Get Stripe Connect status for the current user"""
         profile = getattr(request.user, 'mentor_profile', None)
+        
+        # User has no mentor profile - return safe defaults
         if not profile:
-            return Response({'error': 'Not a mentor'}, status=status.HTTP_403_FORBIDDEN)
+            return Response({
+                'is_connected': False,
+                'requires_action': True,
+                'can_set_availability': False,
+                'payouts_enabled': False,
+                'charges_enabled': False,
+                'has_account': False,
+            }, status=status.HTTP_200_OK)
+        
+        # User has mentor profile - return connection status
+        has_account = bool(profile.stripe_account_id)
+        is_connected = has_account and profile.payouts_enabled and profile.charges_enabled
+        
         return Response({
-            'stripe_account_id': profile.stripe_account_id,
+            'is_connected': is_connected,
+            'requires_action': not is_connected,
+            'can_set_availability': is_connected,
             'payouts_enabled': profile.payouts_enabled,
             'charges_enabled': profile.charges_enabled,
-            'kyc_disabled_reason': profile.kyc_disabled_reason,
+            'has_account': has_account,
+            'stripe_account_id': profile.stripe_account_id if has_account else None,
+            'kyc_disabled_reason': profile.kyc_disabled_reason if not is_connected else None,
             'kyc_due_by': profile.kyc_due_by.isoformat() if profile.kyc_due_by else None,
-            'capabilities': profile.stripe_capabilities,
-        })
+        }, status=status.HTTP_200_OK)
 
 class MentorServiceView(generics.ListCreateAPIView):
     """List and create mentor services"""
@@ -658,6 +686,105 @@ class PlatformAnalyticsView(APIView):
             )
             return Response(analytics)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class MentorProfileStatusView(APIView):
+    """
+    READ-ONLY endpoint to get mentor profile status for the authenticated user.
+    
+    This endpoint is safe for automatic frontend probing/prefetching.
+    
+    Returns:
+    - 200 with profile status if user has a mentor profile
+    - 200 with has_profile=false if user has no mentor profile
+    
+    GateAI OS Contract:
+    - This endpoint performs NO mutations
+    - This endpoint is safe for GET requests
+    - This endpoint can be auto-probed on page load
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request):
+        """Get mentor profile status for the current user"""
+        user = request.user
+        
+        # Check if user has a mentor profile
+        if not hasattr(user, 'mentor_profile'):
+            return Response({
+                'has_profile': False,
+                'mentor_profile_id': None,
+                'application_status': None,
+                'can_update_profile': False
+            }, status=status.HTTP_200_OK)
+        
+        # User has a mentor profile
+        mentor_profile = user.mentor_profile
+        
+        return Response({
+            'has_profile': True,
+            'mentor_profile_id': mentor_profile.id,
+            'application_status': mentor_profile.status,
+            'can_update_profile': True
+        }, status=status.HTTP_200_OK)
+
+
+class MentorProfileCreateView(generics.CreateAPIView):
+    """
+    CREATE mentor profile for authenticated user.
+    
+    This endpoint is for CREATING a new mentor profile.
+    Use PATCH /profile/update/ for updating an existing profile.
+    
+    System defaults are set automatically:
+    - status = "draft"
+    - timezone = user.timezone OR settings.TIME_ZONE OR "UTC"
+    - starting_price = Decimal("0.00")
+    - average_rating = Decimal("0.00")
+    - total_reviews = 0
+    - total_earnings = Decimal("0.00")
+    - total_sessions = 0
+    - is_verified = False
+    - payouts_enabled = False
+    - charges_enabled = False
+    - specializations = []
+    
+    Returns 201 Created with mentor_profile_id on success.
+    Returns 400 if profile already exists or validation fails.
+    """
+    serializer_class = MentorProfileCreateSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def perform_create(self, serializer):
+        user = self.request.user
+        
+        # Check if profile already exists
+        if hasattr(user, 'mentor_profile'):
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({
+                'detail': 'Mentor profile already exists. Use PATCH /profile/update/ to update it.'
+            })
+        
+        # Create the profile with user
+        serializer.save(user=user)
+    
+    def create(self, request, *args, **kwargs):
+        """Override to return mentor_profile_id in response"""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        
+        # Return created profile data with explicit mentor_profile_id
+        profile = serializer.instance
+        response_data = {
+            'id': profile.id,
+            'mentor_profile_id': profile.id,
+            'status': profile.status,
+            'message': 'Mentor profile created successfully',
+        }
+        
+        headers = self.get_success_headers(serializer.data)
+        return Response(response_data, status=status.HTTP_201_CREATED, headers=headers)
+
 
 class MentorProfileUpdateView(generics.RetrieveUpdateAPIView):
     """Get and update mentor profile (for mentors only)"""

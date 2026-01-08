@@ -43,6 +43,7 @@ schema_view = get_schema_view(
     permission_classes=schema_permission_classes,
     patterns=[
         path('api/v1/users/', include('users.urls')),
+        path('api/v1/appointments/', include('appointments.urls')),
         path('api/v1/decision-slots/', include('decision_slots.urls')),
         path('api/v1/signal-delivery/', include('signal_delivery.urls')),
         path('api/v1/adminpanel/', include('adminpanel.urls')),
@@ -69,10 +70,12 @@ urlpatterns = [
     
     # Backward compatibility redirect
     path('api/v1/mentors/', RedirectView.as_view(url='/api/v1/human-loop/', permanent=False)),
-    path('api/v1/decision-slots/', include('decision_slots.urls')), # Decision Slot System (formerly Appointment booking / cancellation)
     
-    # Backward compatibility redirect
-    path('api/v1/appointments/', RedirectView.as_view(url='/api/v1/decision-slots/', permanent=False)),
+    # Appointment domain (isolated from kernel)
+    path('api/v1/appointments/', include('appointments.urls')),
+    
+    # Decision Slot System (kernel arbitration only)
+    path('api/v1/decision-slots/', include('decision_slots.urls')),
     path('api/v1/adminpanel/', include('adminpanel.urls')), # Admin panel for managing users, mentors, appointments, etc.
     path('api/v1/signal-delivery/', include('signal_delivery.urls')), # Signal Delivery Layer (formerly Notifications for users)
     

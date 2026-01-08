@@ -485,6 +485,41 @@ class PaymentDetailView(generics.RetrieveAPIView):
         return Payment.objects.filter(user=self.request.user).select_related('mentor', 'appointment')
 
 
+class PayoutStatusView(APIView):
+    """
+    READ-ONLY endpoint for payout status.
+    
+    Safe for automatic frontend probing.
+    Returns payout readiness without mutations.
+    
+    GateAI OS Contract:
+    - This endpoint performs NO mutations
+    - This endpoint is safe for GET requests
+    - This endpoint can be auto-probed on page load
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request):
+        """Get payout status for the current user"""
+        # User has no mentor profile - return safe defaults
+        if not hasattr(request.user, 'mentor_profile'):
+            return Response({
+                'payout_enabled': False,
+                'requires_setup': True,
+                'has_stripe_account': False,
+            }, status=status.HTTP_200_OK)
+        
+        mentor = request.user.mentor_profile
+        has_stripe = bool(mentor.stripe_account_id)
+        payout_enabled = has_stripe and mentor.payouts_enabled
+        
+        return Response({
+            'payout_enabled': payout_enabled,
+            'requires_setup': not payout_enabled,
+            'has_stripe_account': has_stripe,
+        }, status=status.HTTP_200_OK)
+
+
 class MentorPayoutSummaryView(APIView):
     """Get payout summary for the authenticated mentor"""
     permission_classes = [permissions.IsAuthenticated]

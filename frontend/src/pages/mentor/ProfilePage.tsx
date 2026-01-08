@@ -139,19 +139,34 @@ const MentorProfilePage: React.FC = () => {
         // Fetch mentor's own profile
         const profile = await mentorService.getMyProfile();
         setMentorProfile(profile);
+        
+        // Fetch Stripe Connect status
         try {
-          const status = await mentorService.getStripeStatus();
+          const status = await mentorService.getConnectStatus();
           setPayoutStatus(status);
+          
+          // IMPORTANT: Only fetch payout summary if Stripe is connected
+          // Missing Stripe is an ONBOARDING STATE, not an error
+          // 403 from /payments/payouts/summary/ is EXPECTED when Stripe is not connected
+          if (status?.is_connected) {
+            try {
+              setPayoutSummaryLoading(true);
+              const summary = await mentorService.getPayoutSummary();
+              setPayoutSummary(summary);
+            } catch (error) {
+              console.error('Failed to fetch payout summary:', error);
+              setPayoutSummary(null);
+            } finally {
+              setPayoutSummaryLoading(false);
+            }
+          } else {
+            // Stripe not connected - don't make payout API calls
+            setPayoutSummary(null);
+            setPayoutSummaryLoading(false);
+          }
         } catch {
           setPayoutStatus(null);
-        }
-        try {
-          setPayoutSummaryLoading(true);
-          const summary = await mentorService.getPayoutSummary();
-          setPayoutSummary(summary);
-        } catch {
           setPayoutSummary(null);
-        } finally {
           setPayoutSummaryLoading(false);
         }
       } catch (error: any) {
@@ -169,22 +184,27 @@ const MentorProfilePage: React.FC = () => {
   // Fetch services when mentor profile is available
   useEffect(() => {
     const fetchServices = async () => {
-      if (!mentorProfile?.id) return;
+      // Check for mentor_profile_id from the new profile status response
+      const profileId = mentorProfile?.mentor_profile_id || mentorProfile?.id;
+      if (!profileId) return;
       
       try {
         setServicesLoading(true);
-        const servicesData = await mentorService.getMyServices(mentorProfile.id);
+        const servicesData = await mentorService.getMyServices(profileId);
         setServices(normalizeArray<MentorServiceType>(servicesData, ['results', 'services']));
       } catch (error) {
         console.error('Failed to fetch services:', error);
-        showError('Failed to load services');
+        // Only show error if it's a real failure, not missing profile
+        if (mentorProfile?.has_profile !== false) {
+          showError('Failed to load services');
+        }
       } finally {
         setServicesLoading(false);
       }
     };
 
     fetchServices();
-  }, [mentorProfile?.id, showError]);
+  }, [mentorProfile?.mentor_profile_id, mentorProfile?.id, mentorProfile?.has_profile, showError]);
 
   const handleSetPrimaryService = async (serviceId: number) => {
     try {
@@ -249,8 +269,13 @@ const MentorProfilePage: React.FC = () => {
   };
 
   const handleSaveService = async () => {
-    if (!mentorProfile?.id) {
-      showError('Mentor profile not loaded.');
+    // Get profile ID from the new status response format
+    const profileId = mentorProfile?.mentor_profile_id || mentorProfile?.id;
+    
+    if (!profileId) {
+      // This is an ONBOARDING STATE, not an error
+      // Show a friendly inline message in the dialog instead of a red toast
+      showError('Please create your mentor profile before adding services.');
       return;
     }
     if (!serviceForm.title.trim()) {
@@ -277,7 +302,7 @@ const MentorProfilePage: React.FC = () => {
 
     try {
       if (serviceDialogMode === 'create') {
-        const created = await mentorService.createMentorService(mentorProfile.id, payload);
+        const created = await mentorService.createMentorService(profileId, payload);
         setServices((prev) => [...prev, created]);
         showSuccess('Service created successfully.');
       } else if (editingServiceId) {
@@ -375,8 +400,20 @@ const MentorProfilePage: React.FC = () => {
         session_focus: formData.session_focus,
         specializations: formData.expertise,
       };
-      await mentorService.updateMyProfile(payload);
-      showSuccess('Profile saved successfully.');
+      
+      // IMPORTANT: Branch based on whether profile exists
+      // has_profile === false → POST /profile/ (create)
+      // has_profile === true  → PATCH /profile/update/ (update)
+      if (!mentorProfile?.has_profile) {
+        // Create new profile
+        const created = await mentorService.createMyProfile(payload);
+        setMentorProfile(created);
+        showSuccess('Profile created successfully.');
+      } else {
+        // Update existing profile
+        await mentorService.updateMyProfile(payload);
+        showSuccess('Profile updated successfully.');
+      }
     } catch (error: any) {
       const message = error?.response?.data?.detail || 'Failed to save profile.';
       showError(message);
@@ -853,6 +890,11 @@ const MentorProfilePage: React.FC = () => {
                       </Typography>
                     </Grid>
                   </Grid>
+                ) : !payoutStatus?.is_connected ? (
+                  // Onboarding state: Stripe not connected (warning, not error)
+                  <Alert severity="warning" sx={{ mt: 2 }}>
+                    Connect Stripe to view earnings and payout details. Complete the setup above to start receiving payments.
+                  </Alert>
                 ) : (
                   <Typography variant="body2" color="text.secondary">
                     Payout summary is not available yet.
@@ -890,7 +932,7 @@ const MentorProfilePage: React.FC = () => {
                   'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
               }}
             >
-              Save Profile
+              {!mentorProfile?.has_profile ? 'Create Profile' : 'Save Profile'}
             </Button>
           </Box>
         </Grid>

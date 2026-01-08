@@ -271,33 +271,91 @@ class KernelAuditLog(models.Model):
             return False
 
 
+class KernelArbitrationRecord(models.Model):
+    """
+    Atomic arbitration gate for sys_claim winner selection.
+    
+    Ensures exactly ONE winner per (resource_id, bucket_start) via UNIQUE constraint.
+    Used to implement deterministic arbitration: winner = min(SHA256(context_hash:owner_id))
+    
+    Flow:
+    1. All contenders wait for bucket to close (sleep until bucket_end + 50ms)
+    2. First to wake acquires lock on this record
+    3. Computes winner from all contenders in bucket
+    4. Persists winner_* fields and sets decided_at
+    5. Others read winner and compare to their hash
+    """
+    
+    resource_id = models.CharField(max_length=255, db_index=True, help_text="Resource ID from sys_claim")
+    bucket_start = models.DateTimeField(db_index=True, help_text="Start of 2-second arbitration bucket")
+    
+    # Winner fields (populated after decision)
+    winner_hash = models.CharField(max_length=64, blank=True, default="", help_text="SHA256 hash of winner")
+    winner_owner_id = models.CharField(max_length=128, blank=True, default="", help_text="Owner ID of winner")
+    winner_context_hash = models.CharField(max_length=128, blank=True, default="", help_text="Context hash of winner")
+    
+    # Decision timestamp
+    decided_at = models.DateTimeField(null=True, blank=True, help_text="When winner was decided")
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['resource_id', 'bucket_start'],
+                name='uniq_arb_resource_bucket'
+            )
+        ]
+        indexes = [
+            models.Index(fields=['resource_id', 'bucket_start']),
+            models.Index(fields=['decided_at']),
+        ]
+        ordering = ['-created_at']
+    
+    def __str__(self) -> str:
+        return f"Arbitration({self.resource_id}, bucket={self.bucket_start.isoformat()}, winner={self.winner_hash[:8]}...)"
+
+
 class KernelIdempotencyRecord(models.Model):
     """
     Hot-path idempotency store for kernel event processing.
     
     Decouples hot-path "have we processed this key?" lookups from KernelAuditLog.
     Optimized for fast unique key checks and status queries.
+    
+    State Machine:
+    - IN_PROGRESS: Key claimed, operation in flight
+    - SUCCEEDED: Operation completed successfully (terminal)
+    - REJECTED: Operation rejected by kernel (terminal)
+    - FAILED: Operation failed, may be retried
     """
 
-    STATUS_PROCESSED = "PROCESSED"
+    STATUS_IN_PROGRESS = "IN_PROGRESS"
+    STATUS_SUCCEEDED = "SUCCEEDED"
+    STATUS_PROCESSED = "PROCESSED"  # Legacy alias for SUCCEEDED
     STATUS_REJECTED = "REJECTED"
     STATUS_FAILED = "FAILED"
 
     STATUS_CHOICES = (
-        (STATUS_PROCESSED, "Processed"),
+        (STATUS_IN_PROGRESS, "In Progress"),
+        (STATUS_SUCCEEDED, "Succeeded"),
+        (STATUS_PROCESSED, "Processed"),  # Legacy
         (STATUS_REJECTED, "Rejected"),
         (STATUS_FAILED, "Failed"),
     )
     
+    # Terminal success states - operation provably succeeded
+    SUCCESS_STATES = {STATUS_SUCCEEDED, STATUS_PROCESSED}
+    
     # Terminal states - no transitions allowed FROM these states
-    TERMINAL_STATES = {STATUS_PROCESSED, STATUS_REJECTED}
+    TERMINAL_STATES = {STATUS_SUCCEEDED, STATUS_PROCESSED, STATUS_REJECTED}
 
     idempotency_key = models.CharField(max_length=128, unique=True, db_index=True)
-    event_type = models.CharField(max_length=128, db_index=True)
-    decision_id = models.CharField(max_length=128, db_index=True)
-    context_hash = models.CharField(max_length=64)
+    event_type = models.CharField(max_length=128, db_index=True, blank=True)
+    decision_id = models.CharField(max_length=128, db_index=True, blank=True)
+    context_hash = models.CharField(max_length=64, blank=True)
+    owner_id = models.CharField(max_length=128, blank=True, help_text="Owner ID for semantic collision detection")
     status = models.CharField(
-        max_length=16, choices=STATUS_CHOICES, default=STATUS_PROCESSED, db_index=True
+        max_length=16, choices=STATUS_CHOICES, default=STATUS_IN_PROGRESS, db_index=True
     )
     processed_at = models.DateTimeField(auto_now_add=True, db_index=True)
     last_event_id = models.UUIDField(null=True, blank=True, help_text="Pointer to KernelAuditLog")
@@ -314,12 +372,53 @@ class KernelIdempotencyRecord(models.Model):
     def __str__(self) -> str:
         return f"Idempotency({self.idempotency_key[:16]}...) [{self.status}]"
     
+    def is_semantically_same_request(
+        self, event_type: str, context_hash: str, owner_id: str = None
+    ) -> bool:
+        """
+        Check if incoming request matches the semantic identity of this record.
+        
+        Semantic identity for idempotency: SAME (event_type, context_hash, owner_id)
+        decision_id is NOT part of semantic identity (informational only).
+        
+        Detects idempotency key collisions where the same key is reused for
+        a different operation (different event_type, context_hash, or owner_id).
+        
+        Args:
+            event_type: Incoming event type
+            context_hash: Incoming context hash
+            owner_id: Incoming owner ID (optional, for semantic collision detection)
+        
+        Returns:
+            True if semantically identical, False if collision detected
+        """
+        # If record fields are empty, we can't determine collision (treat as same)
+        # This handles partial initialization during claim
+        if not self.event_type or not self.context_hash:
+            return True
+        
+        # Compare semantic fields: event_type, context_hash, owner_id
+        # Note: owner_id comparison is optional (for backward compatibility)
+        event_match = self.event_type == event_type
+        context_match = self.context_hash == context_hash
+        
+        # If owner_id provided and record has owner_id, check it
+        if owner_id and self.owner_id:
+            owner_match = self.owner_id == owner_id
+            return event_match and context_match and owner_match
+        
+        # If no owner_id check possible, just check event_type and context_hash
+        return event_match and context_match
+    
     @classmethod
     def is_valid_transition(cls, current_status: str, new_status: str) -> bool:
         """
         Check if a state transition is valid (monotonic, no backtracking).
         
-        Terminal states (PROCESSED, REJECTED) cannot transition to FAILED.
+        State machine rules:
+        - IN_PROGRESS can transition to SUCCEEDED, FAILED, or REJECTED
+        - Terminal states (SUCCEEDED, PROCESSED, REJECTED) cannot transition to any other state
+        - FAILED can transition to IN_PROGRESS (retry) or terminal states
         
         Args:
             current_status: Current record status
@@ -328,14 +427,14 @@ class KernelIdempotencyRecord(models.Model):
         Returns:
             True if transition is allowed, False otherwise
         """
-        # Terminal states cannot transition to FAILED
-        if current_status in cls.TERMINAL_STATES and new_status == cls.STATUS_FAILED:
-            return False
-        
         # Allow idempotent updates (same status)
         if current_status == new_status:
             return True
         
-        # All other transitions are valid
+        # Terminal states cannot transition to any other state
+        if current_status in cls.TERMINAL_STATES:
+            return False
+        
+        # All other transitions are valid (IN_PROGRESS -> *, FAILED -> *)
         return True
 

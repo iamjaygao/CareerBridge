@@ -24,6 +24,7 @@ urlpatterns = [
     
     # Statistics
     path('statistics/', views.payment_statistics, name='payment_statistics'),
+    path('payouts/status/', views.PayoutStatusView.as_view(), name='payout_status'),
     path('payouts/summary/', views.MentorPayoutSummaryView.as_view(), name='mentor_payout_summary'),
     
     # Webhooks

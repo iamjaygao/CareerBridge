@@ -11,6 +11,11 @@ import {
   Chip,
   Divider,
   Alert,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -42,12 +47,14 @@ const MentorAvailabilityPage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [onboardingMessage, setOnboardingMessage] = useState<string | null>(null);
   const [mentorId, setMentorId] = useState<number | null>(null);
   const [slotPrice, setSlotPrice] = useState<number>(0);
   const [availability, setAvailability] = useState<DayAvailability[]>([]);
   const [removedSlotIds, setRemovedSlotIds] = useState<number[]>([]);
   const [weekRange, setWeekRange] = useState<{ start: Date; end: Date } | null>(null);
   const [weekOffset, setWeekOffset] = useState(0);
+  const [openClearConfirm, setOpenClearConfirm] = useState(false);
   const normalizeArray = <T,>(value: any, fallbackKeys: string[] = []): T[] => {
     if (Array.isArray(value)) return value;
     for (const key of fallbackKeys) {
@@ -95,19 +102,53 @@ const MentorAvailabilityPage: React.FC = () => {
     const fetchAvailability = async () => {
       try {
         setError(null);
-        const profile = await mentorService.getMyProfile();
-        const mentorProfileId = profile?.id;
-        if (!mentorProfileId) {
-          setError('Mentor profile not found.');
+        setOnboardingMessage(null);
+        
+        // Step 1: Check mentor profile status (READ-ONLY endpoint)
+        const profileStatus = await mentorService.getMyProfile();
+        
+        if (!profileStatus?.has_profile) {
+          // This is an ONBOARDING STATE, not an error
+          setOnboardingMessage('Please create your mentor profile before setting availability.');
           setLoading(false);
           return;
         }
+        
+        const mentorProfileId = profileStatus.mentor_profile_id;
+        if (!mentorProfileId) {
+          // This is a real data error
+          setError('Mentor profile data is incomplete. Please contact support.');
+          setLoading(false);
+          return;
+        }
+        
+        // Step 2: Check Stripe Connect status (READ-ONLY endpoint)
+        const connectStatus = await mentorService.getConnectStatus();
+        
+        if (!connectStatus?.is_connected) {
+          // This is an ONBOARDING STATE, not an error
+          setOnboardingMessage('Please complete Stripe Connect onboarding before setting availability. This is required to receive payments from students.');
+          setLoading(false);
+          return;
+        }
+        
+        // Step 3: Check payout status (READ-ONLY endpoint)
+        const payoutStatus = await mentorService.getPayoutStatus();
+        
+        if (!payoutStatus?.payout_enabled) {
+          // This is an ONBOARDING STATE, not an error
+          setOnboardingMessage('Payouts are not enabled yet. Please complete your Stripe account setup.');
+          setLoading(false);
+          return;
+        }
+        
+        // All checks passed - proceed with loading availability
         setMentorId(mentorProfileId);
 
         const servicesResponse = await mentorService.getMyServices(mentorProfileId);
         const services = normalizeArray<any>(servicesResponse, ['results', 'services']);
-        const primaryService =
-          services.find((service: any) => service.id === profile?.primary_service_id) || services[0];
+        const primaryService = services[0] ?? null;
+         
         const price = primaryService?.price_per_hour || primaryService?.fixed_price || 0;
         setSlotPrice(Number(price));
 
@@ -308,15 +349,27 @@ const MentorAvailabilityPage: React.FC = () => {
   };
 
   const handleClearAll = () => {
-    if (window.confirm('Are you sure you want to clear all availability?')) {
-      const idsToRemove = availability.flatMap((dayAvail) =>
-        dayAvail.slots.filter((slot) => slot.backendId).map((slot) => slot.backendId!)
-      );
-      if (idsToRemove.length) {
-        setRemovedSlotIds((prev) => [...prev, ...idsToRemove]);
-      }
-      setAvailability(availability.map(dayAvail => ({ ...dayAvail, enabled: false, slots: [] })));
+    // Open confirmation dialog instead of using window.confirm
+    setOpenClearConfirm(true);
+  };
+
+  const handleConfirmClear = () => {
+    // Perform the actual clear logic
+    const idsToRemove = availability.flatMap((dayAvail) =>
+      dayAvail.slots.filter((slot) => slot.backendId).map((slot) => slot.backendId!)
+    );
+    if (idsToRemove.length) {
+      setRemovedSlotIds((prev) => [...prev, ...idsToRemove]);
     }
+    setAvailability(availability.map(dayAvail => ({ ...dayAvail, enabled: false, slots: [] })));
+    
+    // Close the dialog
+    setOpenClearConfirm(false);
+  };
+
+  const handleCancelClear = () => {
+    // Close dialog without side effects
+    setOpenClearConfirm(false);
   };
 
   const handleSave = async () => {
@@ -389,6 +442,13 @@ const MentorAvailabilityPage: React.FC = () => {
               {formatWeekRange(weekRange.start, weekRange.end)}
             </Typography>
           )}
+          {/* Onboarding messages (warning, not error) */}
+          {onboardingMessage && (
+            <Alert severity="warning" sx={{ mt: 2 }}>
+              {onboardingMessage}
+            </Alert>
+          )}
+          {/* Real errors (e.g., network failures, data issues) */}
           {error && (
             <Alert severity="error" sx={{ mt: 2 }}>
               {error}
@@ -400,40 +460,44 @@ const MentorAvailabilityPage: React.FC = () => {
             </Alert>
           )}
         </Box>
-        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-          <Button
-            variant="outlined"
-            onClick={() => setWeekOffset((prev) => Math.max(0, prev - 1))}
-            disabled={weekOffset === 0}
-          >
-            This Week
-          </Button>
-          <Button
-            variant="outlined"
-            onClick={() => setWeekOffset((prev) => Math.min(3, prev + 1))}
-            disabled={weekOffset >= 3}
-          >
-            Next Week
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<CopyIcon />}
-            onClick={handleCopyWeek}
-          >
-            Copy to Next Week
-          </Button>
-          <Button
-            variant="outlined"
-            color="error"
-            startIcon={<ClearIcon />}
-            onClick={handleClearAll}
-          >
-            Clear All
-          </Button>
-        </Box>
+        {/* Availability controls - disabled during onboarding */}
+        {!onboardingMessage && (
+          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+            <Button
+              variant="outlined"
+              onClick={() => setWeekOffset((prev) => Math.max(0, prev - 1))}
+              disabled={weekOffset === 0}
+            >
+              This Week
+            </Button>
+            <Button
+              variant="outlined"
+              onClick={() => setWeekOffset((prev) => Math.min(3, prev + 1))}
+              disabled={weekOffset >= 3}
+            >
+              Next Week
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<CopyIcon />}
+              onClick={handleCopyWeek}
+            >
+              Copy to Next Week
+            </Button>
+            <Button
+              variant="outlined"
+              color="error"
+              startIcon={<ClearIcon />}
+              onClick={handleClearAll}
+            >
+              Clear All
+            </Button>
+          </Box>
+        )}
       </Box>
 
-      {/* Weekly Availability */}
+      {/* Weekly Availability - hidden during onboarding */}
+      {!onboardingMessage && (
       <Grid container spacing={3}>
         {availability.map((dayAvail) => (
           <Grid item xs={12} md={6} key={dayAvail.day}>
@@ -523,8 +587,10 @@ const MentorAvailabilityPage: React.FC = () => {
           </Grid>
         ))}
       </Grid>
+      )}
 
-      {/* Save Button */}
+      {/* Save Button - hidden during onboarding */}
+      {!onboardingMessage && (
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 4 }}>
         <Button
           variant="contained"
@@ -540,6 +606,33 @@ const MentorAvailabilityPage: React.FC = () => {
           {saving ? 'Saving...' : 'Save Availability'}
         </Button>
       </Box>
+      )}
+
+      {/* Clear Availability Confirmation Dialog */}
+      <Dialog
+        open={openClearConfirm}
+        onClose={handleCancelClear}
+        aria-labelledby="clear-dialog-title"
+        aria-describedby="clear-dialog-description"
+      >
+        <DialogTitle id="clear-dialog-title">
+          Clear availability?
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText id="clear-dialog-description">
+            This will remove all your availability slots for the selected week.
+            This action cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCancelClear} variant="outlined">
+            Cancel
+          </Button>
+          <Button onClick={handleConfirmClear} variant="contained" color="error" autoFocus>
+            Clear Availability
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

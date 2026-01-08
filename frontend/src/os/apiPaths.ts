@@ -12,6 +12,7 @@
 export const OS_API = {
   ATS_SIGNALS: '/ats-signals/',
   HUMAN_LOOP: '/human-loop/',
+  APPOINTMENTS: '/appointments/',
   DECISION_SLOTS: '/decision-slots/',
   SIGNAL_DELIVERY: '/signal-delivery/',
 } as const;

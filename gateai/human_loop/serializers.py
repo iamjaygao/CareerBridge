@@ -306,6 +306,86 @@ class MentorReviewSerializer(serializers.ModelSerializer):
         return MentorReview.objects.create(mentor=mentor, user=user, **validated_data)
 
 
+class MentorProfileCreateSerializer(serializers.ModelSerializer):
+    """
+    Serializer for CREATING a new mentor profile.
+    
+    Only requires user-editable fields. System defaults are set automatically.
+    """
+    # User-editable fields (minimal required set)
+    bio = serializers.CharField(required=True, max_length=500)
+    current_position = serializers.CharField(required=True, max_length=200)
+    industry = serializers.CharField(required=True, max_length=100)
+    years_of_experience = serializers.IntegerField(required=False, default=0)
+    
+    # Optional user-editable fields
+    primary_focus = serializers.CharField(required=False, allow_blank=True, max_length=100)
+    session_focus = serializers.CharField(required=False, allow_blank=True, max_length=150)
+    specializations = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        default=list
+    )
+    
+    class Meta:
+        model = MentorProfile
+        fields = (
+            'bio',
+            'current_position',
+            'industry',
+            'years_of_experience',
+            'primary_focus',
+            'session_focus',
+            'specializations',
+        )
+    
+    def create(self, validated_data):
+        """
+        Create mentor profile with system defaults.
+        
+        System defaults are set automatically:
+        - status = "draft"
+        - timezone = user.timezone OR settings.TIME_ZONE OR "UTC"
+        - starting_price = Decimal("0.00")
+        - average_rating = Decimal("0.00")
+        - total_reviews = 0
+        - total_earnings = Decimal("0.00")
+        - total_sessions = 0
+        - is_verified = False
+        - payouts_enabled = False
+        - charges_enabled = False
+        - specializations = [] (if not provided)
+        """
+        from decimal import Decimal
+        from django.conf import settings
+        
+        user = validated_data.pop('user')
+        
+        # Set system defaults
+        profile_data = {
+            'user': user,
+            'status': 'draft',  # Override default 'pending' - new profiles start as draft
+            'timezone': getattr(user, 'timezone', None) or settings.TIME_ZONE or 'UTC',
+            'starting_price': Decimal('0.00'),
+            'average_rating': Decimal('0.00'),
+            'total_reviews': 0,
+            'total_earnings': Decimal('0.00'),
+            'total_sessions': 0,
+            'is_verified': False,
+            'payouts_enabled': False,
+            'charges_enabled': False,
+        }
+        
+        # Add user-provided data
+        profile_data.update(validated_data)
+        
+        # Ensure specializations is a list
+        if 'specializations' not in profile_data:
+            profile_data['specializations'] = []
+        
+        return MentorProfile.objects.create(**profile_data)
+
+
 class MentorProfileDetailSerializer(MentorProfileSerializer):
     """Comprehensive mentor detail serializer with services, reviews, and availability"""
 

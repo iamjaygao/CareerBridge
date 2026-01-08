@@ -92,7 +92,12 @@ class MentorService {
   }
 
   /**
-   * Update mentor profile
+   * Update mentor profile (WRITE operation)
+   * 
+   * GateAI OS Contract:
+   * - This endpoint is WRITE-ONLY (PUT/PATCH)
+   * - NEVER use GET on /profile/update/
+   * - Requires explicit user action (form submit, button click)
    */
   async updateMentorProfile(mentorId: number, data: any): Promise<any> {
     try {
@@ -105,13 +110,20 @@ class MentorService {
   }
 
   /**
-   * Get mentor's own profile (for authenticated mentors)
+   * Get mentor's own profile status (for authenticated mentors)
+   * 
+   * IMPORTANT: This uses the READ-ONLY profile status endpoint.
+   * 
+   * GateAI OS Contract:
+   * - NEVER use /profile/update/ for GET requests (write-only endpoint)
+   * - /profile/status/ is READ-ONLY and safe for auto-probing
+   * - Returns: { has_profile, mentor_profile_id, application_status, can_update_profile }
    */
   async getMyProfile(): Promise<any> {
     try {
-      // Try to get via profile update endpoint (if it supports GET)
-      // Otherwise, this might need a dedicated endpoint
-      const response = await apiClient.get(`${OS_API.HUMAN_LOOP}profile/update/`);
+      // Use READ-ONLY profile status endpoint
+      // This is safe for automatic probing/prefetching
+      const response = await apiClient.get(`${OS_API.HUMAN_LOOP}profile/status/`);
       return response.data;
     } catch (error) {
       console.error('Failed to get mentor profile:', error);
@@ -120,7 +132,32 @@ class MentorService {
   }
 
   /**
+   * Create mentor's own profile (for authenticated mentors)
+   * 
+   * GateAI OS Contract:
+   * - This endpoint is WRITE-ONLY (POST)
+   * - Use this when has_profile === false
+   * - Requires explicit user action (form submit, button click)
+   * - Returns 201 on success, 400 if profile already exists
+   */
+  async createMyProfile(data: any): Promise<any> {
+    try {
+      const response = await apiClient.post(`${OS_API.HUMAN_LOOP}profile/`, data);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to create mentor profile:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Update mentor's own profile (for authenticated mentors)
+   * 
+   * GateAI OS Contract:
+   * - This endpoint is WRITE-ONLY (PATCH)
+   * - Use this when has_profile === true
+   * - NEVER use GET on /profile/update/
+   * - Requires explicit user action (form submit, button click)
    */
   async updateMyProfile(data: any): Promise<any> {
     try {
@@ -133,14 +170,43 @@ class MentorService {
   }
 
   /**
-   * Get Stripe Connect status for mentor payouts
+   * Get Stripe Connect status for mentor payouts (READ-ONLY)
+   * 
+   * GateAI OS Contract:
+   * - READ-ONLY endpoint, safe for auto-probing
+   * - Returns: { is_connected, requires_action, can_set_availability, ... }
    */
-  async getStripeStatus(): Promise<any> {
+  async getConnectStatus(): Promise<any> {
     try {
       const response = await apiClient.get(`${OS_API.HUMAN_LOOP}connect/status/`);
       return response.data;
     } catch (error) {
-      console.error('Failed to get Stripe status:', error);
+      console.error('Failed to get connect status:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Legacy alias for getConnectStatus
+   * @deprecated Use getConnectStatus() instead
+   */
+  async getStripeStatus(): Promise<any> {
+    return this.getConnectStatus();
+  }
+
+  /**
+   * Get payout status for current user (READ-ONLY)
+   * 
+   * GateAI OS Contract:
+   * - READ-ONLY endpoint, safe for auto-probing
+   * - Returns: { payout_enabled, requires_setup, has_stripe_account }
+   */
+  async getPayoutStatus(): Promise<any> {
+    try {
+      const response = await apiClient.get('/api/v1/payments/payouts/status/');
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get payout status:', error);
       throw error;
     }
   }
