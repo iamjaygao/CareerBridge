@@ -88,9 +88,18 @@ urlpatterns = [
     path('api/v1/payments/', include('payments.urls')), # Payment management
     path('api/v1/chat/', include('chat.urls')), # Real-time chat
     path('api/v1/search/', include('search.urls')), # Search functionality
+    
+    # Phase-B: Peer Mock Runtime (experimental capability)
+    path('api/v1/peer-mock/', include('peer_mock.urls')),
 
-    # GateAI Kernel Syscalls
+    # GateAI Kernel API (Phase-A: Kernel Control Plane)
+    path('api/v1/kernel/', include('kernel.urls')),
+    
+    # GateAI Kernel Syscalls (legacy direct path)
     path('kernel/', include('kernel.urls')),
+    
+    # GateAI Kernel Console (Root Control Plane)
+    path('kernel/console/', include('kernel.console.urls')),
 
     # Reserved engine namespaces (not yet implemented)
     # See docs/GATEAI_OS_CONTRACT.md for details

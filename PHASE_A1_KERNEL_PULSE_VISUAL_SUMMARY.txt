@@ -1,0 +1,364 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                    PHASE-A.1 KERNEL PULSE — VISUAL SUMMARY                   ║
+║                         Read-Only Observability Plane                        ║
+║                              Status: ✅ COMPLETE                             ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ IMPLEMENTATION OVERVIEW                                                      │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+📦 Backend (5 files)
+   ├─ ✅ kernel/pulse/__init__.py          [NEW] Module docs
+   ├─ ✅ kernel/pulse/views.py             [NEW] KernelPulseSummaryView
+   ├─ ✅ kernel/pulse/urls.py              [NEW] URL routing
+   ├─ ✅ kernel/pulse/test_pulse.py        [NEW] 8 tests (ALL PASSED)
+   └─ ✅ kernel/urls.py                    [MOD] Added pulse/ routing
+
+🌐 Frontend (2 files)
+   ├─ ✅ pages/superadmin/KernelPulsePage.tsx  [NEW] Pulse UI
+   └─ ✅ App.tsx                               [MOD] Added route /superadmin/kernel-pulse
+
+🧪 Tests: 8/8 PASSED ✅
+   ├─ test_unauthenticated_returns_403
+   ├─ test_regular_user_returns_403
+   ├─ test_superuser_returns_200
+   ├─ test_response_contains_pulse_abi_keys
+   ├─ test_recent_syscalls_returned
+   ├─ test_counts_computed_correctly
+   ├─ test_kernel_state_mode_derivation
+   └─ test_active_locks_structure
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ PULSE ABI v0.1 (FROZEN CONTRACT)                                            │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+GET /kernel/pulse/summary/
+
+Response Structure:
+{
+  "pulse_version": "0.1",
+  "now": "2026-01-14T12:00:00Z",
+  
+  "kernel_state": {
+    "mode": "NORMAL | DEGRADED | LOCKED",
+    "active_lock_pressure": "LOW | MEDIUM | HIGH",
+    "error_rate_1h": 0.0234,
+    "chaos_safe": true
+  },
+  
+  "recent_syscalls": [
+    {
+      "at": "ISO8601",
+      "syscall": "SYS_CLAIM",
+      "decision_slot_id": "uuid",
+      "outcome": "HANDLED | FAILED | REJECTED | EMITTED",
+      "error_code": "string|null",
+      "trace_id": "event_id",
+      "resource_type": null,
+      "resource_id": null,
+      "owner_id": null
+    }
+  ],
+  
+  "counts": {
+    "last_1h": {
+      "total": 150,
+      "success": 145,    // HANDLED
+      "retryable": 3,    // EMITTED
+      "terminal": 1,     // FAILED
+      "conflict": 1      // REJECTED
+    },
+    "last_24h": { /* same structure */ }
+  },
+  
+  "active_locks": {
+    "count": 5,
+    "samples": [
+      {
+        "resource_type": "TIMESLOT",
+        "resource_id": "slot_123",
+        "owner_id": "user_456",
+        "expires_at": "ISO8601",
+        "status": "LOCKED"
+      }
+    ]
+  },
+  
+  "top_errors_24h": [
+    {"error_code": "LOCK_CONFLICT", "count": 25}
+  ]
+}
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ KERNEL STATE DERIVATION LOGIC                                               │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+Mode Calculation (from error_rate_1h):
+  ┌─────────────────────────────────┐
+  │ error_rate < 5%   → NORMAL      │  ✅ Healthy
+  │ 5% ≤ error_rate < 20% → DEGRADED│  ⚠️  Degraded
+  │ error_rate ≥ 20%  → LOCKED      │  🔒 Kernel locked
+  └─────────────────────────────────┘
+
+Lock Pressure (from active_locks.count):
+  ┌─────────────────────────────────┐
+  │ count < 10   → LOW              │  ✅ Healthy
+  │ 10 ≤ count < 100 → MEDIUM       │  ⚠️  Watch
+  │ count ≥ 100  → HIGH             │  🔥 Critical
+  └─────────────────────────────────┘
+
+Chaos Safety:
+  chaos_safe = (mode != "LOCKED")
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ DATA FLOW ARCHITECTURE                                                      │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+Frontend Request:
+  │
+  │  GET /kernel/pulse/summary/
+  │  Authorization: Bearer <JWT>
+  │
+  ▼
+┌────────────────────────────────────┐
+│ GovernanceMiddleware               │
+│ ✓ Check: kernel world?             │
+│ ✓ Check: superuser?                │
+│ ✓ JWT auth (pre-DRF)               │
+└─────────┬──────────────────────────┘
+          │
+          ▼
+┌────────────────────────────────────┐
+│ KernelPulseSummaryView             │
+│ ├─ SessionAuth / JWT Auth          │
+│ ├─ IsAuthenticated permission      │
+│ └─ READ-ONLY queries               │
+└─────────┬──────────────────────────┘
+          │
+          ├─────► KernelAuditLog
+          │       ├─ Recent 20 events
+          │       ├─ Counts (1h/24h)
+          │       └─ Top errors (24h)
+          │
+          └─────► ResourceLock
+                  └─ Active locks only
+          │
+          ▼
+┌────────────────────────────────────┐
+│ Compute Kernel State               │
+│ ├─ error_rate_1h                   │
+│ ├─ mode derivation                 │
+│ ├─ lock_pressure                   │
+│ └─ chaos_safe flag                 │
+└─────────┬──────────────────────────┘
+          │
+          ▼
+┌────────────────────────────────────┐
+│ Return Pulse ABI v0.1 JSON         │
+└─────────┬──────────────────────────┘
+          │
+          ▼
+┌────────────────────────────────────┐
+│ KernelPulsePage (React)            │
+│ ├─ ONE XHR on mount                │
+│ ├─ Display metrics                 │
+│ ├─ Tables + Charts                 │
+│ └─ NO polling / NO writes          │
+└────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ SECURITY MODEL                                                               │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+Access Control (3 Layers):
+  ┌─────────────────────────────────────────────────────────┐
+  │ 1️⃣  GovernanceMiddleware                                │
+  │     ✓ request.world == 'kernel'                         │
+  │     ✓ request.user.is_superuser                         │
+  │     ✓ JWT pre-authentication                            │
+  ├─────────────────────────────────────────────────────────┤
+  │ 2️⃣  DRF Authentication                                  │
+  │     ✓ SessionAuthentication                             │
+  │     ✓ JWTAuthentication                                 │
+  ├─────────────────────────────────────────────────────────┤
+  │ 3️⃣  DRF Permission                                      │
+  │     ✓ IsAuthenticated                                   │
+  └─────────────────────────────────────────────────────────┘
+
+Unauthorized Access:
+  ┌─────────────────────────────────────────────────────────┐
+  │ ❌ Unauthenticated        → 403 Forbidden               │
+  │ ❌ Regular user           → 403 Forbidden               │
+  │ ❌ Staff (non-superuser)  → 403 Forbidden               │
+  │ ✅ Superuser + JWT        → 200 OK                      │
+  └─────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ FRONTEND UI COMPONENTS                                                       │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+/superadmin/kernel-pulse
+
+┌───────────────────────────────────────────────────────────────┐
+│ 🔴 Kernel Pulse                                               │
+│ Phase-A.1 | Read-only observability plane | Pulse ABI v0.1   │
+├───────────────────────────────────────────────────────────────┤
+│                                                               │
+│ ┌────────────┐  ┌────────────┐  ┌────────────┐  ┌─────────┐ │
+│ │ Mode       │  │ Pressure   │  │ Error Rate │  │ Chaos   │ │
+│ │ NORMAL ✅  │  │ LOW ✅     │  │ 2.34%      │  │ ✅ YES  │ │
+│ └────────────┘  └────────────┘  └────────────┘  └─────────┘ │
+│                                                               │
+│ ┌──────────────────────┐  ┌──────────────────────┐          │
+│ │ Last 1 Hour          │  │ Last 24 Hours        │          │
+│ │ Total:     150       │  │ Total:     3200      │          │
+│ │ Success:   145       │  │ Success:   3150      │          │
+│ │ Retryable: 3         │  │ Retryable: 30        │          │
+│ │ Terminal:  1         │  │ Terminal:  15        │          │
+│ │ Conflict:  1         │  │ Conflict:  5         │          │
+│ └──────────────────────┘  └──────────────────────┘          │
+│                                                               │
+│ ┌─────────────────────────────────────────────────────────┐  │
+│ │ Active Locks (5)                                        │  │
+│ │ ┌──────┬──────┬───────┬────────┬───────────────────┐   │  │
+│ │ │ Type │ ID   │ Owner │ Status │ Expires           │   │  │
+│ │ ├──────┼──────┼───────┼────────┼───────────────────┤   │  │
+│ │ │ ...  │ ...  │ ...   │ ...    │ ...               │   │  │
+│ │ └──────┴──────┴───────┴────────┴───────────────────┘   │  │
+│ └─────────────────────────────────────────────────────────┘  │
+│                                                               │
+│ ┌─────────────────────────────────────────────────────────┐  │
+│ │ Top Errors (24h)                                        │  │
+│ │ ┌─────────────────────────────┬───────┐                │  │
+│ │ │ Error Code                  │ Count │                │  │
+│ │ ├─────────────────────────────┼───────┤                │  │
+│ │ │ LOCK_CONFLICT               │ 25    │                │  │
+│ │ │ ...                         │ ...   │                │  │
+│ │ └─────────────────────────────┴───────┘                │  │
+│ └─────────────────────────────────────────────────────────┘  │
+│                                                               │
+│ ┌─────────────────────────────────────────────────────────┐  │
+│ │ Recent Syscalls (Last 20)                               │  │
+│ │ ┌──────┬──────────┬─────────┬──────────┬────────────┐  │  │
+│ │ │ Time │ Syscall  │ Outcome │ Resource │ Error Code │  │  │
+│ │ ├──────┼──────────┼─────────┼──────────┼────────────┤  │  │
+│ │ │ ...  │ ...      │ ...     │ ...      │ ...        │  │  │
+│ │ └──────┴──────────┴─────────┴──────────┴────────────┘  │  │
+│ └─────────────────────────────────────────────────────────┘  │
+└───────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ PHASE-A.1 SAFETY COMPLIANCE                                                  │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+✅ READ-ONLY
+   ├─ No database writes
+   ├─ No mutations
+   └─ Query-only operations
+
+✅ NO SIDE EFFECTS
+   ├─ No background jobs
+   ├─ No polling
+   ├─ No external service calls
+   └─ No frozen module calls
+
+✅ KERNEL SOVEREIGNTY
+   ├─ Protected by GovernanceMiddleware
+   ├─ Superuser-only access
+   ├─ Kernel world namespace
+   └─ JWT authentication support
+
+✅ MINIMAL CHANGES
+   ├─ Backend: 5 files (4 new, 1 modified)
+   ├─ Frontend: 2 files (1 new, 1 modified)
+   ├─ No breaking changes
+   └─ Additive only
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ ACCEPTANCE TESTS (ALL PASS ✅)                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+Test A: SuperAdmin Login
+  ✅ Login as SuperAdmin
+  ✅ Navigate to /superadmin
+  ✅ URL is /superadmin
+  ✅ Clean kernel root displays
+
+Test B: Kernel Pulse Page Access
+  ✅ Navigate to /superadmin/kernel-pulse
+  ✅ Network: ONE XHR to /kernel/pulse/summary/ (200)
+  ✅ NO 404 spam
+  ✅ NO frozen module calls
+  ✅ UI displays all metrics
+
+Test C: Backend curl Access
+  ✅ Get JWT token
+  ✅ curl with Bearer token returns 200
+  ✅ Response contains Pulse ABI v0.1 structure
+
+Test D: Unit Tests
+  ✅ 8/8 tests passed
+  ✅ Access control works
+  ✅ Data computation correct
+  ✅ Kernel state derivation works
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ QUICK START                                                                  │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+Backend:
+  cd gateai
+  python3 manage.py test kernel.pulse.test_pulse --settings=gateai.settings_test
+  python3 manage.py runserver 8001
+
+Frontend:
+  cd frontend
+  npm start
+  # Navigate to: http://localhost:3000/superadmin/kernel-pulse
+
+Backend curl:
+  # Get token
+  curl -X POST http://localhost:8001/api/v1/users/login/ \
+    -H "Content-Type: application/json" \
+    -d '{"identifier":"SUPERUSER","password":"PASSWORD"}'
+  
+  # Test pulse endpoint
+  export TOKEN="eyJhbGci..."
+  curl -H "Authorization: Bearer $TOKEN" \
+       http://localhost:8001/kernel/pulse/summary/
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ FILES CHANGED SUMMARY                                                        │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+Backend (5 files):
+  ✅ kernel/pulse/__init__.py                    [NEW] 14 lines
+  ✅ kernel/pulse/views.py                       [NEW] 170 lines
+  ✅ kernel/pulse/urls.py                        [NEW] 11 lines
+  ✅ kernel/pulse/test_pulse.py                  [NEW] 170 lines
+  ✅ kernel/urls.py                              [MOD] +1 line
+
+Frontend (2 files):
+  ✅ pages/superadmin/KernelPulsePage.tsx        [NEW] 440 lines
+  ✅ App.tsx                                     [MOD] +3 lines
+
+Total: 7 files (5 new, 2 modified)
+Lines: ~818 lines added
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ STATUS: ✅ PRODUCTION READY                                                  │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+🎯 Implementation:  ✅ COMPLETE
+🧪 Tests:          ✅ 8/8 PASSED
+🔒 Security:       ✅ 3-LAYER ACCESS CONTROL
+📖 Documentation:  ✅ COMPLETE
+🐛 Linter:         ✅ NO ERRORS
+💥 Breaking:       ✅ NONE
+
+Phase-A.1 Kernel Pulse v0.1 — Ready for Production ✅
+
+═══════════════════════════════════════════════════════════════════════════════
+                            END OF VISUAL SUMMARY
+═══════════════════════════════════════════════════════════════════════════════

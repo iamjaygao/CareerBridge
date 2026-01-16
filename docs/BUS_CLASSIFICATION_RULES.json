@@ -1,0 +1,87 @@
+{
+  "version": "0.1",
+  "description": "Bus classification rules for workload-to-bus mapping",
+  "rules": [
+    {
+      "bus": "PAYMENT_BUS",
+      "match": {
+        "paths": ["payments", "stripe", "refund", "invoice", "billing", "transaction"],
+        "routes": ["/api/v1/payments", "/api/v1/billing"],
+        "keywords": ["payment", "stripe", "refund", "invoice", "billing", "transaction"]
+      }
+    },
+    {
+      "bus": "MENTOR_BUS",
+      "match": {
+        "paths": ["mentors", "mentor", "availability", "appointments", "appointment", "booking", "human_loop", "human-loop"],
+        "routes": ["/api/v1/mentors", "/api/v1/appointments", "/api/v1/human-loop"],
+        "keywords": ["mentor", "availability", "appointment", "booking", "human_loop"]
+      }
+    },
+    {
+      "bus": "AI_BUS",
+      "match": {
+        "paths": ["ats", "signals", "signal", "engine", "resume", "match", "ats_signals", "ats-signals", "signal_delivery", "signal-delivery"],
+        "routes": ["/api/v1/ai", "/api/v1/ats", "/api/v1/signals", "/api/v1/ats-signals", "/api/v1/signal-delivery", "/api/engines"],
+        "keywords": ["ai", "ats", "signal", "engine", "resume", "matcher", "intelligence"]
+      }
+    },
+    {
+      "bus": "PUBLIC_WEB_BUS",
+      "match": {
+        "paths": ["landing", "marketing", "public", "signup", "home", "about", "contact"],
+        "routes": ["/", "/signup", "/pricing", "/about", "/contact"],
+        "keywords": ["public", "landing", "marketing", "signup", "pricing"]
+      }
+    },
+    {
+      "bus": "STAFF_BUS",
+      "match": {
+        "paths": ["staff", "ops", "operations"],
+        "routes": ["/staff"],
+        "keywords": ["staff", "ops", "operations"]
+      }
+    },
+    {
+      "bus": "ADMIN_BUS",
+      "match": {
+        "paths": ["admin", "adminpanel"],
+        "routes": ["/admin", "/api/v1/adminpanel"],
+        "keywords": ["admin", "adminpanel"]
+      }
+    },
+    {
+      "bus": "SEARCH_BUS",
+      "match": {
+        "paths": ["search"],
+        "routes": ["/api/v1/search"],
+        "keywords": ["search", "discovery"]
+      }
+    },
+    {
+      "bus": "CHAT_BUS",
+      "match": {
+        "paths": ["chat", "messaging", "message"],
+        "routes": ["/api/v1/chat"],
+        "keywords": ["chat", "messaging", "message"]
+      }
+    },
+    {
+      "bus": "DECISION_SLOTS_BUS",
+      "match": {
+        "paths": ["decision_slots", "decision-slots", "timeslot", "scheduling"],
+        "routes": ["/api/v1/decision-slots"],
+        "keywords": ["decision_slots", "timeslot", "scheduling", "slot"]
+      }
+    },
+    {
+      "bus": "KERNEL_CORE_BUS",
+      "match": {
+        "paths": ["kernel", "superadmin", "governance", "pulse"],
+        "routes": ["/kernel", "/superadmin"],
+        "keywords": ["kernel", "superadmin", "governance", "pulse"]
+      }
+    }
+  ],
+  "fallback_bus": "UNKNOWN_BUS"
+}

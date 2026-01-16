@@ -1,0 +1,314 @@
+════════════════════════════════════════════════════════════════════════════════
+                    GateAI 4-WORLD OS ENTRY CONSTITUTION
+                           VISUAL NAVIGATION MAP
+════════════════════════════════════════════════════════════════════════════════
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                                                                              │
+│                         🌐 BROWSER ADDRESS BAR                               │
+│                                                                              │
+│    http://localhost:3000/                                                   │
+│    ━━━━━━━━━━━━━━━━━━━━━                                                   │
+│                     ▲                                                        │
+│                     │                                                        │
+│                     │ User types URL or clicks link                          │
+│                     │                                                        │
+└─────────────────────┼────────────────────────────────────────────────────────┘
+                      │
+                      ▼
+════════════════════════════════════════════════════════════════════════════════
+                        WORLD RESOLUTION LAYER
+════════════════════════════════════════════════════════════════════════════════
+
+                 ┌────────────────────────────────┐
+                 │  Path: "/" → Which World?      │
+                 │                                │
+                 │  Resolver: resolve_world()     │
+                 └────────────┬───────────────────┘
+                              │
+           ┌──────────────────┼──────────────────┐
+           │                  │                  │
+       ┌───▼────┐       ┌────▼─────┐      ┌────▼─────┐      ┌──────▼─────┐
+       │ PUBLIC │       │   APP    │      │  ADMIN   │      │   KERNEL   │
+       │   /    │       │  /app    │      │  /admin  │      │ /superadmin│
+       └───┬────┘       └────┬─────┘      └────┬─────┘      └──────┬─────┘
+           │                 │                  │                   │
+           │                 │                  │                   │
+
+
+════════════════════════════════════════════════════════════════════════════════
+                             WORLD 1: PUBLIC
+                               Entry: /
+════════════════════════════════════════════════════════════════════════════════
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                          PUBLIC LANDING PAGE                                 │
+│                                                                              │
+│   ┌─────────────────────────────────────────────────────────────────────┐  │
+│   │  CareerBridge                                 🔔  [ Avatar ]  ▼    │  │
+│   │  Career clarity, guided execution                                   │  │
+│   └─────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+│   ╔═══════════════════════════════════════════════════════════════════╗    │
+│   ║                                                                   ║    │
+│   ║   Know your next role.                                            ║    │
+│   ║   Build the fastest path there.                                   ║    │
+│   ║                                                                   ║    │
+│   ║   CareerBridge combines AI assessment, market signals,            ║    │
+│   ║   and mentor execution to keep your job search focused.           ║    │
+│   ║                                                                   ║    │
+│   ║   [  Start free assessment  ]   [  Browse mentors  ]             ║    │
+│   ║                                                                   ║    │
+│   ╚═══════════════════════════════════════════════════════════════════╝    │
+│                                                                              │
+│   Features • Testimonials • Pricing • FAQ                                   │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+        │                                │
+        │ Not authenticated              │ Authenticated?
+        │                                │ Click "My World" in header
+        ▼                                ▼
+  ┌──────────┐                    ┌────────────────┐
+  │  /login  │                    │ getUserWorld() │
+  │          │                    │ based on flags │
+  │ Enter    │                    └────────┬───────┘
+  │ creds    │                             │
+  └────┬─────┘                             │
+       │                         ┌─────────┴─────────┐
+       │                         │                   │
+       ▼                         ▼                   ▼
+┌─────────────────┐      ┌──────────────┐    ┌────────────┐
+│ LOGIN DISPATCH  │      │ is_superuser?│    │  is_staff? │
+│                 │      │ → /superadmin│    │  → /admin  │
+│ Priority:       │      └──────────────┘    └────────────┘
+│ 1. is_superuser │
+│ 2. is_staff     │
+│ 3. role         │
+└─────────────────┘
+
+NO AUTO-REDIRECT FROM "/" ← THIS IS THE KEY FIX!
+Users can browse PUBLIC world freely, then choose when to enter their world.
+
+
+════════════════════════════════════════════════════════════════════════════════
+                              WORLD 2: APP
+                       Entry: /app, /student, /mentor
+════════════════════════════════════════════════════════════════════════════════
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                          APP WORLD (STUDENT VIEW)                            │
+│                                                                              │
+│   ┌─────────────────────────────────────────────────────────────────────┐  │
+│   │  [☰] CareerBridge                              🔔  [ Avatar ]  ▼   │  │
+│   └─────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+│   ┌──────────────────────────────────────────────────────────────────────┐ │
+│   │  📊 Dashboard                                                        │ │
+│   │  📝 Assessment                                                       │ │
+│   │  💡 Insights                                                         │ │
+│   │  🎓 My Mentors                                                       │ │
+│   │  📅 Appointments                                                     │ │
+│   │  📄 Resumes                                                          │ │
+│   └──────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│   ╔═══════════════════════════════════════════════════════════════════╗    │
+│   ║  Welcome back, John!                                              ║    │
+│   ║                                                                   ║    │
+│   ║  Your resume score: 84/100                                        ║    │
+│   ║  Next appointment: Mock interview with Sarah (Thu 2pm)            ║    │
+│   ║  Suggested actions: Update skills section, book follow-up         ║    │
+│   ╚═══════════════════════════════════════════════════════════════════╝    │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+ACCESS CONTROL:
+✓ Requires authentication (is_authenticated=True)
+✓ Role-based features (student vs mentor)
+✗ Cannot access /admin or /superadmin
+
+
+════════════════════════════════════════════════════════════════════════════════
+                             WORLD 3: ADMIN
+                             Entry: /admin
+════════════════════════════════════════════════════════════════════════════════
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                       ADMIN WORLD (USERLAND OPERATIONS)                      │
+│                                                                              │
+│   ┌─────────────────────────────────────────────────────────────────────┐  │
+│   │  [☰] Admin Panel                               🔔  [ Avatar ]  ▼   │  │
+│   └─────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+│   ┌──────────────────────────────────────────────────────────────────────┐ │
+│   │  👥 User Management                                                  │ │
+│   │  🎓 Mentor Approvals                                                 │ │
+│   │  📅 Appointment Management                                           │ │
+│   │  📊 Analytics                                                        │ │
+│   │  📤 Data Exports                                                     │ │
+│   │  💬 Support Tickets                                                  │ │
+│   └──────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│   ╔═══════════════════════════════════════════════════════════════════╗    │
+│   ║  Admin Dashboard                                                  ║    │
+│   ║                                                                   ║    │
+│   ║  Pending mentor applications: 12                                  ║    │
+│   ║  Support tickets: 5 open                                          ║    │
+│   ║  Active users (24h): 342                                          ║    │
+│   ╚═══════════════════════════════════════════════════════════════════╝    │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+ACCESS CONTROL:
+✓ Requires is_staff=True
+✓ Feature flags apply (can be frozen)
+✓ Capability-based permissions (see AdminCapability model)
+✗ Cannot access /superadmin (Kernel world)
+
+
+════════════════════════════════════════════════════════════════════════════════
+                             WORLD 4: KERNEL
+                           Entry: /superadmin
+════════════════════════════════════════════════════════════════════════════════
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                          KERNEL CONTROL PLANE                                │
+│                        ⚠️  SUPERUSER ONLY ZONE ⚠️                           │
+│                                                                              │
+│   ┌─────────────────────────────────────────────────────────────────────┐  │
+│   │  [☰] Kernel OS                                 🔔  [ ROOT ]  ▼     │  │
+│   └─────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+│   ┌──────────────────────────────────────────────────────────────────────┐ │
+│   │  🖥️  OS Status                                                       │ │
+│   │  ⚙️  Platform Control                                                │ │
+│   │  🔐 Governance Audit                                                 │ │
+│   │  📊 System Audit                                                     │ │
+│   │  🧪 Peer Mock Runtime                                                │ │
+│   │  🗄️  Kernel DB Admin                                                │ │
+│   └──────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│   ╔═══════════════════════════════════════════════════════════════════╗    │
+│   ║  ⚡ KERNEL STATUS: OPERATIONAL                                    ║    │
+│   ║                                                                   ║    │
+│   ║  Governance Version: v47                                          ║    │
+│   ║  Active Workloads: PEER_MOCK, USERS                               ║    │
+│   ║  Feature Flags: 12 ON, 3 BETA, 2 OFF                             ║    │
+│   ║  System Health: 🟢 All systems nominal                            ║    │
+│   ╚═══════════════════════════════════════════════════════════════════╝    │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+              ╔═══════════════════════════════════════════════════╗
+              ║  KERNEL SOVEREIGN GUARD (GovernanceMiddleware)   ║
+              ║                                                   ║
+              ║  if not request.user.is_superuser:               ║
+              ║      return 403 Forbidden                         ║
+              ║                                                   ║
+              ║  BYPASSES: All feature flags, governance rules   ║
+              ╚═══════════════════════════════════════════════════╝
+
+ACCESS CONTROL:
+✓ Requires is_superuser=True (HARD GATE)
+✓ IMMUNE to all feature flags
+✓ IMMUNE to tenant gating
+✓ IMMUNE to admin-level permissions
+✗ Non-superusers get HTTP 403
+
+
+════════════════════════════════════════════════════════════════════════════════
+                         CROSS-WORLD NAVIGATION RULES
+════════════════════════════════════════════════════════════════════════════════
+
+┌────────────────┬─────────┬─────────┬─────────┬─────────┐
+│  From → To     │ PUBLIC  │   APP   │  ADMIN  │ KERNEL  │
+├────────────────┼─────────┼─────────┼─────────┼─────────┤
+│  PUBLIC        │   ✅    │   🔒    │   🔒    │   🔒    │
+│  APP           │   ✅    │   ✅    │   ❌    │   ❌    │
+│  ADMIN         │   ✅    │   ❌    │   ✅    │   ❌    │
+│  KERNEL        │   ✅    │   ✅    │   ✅    │   ✅    │
+└────────────────┴─────────┴─────────┴─────────┴─────────┘
+
+Legend:
+  ✅ Always allowed
+  🔒 Allowed after authentication
+  ❌ Forbidden (403)
+
+Rules:
+  1. PUBLIC → Anywhere: Must authenticate first
+  2. APP ↔ ADMIN: Role separation (no cross-world access)
+  3. KERNEL → Anywhere: Superuser omnipotence (can view any world)
+  4. Anywhere → PUBLIC: Always allowed (marketing is public)
+
+
+════════════════════════════════════════════════════════════════════════════════
+                           LOGIN WORLD DISPATCHER
+════════════════════════════════════════════════════════════════════════════════
+
+                       ┌──────────────────────┐
+                       │  User logs in        │
+                       │  (POST /api/login)   │
+                       └──────────┬───────────┘
+                                  │
+                                  ▼
+                    ┌─────────────────────────┐
+                    │  getLandingPathByRole() │
+                    └─────────────┬───────────┘
+                                  │
+              ┌───────────────────┼───────────────────┐
+              │                   │                   │
+              ▼                   ▼                   ▼
+     ┌────────────────┐  ┌────────────────┐  ┌────────────────┐
+     │ Priority 1:    │  │ Priority 2:    │  │ Priority 3:    │
+     │ is_superuser?  │  │ is_staff?      │  │ role field?    │
+     └────────┬───────┘  └────────┬───────┘  └────────┬───────┘
+              │                   │                   │
+             YES                 YES                 YES
+              │                   │                   │
+              ▼                   ▼                   ▼
+       /superadmin            /admin            /student or /mentor
+       (KERNEL)              (ADMIN)            (APP)
+
+
+════════════════════════════════════════════════════════════════════════════════
+                              KEY GUARANTEES
+════════════════════════════════════════════════════════════════════════════════
+
+1. PUBLIC WORLD SOVEREIGNTY
+   ✓ "/" always renders public landing page
+   ✓ NO automatic redirect for authenticated users
+   ✓ Users choose when to enter their world
+
+2. LOGIN DISPATCHER EXCLUSIVITY
+   ✓ Only ONE place dispatches users to worlds (LoginPage.onSubmit)
+   ✓ Uses explicit priority: is_superuser > is_staff > role
+   ✓ Predictable, auditable, testable
+
+3. KERNEL IMMUNITY
+   ✓ Kernel world BYPASSES all feature flags
+   ✓ Kernel world BYPASSES all governance checks
+   ✓ Only is_superuser=True can enter
+   ✓ Emergency access guaranteed
+
+4. USER CHOICE
+   ✓ Authenticated users see "My World" button
+   ✓ Clicking "My World" dispatches to their sovereign world
+   ✓ No forced navigation away from PUBLIC world
+
+
+════════════════════════════════════════════════════════════════════════════════
+                          IMPLEMENTATION STATUS
+════════════════════════════════════════════════════════════════════════════════
+
+✅ PUBLIC world owns "/"
+✅ Login world dispatcher implemented
+✅ Kernel sovereign guard active
+✅ User choice principle enforced
+✅ "My World" navigation added
+✅ All 4 worlds have sovereign entries
+✅ Constitution ratified
+✅ Documentation complete
+
+────────────────────────────────────────────────────────────────────────────────
+                        🎉 READY FOR PRODUCTION 🎉
+════════════════════════════════════════════════════════════════════════════════

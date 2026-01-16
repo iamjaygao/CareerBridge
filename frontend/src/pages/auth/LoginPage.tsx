@@ -75,14 +75,14 @@ const LoginPage: React.FC = () => {
         })
       ).unwrap();
 
-      // 2. Extract role from the unified user object
-      const role = result.user?.role;
+      // 2. Extract user object (includes is_superuser, is_staff, role)
+      const user = result.user;
       
-      // 3. Determine the landing path using the robust helper
-      const landingPath = getLandingPathByRole(role);
+      // 3. Determine the landing path using the robust helper (checks Django flags)
+      const landingPath = getLandingPathByRole(user);
 
       // 4. Defensive check: If the role maps back to /login, 
-      // it means the role is undefined or not configured in frontend
+      // it means the user is undefined or not configured in frontend
       if (landingPath === '/login') {
         console.error('[LOGIN] Access Denied: Unrecognized role configuration');
         // We let the authSlice error state handle the UI feedback if needed, 

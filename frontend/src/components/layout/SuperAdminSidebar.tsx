@@ -11,18 +11,30 @@ import {
   Toolbar,
   Typography,
   Divider,
+  ListSubheader,
 } from '@mui/material';
 import {
-  Dashboard,
-  People,
-  School,
-  Event,
-  Assessment,
-  Work,
-  Settings,
+  MonitorHeart,
+  Rocket,
+  History,
 } from '@mui/icons-material';
+import { useSelector } from 'react-redux';
+import { RootState } from '../../store';
 
 const drawerWidth = 260;
+
+interface MenuItem {
+  text: string;
+  icon: React.ReactElement;
+  path: string;
+  superUserOnly?: boolean;
+  disabled?: boolean;
+}
+
+interface MenuSection {
+  title: string;
+  items: MenuItem[];
+}
 
 interface SuperAdminSidebarProps {
   mobileOpen: boolean;
@@ -32,16 +44,33 @@ interface SuperAdminSidebarProps {
 const SuperAdminSidebar: React.FC<SuperAdminSidebarProps> = ({ mobileOpen, onMobileClose }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useSelector((state: RootState) => state.auth);
 
-  const menuItems = [
-    { text: 'Dashboard', icon: <Dashboard />, path: '/superadmin' },
-    { text: 'Users', icon: <People />, path: '/superadmin/users' },
-    { text: 'Mentors', icon: <School />, path: '/superadmin/mentors' },
-    { text: 'Appointments', icon: <Event />, path: '/superadmin/appointments' },
-    { text: 'Assessment Engine', icon: <Assessment />, path: '/superadmin/assessment' },
-    { text: 'Market Intelligence', icon: <Work />, path: '/superadmin/jobs' },
-    { text: 'System Console', icon: <Settings />, path: '/superadmin/system-console' },
-    { text: 'System Settings', icon: <Settings />, path: '/superadmin/system' },
+  // Check if user is actual superuser (not impersonated)
+  const isSuperUser = Boolean(user?.is_superuser);
+
+  // Phase-A UI Constitution: Only 3 allowed UI elements in Kernel Control Plane
+  const menuSections: MenuSection[] = [
+    {
+      title: '🔷 GateAI OS Kernel Control Plane',
+      items: [
+        { 
+          text: 'Kernel Pulse', 
+          icon: <MonitorHeart />, 
+          path: '/superadmin/kernel-pulse',
+        },
+        { 
+          text: 'Workload Runtime Console', 
+          icon: <Rocket />, 
+          path: '/superadmin/workload-runtime',
+        },
+        { 
+          text: 'Governance Audit Logs', 
+          icon: <History />, 
+          path: '/superadmin/audit-logs',
+        },
+      ],
+    },
   ];
 
   const drawer = (
@@ -61,62 +90,101 @@ const SuperAdminSidebar: React.FC<SuperAdminSidebarProps> = ({ mobileOpen, onMob
           sx={{
             color: 'white',
             fontWeight: 700,
-            fontSize: '1.25rem',
+            fontSize: '1.15rem',
           }}
         >
-          Super Admin
+          CareerBridge OS
         </Typography>
       </Toolbar>
       <Divider />
-      <List sx={{ px: 2, py: 2 }}>
-        {menuItems.map((item) => {
-          const isSelected = location.pathname === item.path || 
-            (item.path === '/superadmin' && location.pathname.startsWith('/superadmin') && location.pathname === '/superadmin') ||
-            (item.path !== '/superadmin' && location.pathname.startsWith(item.path));
-          return (
-            <ListItem key={item.text} disablePadding sx={{ mb: 0.5 }}>
-              <ListItemButton
-                onClick={() => {
-                  navigate(item.path);
-                  onMobileClose();
-                }}
-                selected={isSelected}
+
+      {/* 4-Layer Menu Sections */}
+      {menuSections.map((section, sectionIndex) => {
+        // Hide superuser-only sections if not superuser
+        const hasSuperUserOnlyItems = section.items.some(item => item.superUserOnly === true);
+        if (hasSuperUserOnlyItems && !isSuperUser) {
+          return null;
+        }
+
+        return (
+          <React.Fragment key={sectionIndex}>
+            <List sx={{ px: 2, py: 1 }}>
+              <ListSubheader
                 sx={{
-                  borderRadius: 2,
-                  '&.Mui-selected': {
-                    bgcolor: 'primary.main',
-                    color: 'white',
-                    '&:hover': {
-                      bgcolor: 'primary.dark',
-                    },
-                    '& .MuiListItemIcon-root': {
-                      color: 'white',
-                    },
-                  },
-                  '&:hover': {
-                    bgcolor: 'grey.100',
-                  },
+                  bgcolor: 'transparent',
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  color: 'text.secondary',
+                  lineHeight: '32px',
+                  px: 2,
                 }}
               >
-                <ListItemIcon
-                  sx={{
-                    color: isSelected ? 'white' : 'text.secondary',
-                    minWidth: 40,
-                  }}
-                >
-                  {item.icon}
-                </ListItemIcon>
-                <ListItemText
-                  primary={item.text}
-                  primaryTypographyProps={{
-                    fontWeight: isSelected ? 600 : 500,
-                  }}
-                />
-              </ListItemButton>
-            </ListItem>
-          );
-        })}
-      </List>
+                {section.title}
+              </ListSubheader>
+              {section.items.map((item) => {
+                // Hide superuser-only items
+                if (item.superUserOnly && !isSuperUser) {
+                  return null;
+                }
+
+                const isSelected = location.pathname === item.path || 
+                  (item.path !== '/superadmin' && location.pathname.startsWith(item.path));
+                
+                return (
+                  <ListItem key={item.text} disablePadding sx={{ mb: 0.5 }}>
+                    <ListItemButton
+                      onClick={() => {
+                        if (item.disabled !== true) {
+                          navigate(item.path);
+                          onMobileClose();
+                        }
+                      }}
+                      selected={isSelected}
+                      disabled={item.disabled === true}
+                      sx={{
+                        borderRadius: 2,
+                        '&.Mui-selected': {
+                          bgcolor: 'primary.main',
+                          color: 'white',
+                          '&:hover': {
+                            bgcolor: 'primary.dark',
+                          },
+                          '& .MuiListItemIcon-root': {
+                            color: 'white',
+                          },
+                        },
+                        '&:hover': {
+                          bgcolor: item.disabled === true ? 'transparent' : 'grey.100',
+                        },
+                        '&.Mui-disabled': {
+                          opacity: 0.5,
+                        },
+                      }}
+                    >
+                      <ListItemIcon
+                        sx={{
+                          color: isSelected ? 'white' : 'text.secondary',
+                          minWidth: 40,
+                        }}
+                      >
+                        {item.icon}
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={item.text}
+                        primaryTypographyProps={{
+                          fontWeight: isSelected ? 600 : 500,
+                          fontSize: '0.875rem',
+                        }}
+                      />
+                    </ListItemButton>
+                  </ListItem>
+                );
+              })}
+            </List>
+            {sectionIndex < menuSections.length - 1 && <Divider sx={{ my: 1 }} />}
+          </React.Fragment>
+        );
+      })}
     </Box>
   );
 

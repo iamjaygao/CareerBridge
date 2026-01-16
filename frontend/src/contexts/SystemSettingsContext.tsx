@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import apiClient from '../services/api/client';
 import { SystemSettings } from '../types';
+import { canCallModule } from '../utils/phaseAGuard';
 
 interface SystemSettingsContextType {
   settings: SystemSettings | null;
@@ -17,6 +18,13 @@ export const SystemSettingsProvider: React.FC<{ children: ReactNode }> = ({ chil
   const [error, setError] = useState<string | null>(null);
 
   const fetchSettings = async () => {
+    // Phase-A guard: ADMINPANEL frozen for SuperAdmin world
+    // SystemSettings are for userland admin only, not kernel control plane
+    if (!canCallModule('ADMINPANEL')) {
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);

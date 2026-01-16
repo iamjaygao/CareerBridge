@@ -1,5 +1,6 @@
 import apiClient from './client';
 import { OS_API } from '../../os/apiPaths';
+import { canCallModule } from '../../utils/phaseAGuard';
 
 export interface Notification {
   id: number;
@@ -31,6 +32,7 @@ export interface PaginatedNotifications {
 
 /**
  * Get all notifications for the current user
+ * Phase-A: SIGNAL_DELIVERY module is frozen
  */
 export const getNotifications = async (params?: {
   notification_type?: string;
@@ -38,6 +40,11 @@ export const getNotifications = async (params?: {
   priority?: string;
   limit?: number;
 }): Promise<PaginatedNotifications> => {
+  // Phase-A guard: SIGNAL_DELIVERY is frozen
+  if (!canCallModule('SIGNAL_DELIVERY')) {
+    return { count: 0, next: null, previous: null, results: [] };
+  }
+
   const response = await apiClient.get<PaginatedNotifications>(OS_API.SIGNAL_DELIVERY, { params });
   return response.data;
 };
@@ -85,8 +92,14 @@ export const deleteAllNotifications = async (): Promise<{ message: string }> => 
 
 /**
  * Get unread notification count
+ * Phase-A: SIGNAL_DELIVERY module is frozen
  */
 export const getUnreadNotificationCount = async (): Promise<number> => {
+  // Phase-A guard: SIGNAL_DELIVERY is frozen
+  if (!canCallModule('SIGNAL_DELIVERY')) {
+    return 0;
+  }
+
   const response = await apiClient.get<{ unread_count: number }>(`${OS_API.SIGNAL_DELIVERY}unread-count/`);
   return response.data.unread_count;
 };

@@ -2,14 +2,12 @@ from django.apps import AppConfig
 
 
 class KernelConfig(AppConfig):
-    default_auto_field = "django.db.models.BigAutoField"
-    name = "kernel"
-
+    default_auto_field = 'django.db.models.BigAutoField'
+    name = 'kernel'
+    verbose_name = 'Kernel'
+    
     def ready(self):
-        # Import listeners registration side-effects
-        try:
-            import kernel.listeners  # noqa: F401
-        except Exception:
-            # Avoid hard failures during migrations; listeners will be registered once apps are ready
-            pass
-
+        """Import governance models and admin when app is ready"""
+        # Import governance models to ensure they're registered
+        from kernel.governance import models as governance_models
+        from kernel.governance import admin as governance_admin

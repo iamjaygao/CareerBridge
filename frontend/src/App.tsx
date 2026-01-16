@@ -36,7 +36,7 @@ import StudentLayout from './components/layout/StudentLayout';
 import MentorLayout from './components/layout/MentorLayout';
 import StaffLayout from './components/layout/StaffLayout';
 import AdminLayout from './components/layout/AdminLayout';
-import SuperAdminLayout from './components/layout/SuperAdminLayout';
+import KernelWorldLayout from './layouts/KernelWorldLayout';
 
 // Routes / Guards
 import StudentRoute from './components/student/StudentRoute';
@@ -45,6 +45,7 @@ import StaffRoute from './components/staff/StaffRoute';
 import AdminRoute from './components/admin/AdminRoute';
 import SuperAdminRoute from './components/superadmin/SuperAdminRoute';
 import { getLandingPathByRole } from './utils/roleLanding';
+import { useNavigate } from 'react-router-dom';
 
 /* ===========================
    Lazy Pages
@@ -109,15 +110,11 @@ const AdminPromotionsPage = lazy(() => import('./pages/admin/promotions/Promotio
 const AdminPayoutsPage = lazy(() => import('./pages/admin/payouts/PayoutsPage'));
 const AnalyticsPage = lazy(() => import('./pages/analytics/AnalyticsPage'));
 
-// SuperAdmin
-const CommandCenter = lazy(() => import('./pages/superadmin/CommandCenter'));
-const SuperAdminSystemSettingsPage = lazy(() => import('./pages/admin/system/SystemSettingsPage'));
-const SuperAdminUsersPage = lazy(() => import('./pages/superadmin/UsersPage'));
-const SuperAdminMentorsPage = lazy(() => import('./pages/superadmin/MentorsPage'));
-const SuperAdminAppointmentsPage = lazy(() => import('./pages/superadmin/AppointmentsPage'));
-const SuperAdminAssessmentPage = lazy(() => import('./pages/superadmin/AssessmentPage'));
-const SuperAdminJobsPage = lazy(() => import('./pages/superadmin/JobsPage'));
-const SuperAdminSystemPage = lazy(() => import('./pages/superadmin/SystemPage'));
+// SuperAdmin - Phase-A UI Constitution: Only 3 allowed UI elements
+const KernelPulsePage = lazy(() => import('./pages/superadmin/KernelPulsePage'));
+const WorkloadRuntimeConsolePage = lazy(() => import('./pages/superadmin/WorkloadRuntimeConsolePage'));
+const GovernanceAuditPage = lazy(() => import('./pages/superadmin/GovernanceAuditPage'));
+const PeerMockConsolePage = lazy(() => import('./pages/superadmin/PeerMockConsolePage'));
 
 // Notifications (shared)
 const NotificationsPage = lazy(() => import('./pages/notifications/NotificationsPage'));
@@ -155,9 +152,9 @@ const ProtectedGate: React.FC = () => {
 };
 
 const DashboardRedirect: React.FC = () => {
-  const role = useSelector((state: RootState) => state.auth.user?.role);
-  if (!role) return <Navigate to="/login" replace />;
-  return <Navigate to={getLandingPathByRole(role)} replace />;
+  const user = useSelector((state: RootState) => state.auth.user);
+  if (!user) return <Navigate to="/login" replace />;
+  return <Navigate to={getLandingPathByRole(user)} replace />;
 };
 
 const RoleRedirect: React.FC<{ targetByRole: Record<string, string> }> = ({ targetByRole }) => {
@@ -206,6 +203,72 @@ const ChatRoomRedirect: React.FC = () => {
 };
 
 /* ===========================
+   World Router Hard Correction (Phase-A)
+   Ensures SuperAdmin never gets stuck in wrong world
+=========================== */
+
+/**
+ * WorldRouter: Hard-corrects world routing mismatches
+ * 
+ * Purpose: If a SuperAdmin accidentally lands in /admin or /dashboard
+ * (due to old links, history, or routing bugs), this auto-redirects
+ * them to their correct world (/superadmin) WITHOUT showing 403.
+ * 
+ * Phase-A requirement: SuperAdmin must ONLY see kernel control plane.
+ */
+const WorldRouter: React.FC = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { user, authLoaded } = useSelector((state: RootState) => state.auth);
+
+  useEffect(() => {
+    // Wait for auth to load
+    if (!authLoaded || !user) return;
+
+    const path = location.pathname;
+
+    // Phase-A: SuperAdmin world correction
+    // If SuperAdmin lands in wrong world → auto-redirect to /superadmin
+    const isSuperAdmin = Boolean(user.is_superuser) || user.role === 'superadmin';
+    const isStaffOrAdmin = Boolean(user.is_staff) || user.role === 'admin';
+
+    if (isSuperAdmin) {
+      // SuperAdmin must ONLY be in /superadmin world (or public/auth routes)
+      const wrongWorlds = ['/admin', '/dashboard', '/student', '/mentor', '/staff'];
+      const isInWrongWorld = wrongWorlds.some(prefix => path.startsWith(prefix));
+      
+      if (isInWrongWorld || path === '/') {
+        console.warn(`[WORLD-ROUTER] SuperAdmin in wrong world: ${path} → /superadmin`);
+        navigate('/superadmin', { replace: true });
+        return;
+      }
+    } else if (isStaffOrAdmin) {
+      // Staff/Admin must not be in superadmin or dashboard
+      const wrongWorlds = ['/superadmin', '/dashboard', '/student', '/mentor'];
+      const isInWrongWorld = wrongWorlds.some(prefix => path.startsWith(prefix));
+      
+      if (isInWrongWorld) {
+        console.warn(`[WORLD-ROUTER] Staff/Admin in wrong world: ${path} → /admin`);
+        navigate('/admin', { replace: true });
+        return;
+      }
+    } else {
+      // Regular user must not be in admin/superadmin
+      const wrongWorlds = ['/superadmin', '/admin', '/staff'];
+      const isInWrongWorld = wrongWorlds.some(prefix => path.startsWith(prefix));
+      
+      if (isInWrongWorld) {
+        console.warn(`[WORLD-ROUTER] Regular user in wrong world: ${path} → /dashboard`);
+        navigate('/dashboard', { replace: true });
+        return;
+      }
+    }
+  }, [authLoaded, user, location.pathname, navigate]);
+
+  return null;
+};
+
+/* ===========================
    App Content (Logic & Routes)
 =========================== */
 
@@ -233,6 +296,7 @@ const AppInner: React.FC = () => {
 
   return (
     <Router>
+      <WorldRouter />
       <Suspense fallback={<LoadingSpinner />}>
         <Routes>
           {/* ================= Public ================= */}
@@ -402,20 +466,27 @@ const AppInner: React.FC = () => {
             </Route>
           </Route>
 
-          {/* ================= SuperAdmin ================= */}
+          {/* ================= SuperAdmin (Kernel World) ================= */}
           <Route element={<ProtectedGate />}>
             <Route element={<SuperAdminRoute />}>
-              <Route element={<SuperAdminLayout />}>
-                <Route path="/superadmin" element={<CommandCenter />} />
-                <Route path="/superadmin/users" element={<SuperAdminUsersPage />} />
-                <Route path="/superadmin/mentors" element={<SuperAdminMentorsPage />} />
-                <Route path="/superadmin/appointments" element={<SuperAdminAppointmentsPage />} />
-                <Route path="/superadmin/assessment" element={<SuperAdminAssessmentPage />} />
-                <Route path="/superadmin/jobs" element={<SuperAdminJobsPage />} />
-                <Route path="/superadmin/system-console" element={<SuperAdminSystemPage />} />
-                <Route path="/superadmin/system" element={<SuperAdminSystemSettingsPage />} />
-                <Route path="/superadmin/analytics" element={<AnalyticsPage />} />
-                <Route path="/superadmin/notifications" element={<NotificationsPage />} />
+              <Route element={<KernelWorldLayout />}>
+                {/* Phase-A UI Constitution: Only 3 UI elements allowed in Kernel Control Plane */}
+                
+                {/* 1. Kernel Pulse - Read-only Observability */}
+                <Route path="/superadmin/kernel-pulse" element={<KernelPulsePage />} />
+                
+                {/* 2. Workload Runtime Console - Frozen Workload Registry */}
+                <Route path="/superadmin/workload-runtime" element={<WorkloadRuntimeConsolePage />} />
+                
+                {/* 3. Governance Audit Logs - Compliance & Audit Trail */}
+                <Route path="/superadmin/audit-logs" element={<GovernanceAuditPage />} />
+                
+                {/* Phase-B: Peer Mock Runtime Console */}
+                <Route path="/superadmin/peer-mock" element={<PeerMockConsolePage />} />
+                
+                {/* Route Guard: Redirect all other /superadmin/* paths to kernel-pulse */}
+                <Route path="/superadmin/*" element={<Navigate to="/superadmin/kernel-pulse" replace />} />
+                <Route path="/superadmin" element={<Navigate to="/superadmin/kernel-pulse" replace />} />
               </Route>
             </Route>
           </Route>

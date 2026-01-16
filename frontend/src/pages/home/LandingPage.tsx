@@ -25,15 +25,15 @@ import {
 const LandingPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const isAuthenticated = !!localStorage.getItem('access_token');
-  const allowHomepage = new URLSearchParams(location.search).get('from') === 'portal';
-
-  // If user is already logged in, redirect to dashboard
-  React.useEffect(() => {
-    if (isAuthenticated && !allowHomepage) {
-      navigate('/dashboard', { replace: true });
-    }
-  }, [isAuthenticated, allowHomepage, navigate]);
+  
+  // ════════════════════════════════════════════════════════════════════════
+  // 4-WORLD OS CONSTITUTION: PUBLIC WORLD OWNS "/"
+  // ════════════════════════════════════════════════════════════════════════
+  // REMOVED: Automatic redirect to /dashboard for authenticated users
+  // PUBLIC world "/" is now a sovereign entry point - visitors may browse
+  // regardless of auth state. Users can manually navigate to their world
+  // via the header navigation or by clicking "Dashboard" link.
+  // ════════════════════════════════════════════════════════════════════════
 
   const heroStats = [
     { label: 'Profiles analyzed', value: '50k+' },

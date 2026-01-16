@@ -22,23 +22,17 @@ import {
   Settings,
   Logout,
   Search as SearchIcon,
-  AdminPanelSettings,
-  Badge as StaffIcon,
-  Work as MentorIcon,
-  School as StudentIcon,
-  SwapHoriz as SwapIcon,
 } from '@mui/icons-material';
 import { RootState } from '../../store';
 import { logout } from '../../store/slices/authSlice';
 import { useRole } from '../../contexts/RoleContext';
 import NotificationBell from '../common/NotificationBell';
-import ViewingAsChip from '../common/ViewingAsChip';
 
 const DashboardHeader: React.FC = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
-  const { setOverrideRole, resetOverrideRole, isSuperAdmin } = useRole();
+  const { isSuperAdmin } = useRole();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -52,7 +46,6 @@ const DashboardHeader: React.FC = () => {
 
   const handleLogout = () => {
     dispatch(logout());
-    resetOverrideRole();
     handleProfileMenuClose();
     navigate('/');
   };
@@ -74,26 +67,6 @@ const DashboardHeader: React.FC = () => {
       return user.username[0].toUpperCase();
     }
     return 'U';
-  };
-
-  // Role switching functions (superadmin only)
-  const switchRole = (targetRole: string) => {
-    setOverrideRole(targetRole);
-    handleProfileMenuClose();
-    const dashboardPaths: Record<string, string> = {
-      student: '/student',
-      mentor: '/mentor',
-      staff: '/staff',
-      admin: '/admin',
-    };
-    const targetPath = dashboardPaths[targetRole] || '/';
-    navigate(targetPath);
-  };
-
-  const resetRole = () => {
-    resetOverrideRole();
-    handleProfileMenuClose();
-    navigate('/superadmin');
   };
 
   return (
@@ -207,11 +180,10 @@ const DashboardHeader: React.FC = () => {
                   cursor: 'pointer',
                 }}
               >
-                {getUserInitials()}
-              </Avatar>
-            </IconButton>
-            <ViewingAsChip />
-          </Box>
+              {getUserInitials()}
+            </Avatar>
+          </IconButton>
+        </Box>
 
           {/* Profile Menu */}
           <Menu
@@ -234,37 +206,6 @@ const DashboardHeader: React.FC = () => {
               },
             }}
           >
-            {/* SuperAdmin Role Switching Section */}
-            {isSuperAdmin && (
-              <>
-                <MenuItem disabled sx={{ opacity: 1, fontWeight: 600 }}>
-                  <SwapIcon sx={{ mr: 2, fontSize: 20 }} />
-                  Switch Role
-                </MenuItem>
-                <MenuItem onClick={() => switchRole('student')}>
-                  <StudentIcon sx={{ mr: 2, fontSize: 20 }} />
-                  View as Student
-                </MenuItem>
-                <MenuItem onClick={() => switchRole('mentor')}>
-                  <MentorIcon sx={{ mr: 2, fontSize: 20 }} />
-                  View as Mentor
-                </MenuItem>
-                <MenuItem onClick={() => switchRole('staff')}>
-                  <StaffIcon sx={{ mr: 2, fontSize: 20 }} />
-                  View as Staff
-                </MenuItem>
-                <MenuItem onClick={() => switchRole('admin')}>
-                  <AdminPanelSettings sx={{ mr: 2, fontSize: 20 }} />
-                  View as Admin
-                </MenuItem>
-                <MenuItem onClick={resetRole}>
-                  <SwapIcon sx={{ mr: 2, fontSize: 20 }} />
-                  Reset to Superadmin
-                </MenuItem>
-                <Divider />
-              </>
-            )}
-
             <MenuItem onClick={() => handleNavigation('/dashboard')}>
               <Dashboard sx={{ mr: 2, fontSize: 20 }} />
               Dashboard
