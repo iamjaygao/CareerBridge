@@ -1,4 +1,5 @@
 import apiClient from './client';
+import { canCallModule } from '../../utils/phaseAGuard';
 
 export interface SearchResult {
   jobs?: any[];
@@ -8,8 +9,14 @@ export interface SearchResult {
 
 /**
  * Preload popular data for search suggestions
+ * Phase-A: SEARCH module is frozen, skip all requests
  */
 export const preloadPopularData = async (): Promise<void> => {
+  // Phase-A guard: SEARCH is frozen, don't make requests
+  if (!canCallModule('SEARCH')) {
+    return;
+  }
+
   try {
     // Preload popular jobs, skills, industries
     await Promise.all([
@@ -25,8 +32,14 @@ export const preloadPopularData = async (): Promise<void> => {
 
 /**
  * Search across all resources
+ * Phase-A: SEARCH module is frozen
  */
 export const searchAll = async (query: string): Promise<SearchResult> => {
+  // Phase-A guard: SEARCH is frozen
+  if (!canCallModule('SEARCH')) {
+    return { jobs: [], mentors: [], resumes: [] };
+  }
+
   try {
     const response = await apiClient.get('/search/', {
       params: { q: query },
@@ -40,8 +53,14 @@ export const searchAll = async (query: string): Promise<SearchResult> => {
 
 /**
  * Get popular jobs
+ * Phase-A: SEARCH module is frozen
  */
 export const getPopularJobs = async (): Promise<string[]> => {
+  // Phase-A guard: SEARCH is frozen
+  if (!canCallModule('SEARCH')) {
+    return [];
+  }
+
   try {
     const response = await apiClient.get('/search/popular/jobs/');
     return response.data;

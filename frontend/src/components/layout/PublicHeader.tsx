@@ -16,30 +16,20 @@ import {
 } from '@mui/material';
 import {
   Dashboard,
-  Assessment,
-  TrendingUp as Insights,
-  People,
   Person,
   Settings,
   Logout,
   Menu as MenuIcon,
-  AdminPanelSettings,
-  Badge as StaffIcon,
-  Work as MentorIcon,
-  School as StudentIcon,
-  SwapHoriz as SwapIcon,
 } from '@mui/icons-material';
 import { RootState } from '../../store';
 import { logout } from '../../store/slices/authSlice';
-import { useRole } from '../../contexts/RoleContext';
+import { getLandingPathByRole } from '../../utils/roleLanding';
 import NotificationBell from '../common/NotificationBell';
-import ViewingAsChip from '../common/ViewingAsChip';
 
 const PublicHeader: React.FC = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
-  const { setOverrideRole, resetOverrideRole, isSuperAdmin } = useRole();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [mobileMenuAnchor, setMobileMenuAnchor] = useState<null | HTMLElement>(null);
 
@@ -71,6 +61,14 @@ const PublicHeader: React.FC = () => {
     handleMobileMenuClose();
   };
 
+  // ════════════════════════════════════════════════════════════════════════
+  // 4-WORLD OS: Direct navigation to user's sovereign world
+  // ════════════════════════════════════════════════════════════════════════
+  const getUserWorldPath = (): string => {
+    if (!user) return '/';
+    return getLandingPathByRole(user);
+  };
+
   const getUserInitials = () => {
     if (user?.first_name && user?.last_name) {
       const first = user.first_name?.[0] || '';
@@ -83,28 +81,6 @@ const PublicHeader: React.FC = () => {
       return user.username[0].toUpperCase();
     }
     return 'U';
-  };
-
-  // Role switching functions (superadmin only)
-  const switchRole = (targetRole: string) => {
-    setOverrideRole(targetRole);
-    handleProfileMenuClose();
-    handleMobileMenuClose();
-    const dashboardPaths: Record<string, string> = {
-      student: '/student',
-      mentor: '/mentor',
-      staff: '/staff',
-      admin: '/admin',
-    };
-    const targetPath = dashboardPaths[targetRole] || '/';
-    navigate(targetPath);
-  };
-
-  const resetRole = () => {
-    resetOverrideRole();
-    handleProfileMenuClose();
-    handleMobileMenuClose();
-    navigate('/superadmin');
   };
 
   return (
@@ -283,7 +259,6 @@ const PublicHeader: React.FC = () => {
                       {getUserInitials()}
                     </Avatar>
                   </IconButton>
-                  <ViewingAsChip />
                 </Box>
 
                 {/* Mobile Menu Button */}
@@ -315,53 +290,9 @@ const PublicHeader: React.FC = () => {
                     },
                   }}
                 >
-                  {/* SuperAdmin Role Switching Section */}
-                  {isSuperAdmin && (
-                    <>
-                      <MenuItem disabled sx={{ opacity: 1, fontWeight: 600 }}>
-                        <SwapIcon sx={{ mr: 2, fontSize: 20 }} />
-                        Switch Role
-                      </MenuItem>
-                      <MenuItem onClick={() => switchRole('student')}>
-                        <StudentIcon sx={{ mr: 2, fontSize: 20 }} />
-                        View as Student
-                      </MenuItem>
-                      <MenuItem onClick={() => switchRole('mentor')}>
-                        <MentorIcon sx={{ mr: 2, fontSize: 20 }} />
-                        View as Mentor
-                      </MenuItem>
-                      <MenuItem onClick={() => switchRole('staff')}>
-                        <StaffIcon sx={{ mr: 2, fontSize: 20 }} />
-                        View as Staff
-                      </MenuItem>
-                      <MenuItem onClick={() => switchRole('admin')}>
-                        <AdminPanelSettings sx={{ mr: 2, fontSize: 20 }} />
-                        View as Admin
-                      </MenuItem>
-                      <MenuItem onClick={resetRole}>
-                        <SwapIcon sx={{ mr: 2, fontSize: 20 }} />
-                        Reset to Superadmin
-                      </MenuItem>
-                      <Divider />
-                    </>
-                  )}
-
-                  <MenuItem onClick={() => handleNavigation('/dashboard')}>
+                  <MenuItem onClick={() => handleNavigation(getUserWorldPath())}>
                     <Dashboard sx={{ mr: 2, fontSize: 20 }} />
-                    Dashboard
-                  </MenuItem>
-                  <Divider />
-                  <MenuItem onClick={() => handleNavigation('/dashboard/assessment')}>
-                    <Assessment sx={{ mr: 2, fontSize: 20 }} />
-                    My Assessments
-                  </MenuItem>
-                  <MenuItem onClick={() => handleNavigation('/dashboard/intelligence')}>
-                    <Insights sx={{ mr: 2, fontSize: 20 }} />
-                    My Insights
-                  </MenuItem>
-                  <MenuItem onClick={() => handleNavigation('/mentors')}>
-                    <People sx={{ mr: 2, fontSize: 20 }} />
-                    My Mentors
+                    My World
                   </MenuItem>
                   <Divider />
                   <MenuItem onClick={() => handleNavigation('/profile')}>
@@ -398,52 +329,9 @@ const PublicHeader: React.FC = () => {
                   <MenuItem onClick={() => handleNavigation('/intelligence')}>Market Intelligence</MenuItem>
                   <MenuItem onClick={() => handleNavigation('/mentors')}>MentorBridge</MenuItem>
                   <Divider />
-                  {/* SuperAdmin Role Switching Section (Mobile) */}
-                  {isSuperAdmin && (
-                    <>
-                      <MenuItem disabled sx={{ opacity: 1, fontWeight: 600 }}>
-                        <SwapIcon sx={{ mr: 2, fontSize: 20 }} />
-                        Switch Role
-                      </MenuItem>
-                      <MenuItem onClick={() => switchRole('student')}>
-                        <StudentIcon sx={{ mr: 2, fontSize: 20 }} />
-                        View as Student
-                      </MenuItem>
-                      <MenuItem onClick={() => switchRole('mentor')}>
-                        <MentorIcon sx={{ mr: 2, fontSize: 20 }} />
-                        View as Mentor
-                      </MenuItem>
-                      <MenuItem onClick={() => switchRole('staff')}>
-                        <StaffIcon sx={{ mr: 2, fontSize: 20 }} />
-                        View as Staff
-                      </MenuItem>
-                      <MenuItem onClick={() => switchRole('admin')}>
-                        <AdminPanelSettings sx={{ mr: 2, fontSize: 20 }} />
-                        View as Admin
-                      </MenuItem>
-                      <MenuItem onClick={resetRole}>
-                        <SwapIcon sx={{ mr: 2, fontSize: 20 }} />
-                        Reset to Superadmin
-                      </MenuItem>
-                      <Divider />
-                    </>
-                  )}
-                  <MenuItem onClick={() => handleNavigation('/dashboard')}>
+                  <MenuItem onClick={() => handleNavigation(getUserWorldPath())}>
                     <Dashboard sx={{ mr: 2, fontSize: 20 }} />
-                    Dashboard
-                  </MenuItem>
-                  <Divider />
-                  <MenuItem onClick={() => handleNavigation('/dashboard/assessment')}>
-                    <Assessment sx={{ mr: 2, fontSize: 20 }} />
-                    My Assessments
-                  </MenuItem>
-                  <MenuItem onClick={() => handleNavigation('/dashboard/intelligence')}>
-                    <Insights sx={{ mr: 2, fontSize: 20 }} />
-                    My Insights
-                  </MenuItem>
-                  <MenuItem onClick={() => handleNavigation('/mentors')}>
-                    <People sx={{ mr: 2, fontSize: 20 }} />
-                    My Mentors
+                    My World
                   </MenuItem>
                   <Divider />
                   <MenuItem onClick={() => handleNavigation('/profile')}>

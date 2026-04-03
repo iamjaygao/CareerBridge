@@ -17,7 +17,11 @@ export interface TypingIndicator {
 
 class ChatService {
   private socket: Socket | null = null;
-  private baseURL = process.env.REACT_APP_WS_URL || 'ws://localhost:8000';
+  private get wsBaseURL(): string {
+    if (process.env.REACT_APP_WS_URL) return process.env.REACT_APP_WS_URL;
+    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${proto}//${window.location.host}`;
+  }
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000;
@@ -32,7 +36,7 @@ class ChatService {
   connect(userId: number, token: string): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        this.socket = io(this.baseURL, {
+        this.socket = io(this.wsBaseURL, {
           auth: {
             token,
           },
@@ -170,7 +174,7 @@ class ChatService {
       formData.append('file', file);
       formData.append('room_id', roomId);
 
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000/api'}/chat/upload-file/`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || '/api/v1'}/chat/upload-file/`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
@@ -203,7 +207,7 @@ class ChatService {
   async getChatHistory(roomId: string, limit: number = 50, offset: number = 0): Promise<ChatMessage[]> {
     try {
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:8000/api'}/chat/history/${roomId}/?limit=${limit}&offset=${offset}`,
+        `${process.env.REACT_APP_API_URL || '/api/v1'}/chat/history/${roomId}/?limit=${limit}&offset=${offset}`,
         {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
@@ -226,7 +230,7 @@ class ChatService {
   async getChatRooms(): Promise<ChatRoom[]> {
     try {
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:8000/api'}/chat/rooms/`,
+        `${process.env.REACT_APP_API_URL || '/api/v1'}/chat/rooms/`,
         {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
@@ -249,7 +253,7 @@ class ChatService {
   async createChatRoom(participantIds: number[], name?: string): Promise<ChatRoom> {
     try {
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:8000/api'}/chat/rooms/`,
+        `${process.env.REACT_APP_API_URL || '/api/v1'}/chat/rooms/`,
         {
           method: 'POST',
           headers: {

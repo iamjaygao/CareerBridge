@@ -1,9 +1,15 @@
 from django.urls import path
 from . import views
+from . import governance_views
 
 app_name = 'adminpanel'
 
 urlpatterns = [
+    # Governance (SuperAdmin only)
+    path('governance/platform-state/', governance_views.PlatformStateView.as_view(), name='governance-platform-state'),
+    path('governance/feature-flags/', governance_views.FeatureFlagListView.as_view(), name='governance-feature-flags'),
+    path('governance/feature-flags/<str:key>/', governance_views.FeatureFlagDetailView.as_view(), name='governance-feature-flag-detail'),
+    
     # Dashboard
     path('dashboard/', views.AdminDashboardView.as_view(), name='admin-dashboard'),
     path('dashboard-stats/', views.DashboardStatsView.as_view(), name='dashboard-stats'),

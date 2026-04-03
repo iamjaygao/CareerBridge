@@ -2,7 +2,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
-from careerbridge.external_services.utils import get_circuit_breaker, _service_breakers, _service_metrics
+from external_services.utils import get_circuit_breaker, _service_breakers, _service_metrics
 from unittest.mock import patch
 import requests
 from django.urls import reverse
@@ -31,7 +31,7 @@ class LegalEndpointsTests(TestCase):
     def test_circuit_breaker_opens_on_failures(self, mock_request):
         # Force 5 consecutive failures to trip breaker
         mock_request.side_effect = requests.exceptions.RequestException('fail')
-        from careerbridge.external_services.utils import make_api_request
+        from external_services.utils import make_api_request
         service = 'test_service'
         for _ in range(5):
             with self.assertRaises(Exception):

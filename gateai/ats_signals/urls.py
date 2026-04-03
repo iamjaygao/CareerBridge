@@ -11,6 +11,7 @@ urlpatterns = [
 
     # Resume analysis
     path('analyze/', views.ResumeAnalysisView.as_view(), name='resume-analyze'),
+    path('jd-match/', views.JDMatchView.as_view(), name='jd-match'),
     path('analysis/<int:pk>/', views.ResumeAnalysisDetailView.as_view(), name='analysis-detail'),
     path('<int:resume_id>/analysis/', views.ResumeAnalysisByResumeView.as_view(), name='analysis-by-resume'),
     path('feedback/<int:pk>/', views.ResumeFeedbackView.as_view(), name='feedback-detail'),

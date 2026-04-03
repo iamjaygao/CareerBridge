@@ -1,0 +1,233 @@
+════════════════════════════════════════════════════════════════════════════════
+                        GateAI 4-WORLD OS ARCHITECTURE
+════════════════════════════════════════════════════════════════════════════════
+
+                              ┌──────────────────┐
+                              │   HTTP REQUEST   │
+                              └────────┬─────────┘
+                                       │
+                                       ▼
+                         ┌─────────────────────────┐
+                         │  GovernanceMiddleware   │
+                         │  (World Resolution)     │
+                         └────────┬────────────────┘
+                                  │
+                    world = resolve_world(path)
+                    request.world = world
+                                  │
+          ┌───────────────────────┴───────────────────────┐
+          │                                               │
+      Is Kernel?                                     Is Userland?
+    (superadmin,                               (public, app, admin)
+     /api/engines,                                        │
+     governance)                                          │
+          │                                               │
+          ▼                                               ▼
+   ┌──────────────────┐                     ┌────────────────────────┐
+   │ KERNEL SOVEREIGN │                     │ USERLAND GOVERNANCE    │
+   │      GUARD       │                     │                        │
+   └──────┬───────────┘                     │ 1. Feature Flag Check  │
+          │                                 │ 2. Visibility Rules    │
+    is_superuser?                           │ 3. BETA Gates          │
+          │                                 │ 4. Module Freeze       │
+     ┌────┴────┐                            └────────┬───────────────┘
+     │         │                                     │
+    YES       NO                              Allowed? ─┐
+     │         │                                     │  │
+     │         ▼                                    YES NO
+     │    ┌─────────┐                               │  │
+     │    │ 403     │                               │  ▼
+     │    │ Kernel  │                               │ 404
+     │    │ Denied  │                               │ Feature
+     │    └─────────┘                               │ Disabled
+     │                                              │
+     └─────────────────┬────────────────────────────┘
+                       │
+          BYPASS ALL governance checks
+                       │
+                       ▼
+              ┌────────────────┐
+              │   APPLICATION  │
+              │     HANDLER    │
+              └────────┬───────┘
+                       │
+                       ▼
+              ┌────────────────┐
+              │    RESPONSE    │
+              └────────────────┘
+
+
+════════════════════════════════════════════════════════════════════════════════
+                           WORLD NAMESPACE MAP
+════════════════════════════════════════════════════════════════════════════════
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  PUBLIC WORLD                                                                │
+│  • No authentication required                                                │
+│  • Feature flags apply                                                       │
+│  • Paths: /, /login, /register, /about, /pricing, /api/public               │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  APP WORLD                                                                   │
+│  • Requires authentication (is_authenticated)                                │
+│  • Feature flags apply                                                       │
+│  • Tenant/workspace isolation                                                │
+│  • Paths: /student, /mentor, /dashboard, /appointments, /api/v1/users       │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  ADMIN WORLD                                                                 │
+│  • Requires staff permission (is_staff)                                      │
+│  • Feature flags apply                                                       │
+│  • Capability-based permissions                                              │
+│  • Paths: /admin, /staff, /api/v1/adminpanel/users, /analytics              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  KERNEL WORLD                                                                │
+│  • Requires superuser (is_superuser) ← HARD GATE                            │
+│  • IMMUNE to feature flags, governance, all gating                           │
+│  • Paths: /superadmin, /kernel, /api/engines, /api/.../governance           │
+│  • Root of trust                                                             │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+
+════════════════════════════════════════════════════════════════════════════════
+                              ACCESS CONTROL MATRIX
+════════════════════════════════════════════════════════════════════════════════
+
+┌────────┬──────────────┬───────────────┬──────────────┬──────────────┐
+│ World  │ Auth Needed? │ Min Perm      │ Feature Flag │ Tenant Gate  │
+├────────┼──────────────┼───────────────┼──────────────┼──────────────┤
+│ PUBLIC │      NO      │ none          │     YES      │     NO       │
+├────────┼──────────────┼───────────────┼──────────────┼──────────────┤
+│ APP    │     YES      │ authenticated │     YES      │     YES      │
+├────────┼──────────────┼───────────────┼──────────────┼──────────────┤
+│ ADMIN  │     YES      │ is_staff      │     YES      │     NO       │
+├────────┼──────────────┼───────────────┼──────────────┼──────────────┤
+│ KERNEL │     YES      │ is_superuser  │   IMMUNE ✓   │  IMMUNE ✓    │
+└────────┴──────────────┴───────────────┴──────────────┴──────────────┘
+
+
+════════════════════════════════════════════════════════════════════════════════
+                          POST-LOGIN ROUTING LOGIC
+════════════════════════════════════════════════════════════════════════════════
+
+                        ┌──────────────────┐
+                        │  Login Success   │
+                        └────────┬─────────┘
+                                 │
+                    ┌────────────┴────────────┐
+                    │  Check Django Flags     │
+                    │  (priority order)       │
+                    └────────┬────────────────┘
+                             │
+            ┌────────────────┼────────────────┐
+            │                │                │
+      is_superuser?     is_staff?         role field?
+            │                │                │
+           YES              YES              YES
+            │                │                │
+            ▼                ▼                ▼
+    /superadmin          /admin         /student, /mentor
+    (KERNEL)             (ADMIN)        (APP)
+
+
+════════════════════════════════════════════════════════════════════════════════
+                           FEATURE FLAG SCOPE
+════════════════════════════════════════════════════════════════════════════════
+
+  Feature Flag State: OFF
+            │
+  ┌─────────┴─────────┐
+  │                   │
+USERLAND            KERNEL
+  │                   │
+  ▼                   ▼
+404              UNAFFECTED ✓
+"Feature         (immunity)
+disabled"
+
+
+  Feature Flag State: BETA
+            │
+  ┌─────────┴─────────┐
+  │                   │
+USERLAND            KERNEL
+  │                   │
+  ▼                   ▼
+Superuser           UNAFFECTED ✓
+only                (immunity)
+
+
+════════════════════════════════════════════════════════════════════════════════
+                              AUDIT TRAIL
+════════════════════════════════════════════════════════════════════════════════
+
+Every operation is tagged with world context:
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  AdminAction (adminpanel.AdminAction)                                        │
+│  • action_type: "user_management"                                            │
+│  • action_description: "Updated user john"                                   │
+│  • world: "admin" ← TRACKED                                                  │
+│  • admin_user: staff_admin                                                   │
+│  • timestamp: 2026-01-13T21:51:00Z                                           │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  GovernanceAudit (kernel.governance.GovernanceAudit)                         │
+│  • action: "FEATURE_FLAG_UPDATE"                                             │
+│  • payload: {old_state: {...}, new_state: {...}}                            │
+│  • world: "kernel" ← TRACKED                                                 │
+│  • actor: root                                                               │
+│  • timestamp: 2026-01-13T21:52:00Z                                           │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+
+════════════════════════════════════════════════════════════════════════════════
+                           KEY DESIGN PRINCIPLES
+════════════════════════════════════════════════════════════════════════════════
+
+1. KERNEL SOVEREIGNTY
+   • Kernel world is the root of trust
+   • Superusers can ALWAYS access kernel
+   • No userland operation can lock out root
+
+2. FEATURE FLAG IMMUNITY
+   • Kernel bypasses ALL feature flag checks
+   • Even if all features are frozen (OFF), kernel remains accessible
+   • Guarantees emergency access
+
+3. CLEAR BOUNDARIES
+   • Each world has distinct namespaces and purposes
+   • No overlap between staff admin (/admin) and superuser (/superadmin)
+   • Userland cannot escalate to kernel
+
+4. AUDIT EVERYTHING
+   • All operations tagged with world context
+   • Full traceability for compliance and security
+   • Can filter logs by world: "Show all kernel operations"
+
+5. DEFENSE IN DEPTH
+   • Multiple layers: world → auth → feature flags → permissions
+   • Hard gate for kernel (not configurable)
+   • Fail-safe: unknown paths default to public world
+
+
+════════════════════════════════════════════════════════════════════════════════
+                                  SUMMARY
+════════════════════════════════════════════════════════════════════════════════
+
+✓ 4 worlds: PUBLIC, APP, ADMIN, KERNEL
+✓ Kernel has absolute priority (superuser only, immune to governance)
+✓ Feature flags apply to userland only (public/app/admin)
+✓ Every request tagged with world context
+✓ Audit logs include world field
+✓ Post-login routing respects world boundaries
+✓ Emergency access guaranteed (kernel immunity)
+
+This is an OS-grade architecture, not a UI permission change.
+
+════════════════════════════════════════════════════════════════════════════════

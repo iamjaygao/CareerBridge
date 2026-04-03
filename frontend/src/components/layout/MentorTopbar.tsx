@@ -23,16 +23,7 @@ import {
 } from '@mui/icons-material';
 import { RootState } from '../../store';
 import { logout } from '../../store/slices/authSlice';
-import { useRole } from '../../contexts/RoleContext';
 import NotificationBell from '../common/NotificationBell';
-import ViewingAsChip from '../common/ViewingAsChip';
-import {
-  SwapHoriz as SwapIcon,
-  School as StudentIcon,
-  Work as MentorIcon,
-  Badge as StaffIcon,
-  AdminPanelSettings as AdminIcon,
-} from '@mui/icons-material';
 
 interface MentorTopbarProps {
   onMenuClick: () => void;
@@ -42,7 +33,6 @@ const MentorTopbar: React.FC<MentorTopbarProps> = ({ onMenuClick }) => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const { user } = useSelector((state: RootState) => state.auth);
-  const { setImpersonatedRole, isSuperAdmin: userIsSuperAdmin } = useRole();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -58,33 +48,6 @@ const MentorTopbar: React.FC<MentorTopbarProps> = ({ onMenuClick }) => {
     dispatch(logout());
     handleProfileMenuClose();
     navigate('/');
-  };
-
-  const handleRoleSwitch = (role: string) => {
-    setImpersonatedRole(role);
-    handleProfileMenuClose();
-    switch (role) {
-      case 'student':
-        navigate('/student');
-        break;
-      case 'mentor':
-        navigate('/mentor');
-        break;
-      case 'staff':
-        navigate('/staff');
-        break;
-      case 'admin':
-        navigate('/admin');
-        break;
-      default:
-        navigate('/mentor');
-    }
-  };
-
-  const handleResetImpersonation = () => {
-    setImpersonatedRole(null);
-    handleProfileMenuClose();
-    navigate('/admin');
   };
 
   const getUserInitials = () => {
@@ -226,7 +189,6 @@ const MentorTopbar: React.FC<MentorTopbarProps> = ({ onMenuClick }) => {
                 {getUserInitials()}
               </Avatar>
             </IconButton>
-            <ViewingAsChip />
           </Box>
 
           {/* Profile menu */}

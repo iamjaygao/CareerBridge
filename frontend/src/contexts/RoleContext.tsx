@@ -1,91 +1,51 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+/**
+ * RoleContext - 4-World OS Hardened
+ * 
+ * SECURITY PATCH: PATCH-S0-CLEAN (Ghost World Purge)
+ * 
+ * REMOVED:
+ * - All role override/impersonation logic
+ * - localStorage role switching
+ * - setOverrideRole / resetOverrideRole
+ * - isImpersonating flag
+ * 
+ * RETAINED:
+ * - isSuperAdmin check (reads from backend user.is_superuser)
+ * - currentRole (reads from backend user.role)
+ * 
+ * PRINCIPLE:
+ * The ONLY source of truth for user role/permissions is the backend
+ * authenticated user profile. No frontend override is allowed.
+ */
+
+import React, { createContext, useContext, ReactNode } from 'react';
 import { useSelector } from 'react-redux';
 import { RootState } from '../store';
 
-const OVERRIDE_ROLE_KEY = 'override_role'; // Key for role switching (superadmin only)
-
 interface RoleContextType {
   currentRole: string | null;
-  activeRole: string | null; // effectiveRole = override_role || user.role
-  effectiveRole: string | null; // Alias for activeRole
-  isImpersonating: boolean;
-  setOverrideRole: (role: string | null) => void;
-  resetOverrideRole: () => void;
   isSuperAdmin: boolean;
-  // Backward compatibility
-  setImpersonatedRole: (role: string | null) => void;
-  resetImpersonation: () => void;
+  isStaff: boolean;
 }
 
 const RoleContext = createContext<RoleContextType | undefined>(undefined);
 
-export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const RoleProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { user } = useSelector((state: RootState) => state.auth);
-  const [overrideRole, setOverrideRoleState] = useState<string | null>(null);
 
-  // Load override role from localStorage on mount
-  useEffect(() => {
-    const stored = localStorage.getItem(OVERRIDE_ROLE_KEY);
-    if (stored) {
-      setOverrideRoleState(stored);
-    }
-  }, []);
-
-  // Prevent non-superadmin accounts from inheriting an override role
-  useEffect(() => {
-    if (overrideRole && user?.role !== 'superadmin') {
-      localStorage.removeItem(OVERRIDE_ROLE_KEY);
-      setOverrideRoleState(null);
-    }
-  }, [overrideRole, user?.role]);
-
-  // Determine effective role: override_role OR real user role
-  // effectiveRole = override_role ?? user.role
-  const effectiveRole = overrideRole || user?.role || null;
-  const isImpersonating = !!overrideRole;
-  const isSuperAdmin = user?.role === 'superadmin';
-
-  // Expose effectiveRole as activeRole and currentRole for backward compatibility
-  const activeRole = effectiveRole;
-  const currentRole = effectiveRole;
-
-  const setOverrideRole = (role: string | null) => {
-    if (user?.role !== 'superadmin') {
-      localStorage.removeItem(OVERRIDE_ROLE_KEY);
-      setOverrideRoleState(null);
-      return;
-    }
-    if (role) {
-      localStorage.setItem(OVERRIDE_ROLE_KEY, role);
-      setOverrideRoleState(role);
-    } else {
-      localStorage.removeItem(OVERRIDE_ROLE_KEY);
-      setOverrideRoleState(null);
-    }
-  };
-
-  const resetOverrideRole = () => {
-    localStorage.removeItem(OVERRIDE_ROLE_KEY);
-    setOverrideRoleState(null);
-  };
-
-  // Backward compatibility aliases
-  const setImpersonatedRole = setOverrideRole;
-  const resetImpersonation = resetOverrideRole;
+  // ════════════════════════════════════════════════════════════════════════
+  // SECURITY: Role determined ONLY by backend authentication
+  // ════════════════════════════════════════════════════════════════════════
+  const currentRole = user?.role || null;
+  const isSuperAdmin = Boolean(user?.is_superuser);
+  const isStaff = Boolean(user?.is_staff);
 
   return (
     <RoleContext.Provider
       value={{
         currentRole,
-        activeRole,
-        effectiveRole,
-        isImpersonating,
-        setOverrideRole,
-        resetOverrideRole,
         isSuperAdmin,
-        // Backward compatibility
-        setImpersonatedRole,
-        resetImpersonation,
+        isStaff,
       }}
     >
       {children}

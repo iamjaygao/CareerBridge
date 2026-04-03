@@ -23,23 +23,17 @@ import {
   Settings,
   Logout,
   Menu as MenuIcon,
-  AdminPanelSettings,
-  Badge as StaffIcon,
-  Work as MentorIcon,
-  School as StudentIcon,
-  SwapHoriz as SwapIcon,
 } from '@mui/icons-material';
 import { RootState } from '../../store';
 import { logout } from '../../store/slices/authSlice';
 import { useRole } from '../../contexts/RoleContext';
 import NotificationBell from './NotificationBell';
-import ViewingAsChip from './ViewingAsChip';
 
 const Header: React.FC = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
-  const { setImpersonatedRole, resetImpersonation, isSuperAdmin } = useRole();
+  const { isSuperAdmin } = useRole();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [mobileMenuAnchor, setMobileMenuAnchor] = useState<null | HTMLElement>(null);
 
@@ -83,30 +77,6 @@ const Header: React.FC = () => {
       return user.username[0].toUpperCase();
     }
     return 'U';
-  };
-
-  // Role switching functions
-  const switchRole = (targetRole: string) => {
-    setImpersonatedRole(targetRole);
-    handleProfileMenuClose();
-    handleMobileMenuClose();
-    // Navigate to the appropriate dashboard based on role
-    const dashboardPaths: Record<string, string> = {
-      student: '/student',
-      mentor: '/mentor',
-      staff: '/staff',
-      admin: '/admin',
-    };
-    const targetPath = dashboardPaths[targetRole] || '/';
-    navigate(targetPath);
-  };
-
-  const resetRole = () => {
-    resetImpersonation();
-    handleProfileMenuClose();
-    handleMobileMenuClose();
-    // Navigate to superadmin dashboard without logging out
-    navigate('/superadmin');
   };
 
   return (
@@ -285,11 +255,10 @@ const Header: React.FC = () => {
                         cursor: 'pointer',
                       }}
                     >
-                      {getUserInitials()}
-                    </Avatar>
-                  </IconButton>
-                  <ViewingAsChip />
-                </Box>
+                    {getUserInitials()}
+                  </Avatar>
+                </IconButton>
+              </Box>
 
                 {/* Mobile Menu Button */}
                 <IconButton
@@ -320,37 +289,6 @@ const Header: React.FC = () => {
                     },
                   }}
                 >
-                  {/* SuperAdmin Role Switching Section */}
-                  {isSuperAdmin && (
-                    <>
-                      <MenuItem disabled sx={{ opacity: 1, fontWeight: 600 }}>
-                        <SwapIcon sx={{ mr: 2, fontSize: 20 }} />
-                        Switch Role
-                      </MenuItem>
-                      <MenuItem onClick={() => switchRole('student')}>
-                        <StudentIcon sx={{ mr: 2, fontSize: 20 }} />
-                        View as Student
-                      </MenuItem>
-                      <MenuItem onClick={() => switchRole('mentor')}>
-                        <MentorIcon sx={{ mr: 2, fontSize: 20 }} />
-                        View as Mentor
-                      </MenuItem>
-                      <MenuItem onClick={() => switchRole('staff')}>
-                        <StaffIcon sx={{ mr: 2, fontSize: 20 }} />
-                        View as Staff
-                      </MenuItem>
-                      <MenuItem onClick={() => switchRole('admin')}>
-                        <AdminPanelSettings sx={{ mr: 2, fontSize: 20 }} />
-                        View as Admin
-                      </MenuItem>
-                      <MenuItem onClick={resetRole}>
-                        <SwapIcon sx={{ mr: 2, fontSize: 20 }} />
-                        Reset to Superadmin
-                      </MenuItem>
-                      <Divider />
-                    </>
-                  )}
-
                   <MenuItem onClick={() => handleNavigation('/dashboard')}>
                     <Dashboard sx={{ mr: 2, fontSize: 20 }} />
                     Dashboard
@@ -403,38 +341,7 @@ const Header: React.FC = () => {
                   <MenuItem onClick={() => handleNavigation('/assessment')}>Assessment Engine</MenuItem>
                   <MenuItem onClick={() => handleNavigation('/intelligence')}>Market Intelligence</MenuItem>
                   <MenuItem onClick={() => handleNavigation('/mentors')}>MentorBridge</MenuItem>
-                  <Divider />
-                  {/* SuperAdmin Role Switching Section (Mobile) */}
-                  {isSuperAdmin && (
-                    <>
-                      <MenuItem disabled sx={{ opacity: 1, fontWeight: 600 }}>
-                        <SwapIcon sx={{ mr: 2, fontSize: 20 }} />
-                        Switch Role
-                      </MenuItem>
-                      <MenuItem onClick={() => switchRole('student')}>
-                        <StudentIcon sx={{ mr: 2, fontSize: 20 }} />
-                        View as Student
-                      </MenuItem>
-                      <MenuItem onClick={() => switchRole('mentor')}>
-                        <MentorIcon sx={{ mr: 2, fontSize: 20 }} />
-                        View as Mentor
-                      </MenuItem>
-                      <MenuItem onClick={() => switchRole('staff')}>
-                        <StaffIcon sx={{ mr: 2, fontSize: 20 }} />
-                        View as Staff
-                      </MenuItem>
-                      <MenuItem onClick={() => switchRole('admin')}>
-                        <AdminPanelSettings sx={{ mr: 2, fontSize: 20 }} />
-                        View as Admin
-                      </MenuItem>
-                      <MenuItem onClick={resetRole}>
-                        <SwapIcon sx={{ mr: 2, fontSize: 20 }} />
-                        Reset to Superadmin
-                      </MenuItem>
-                      <Divider />
-                    </>
-                  )}
-
+                  <Divider /                >
                   <MenuItem onClick={() => handleNavigation('/dashboard')}>
                     <Dashboard sx={{ mr: 2, fontSize: 20 }} />
                     Dashboard

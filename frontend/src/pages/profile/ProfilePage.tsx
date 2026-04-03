@@ -51,7 +51,7 @@ import FileUpload from '../../components/common/FileUpload';
 import { getLandingPathByRole } from '../../utils/roleLanding';
 
 const API_BASE_URL =
-  process.env.REACT_APP_API_URL || 'http://localhost:8001/api/v1';
+  process.env.REACT_APP_API_URL || '/api/v1';
 
 const ProfilePage: React.FC = () => {
   const dispatch = useDispatch();

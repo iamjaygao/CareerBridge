@@ -29,7 +29,7 @@ export interface PaymentResult {
 }
 
 class PaymentService {
-  private baseURL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8001/api/v1';
+  private baseURL = process.env.REACT_APP_API_BASE_URL || '/api/v1';
 
   // Create payment intent on the server
   async createPaymentIntent(params: {

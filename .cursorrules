@@ -78,3 +78,122 @@ END OF KERNEL
 
 - No new code may directly modify ResourceLock / TimeSlot reservation state.
 - All future changes MUST go through kernel syscalls or events.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Section D: CURSOR PATCH GOVERNANCE LAYER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Rule 16: SINGLE-FILE PATCH MODE (DEFAULT)
+
+Cursor is restricted to SINGLE-FILE PATCH MODE unless explicitly elevated.
+
+- Cursor may only modify exactly ONE file per operation.
+- Multi-file edits are forbidden by default.
+- No directory-level operations allowed.
+- No project-wide refactors allowed.
+
+Elevation requires explicit MODE [EVOLUTION] authorization.
+
+
+Rule 17: NO AUTO DOCUMENTATION GENERATION
+
+Cursor is strictly prohibited from auto-generating:
+
+- README.md
+- ARCHITECTURE.md
+- DESIGN.md
+- ROADMAP.md
+- KERNEL.md
+- API.md
+- SECURITY.md
+- CHANGELOG.md
+- Any *.md file
+
+Unless explicitly requested via MODE [EVOLUTION] + DOC_SCOPE declaration.
+
+
+Rule 18: NO PROJECT SCANNING
+
+Cursor must not:
+
+- Scan the entire repository
+- Load multi-module context
+- Analyze whole directories
+- Summarize the system
+- Re-interpret system architecture
+
+Context scope MUST be limited to the target file.
+
+
+Rule 19: MINIMAL DIFF MANDATE
+
+All patches MUST:
+
+- Be minimal
+- Be local
+- Avoid stylistic refactors
+- Avoid code reformatting
+- Avoid non-functional changes
+
+
+Rule 20: NO FILE CREATION BY DEFAULT
+
+Cursor must not create:
+
+- New files
+- New directories
+- New documentation artifacts
+
+Unless explicitly authorized by MODE [EVOLUTION].
+
+
+Rule 21: TOKEN SAFETY GOVERNANCE
+
+Cursor must operate under Token Safety Mode:
+
+- Avoid large context ingestion
+- Avoid repository-wide inference
+- Avoid summarization tasks
+- Avoid architectural redesign tasks
+
+Cursor must prioritize determinism, auditability, and token containment.
+
+
+Rule 22: KERNEL ZONE RESTRICTION
+
+For any path under:
+
+- /kernel/*
+- /decision_slots/*
+- /ats_signals/*
+- /human_loop/*
+- /signal_delivery/*
+
+Cursor must enforce:
+
+- Single-file patch
+- No new file creation
+- No markdown
+- No documentation
+- No refactor
+- No formatting
+- Minimal diff only
+
+Violations require STOP + justification, not guessing.
+
+
+Rule 23: DOC_SCOPE (Explicit Override Gate)
+
+Documentation generation is only allowed when ALL of the following are present:
+
+- MODE [EVOLUTION]
+- DOC_SCOPE = {explicit file list}
+- User explicitly authorizes documentation creation
+- Scope is limited to declared files only
+
+Otherwise, documentation generation is forbidden.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+END OF CURSOR GOVERNANCE LAYER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

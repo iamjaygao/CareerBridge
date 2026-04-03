@@ -20,6 +20,10 @@ export interface User {
   created_at?: string;
   last_login?: string;
   date_joined?: string;
+  // Django authentication flags
+  is_superuser?: boolean;
+  is_staff?: boolean;
+  is_authenticated?: boolean;
 }
 
 // Mentor Types

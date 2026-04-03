@@ -42,6 +42,7 @@ from .serializers import (
 from appointments.serializers import AppointmentUpdateSerializer
 from .permissions import IsAdminOrStaff, IsAdminUser, IsAdminOrSuperAdmin, user_has_role
 from .permissions_system import IsSuperAdminOnly
+from users.permissions import HasAdminCapability, user_has_capability
 from .export_utils import build_export_rows, write_export_file
 
 User = get_user_model()
@@ -53,6 +54,27 @@ _HEALTH_CHECK_CACHE_KEY = 'system_health_cache'
 _HEALTH_CHECK_CACHE_TIMEOUT = 30  # seconds
 
 logger = logging.getLogger(__name__)
+
+
+def log_admin_action(request, action_type, action_description, target_model='', target_id=None, action_data=None):
+    """
+    Helper to create AdminAction log entries with world context.
+    
+    Automatically extracts world from request.world (set by GovernanceMiddleware).
+    """
+    from .models import AdminAction
+    
+    AdminAction.objects.create(
+        admin_user=request.user,
+        action_type=action_type,
+        action_description=action_description,
+        target_model=target_model,
+        target_id=target_id,
+        action_data=action_data or {},
+        world=getattr(request, 'world', 'admin'),  # Extract from middleware
+        ip_address=request.META.get('REMOTE_ADDR'),
+        user_agent=request.META.get('HTTP_USER_AGENT', '')
+    )
 
 
 def get_unified_system_health(use_cache: bool = True) -> Dict:
@@ -849,15 +871,13 @@ class DataExportListView(generics.ListCreateAPIView):
     
     def perform_create(self, serializer):
         export = serializer.save()
-        AdminAction.objects.create(
-            admin_user=self.request.user,
+        log_admin_action(
+            self.request,
             action_type='data_export',
             action_description=f'Created export request {export.name}',
             target_model='DataExport',
             target_id=export.id,
-            action_data={'export_type': export.export_type, 'format': export.format},
-            ip_address=self.request.META.get('REMOTE_ADDR'),
-            user_agent=self.request.META.get('HTTP_USER_AGENT', '')
+            action_data={'export_type': export.export_type, 'format': export.format}
         )
         from .tasks import process_data_export
         process_data_export.delay(export.id)
@@ -2314,7 +2334,8 @@ class ContentDetailView(generics.RetrieveUpdateDestroyAPIView):
 class SupportTicketListView(generics.ListCreateAPIView):
     """Support tickets list"""
     serializer_class = SupportTicketSerializer
-    permission_classes = [IsAdminOrStaff]
+    permission_classes = [IsAdminOrStaff, HasAdminCapability]
+    required_capability = 'user.support'
 
     def get_queryset(self):
         from .models import SupportTicket

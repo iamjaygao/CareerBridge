@@ -71,8 +71,9 @@ class RegisterSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ("id", "username", "email", "first_name", "last_name", "role", "avatar", "phone", "location", "email_verified")
-        read_only_fields = ("id",)
+        # Phase-A: Added is_superuser/is_staff for frontend world routing
+        fields = ("id", "username", "email", "first_name", "last_name", "role", "avatar", "phone", "location", "email_verified", "is_superuser", "is_staff")
+        read_only_fields = ("id", "is_superuser", "is_staff")
 
 
 # ----------------------------------------------------------
@@ -105,11 +106,9 @@ class LoginSerializer(serializers.Serializer):
 
         refresh = RefreshToken.for_user(user)
         return {
+            "refresh": str(refresh),
+            "access": str(refresh.access_token),
             "user": UserSerializer(user).data,
-            "tokens": {
-                "refresh": str(refresh),
-                "access": str(refresh.access_token),
-            },
         }
 # ----------------------------------------------------------
 # Email verification serializer

@@ -83,6 +83,9 @@ class AdminAction(models.Model):
     target_id = models.IntegerField(null=True, blank=True, help_text="Target object ID")
     action_data = models.JSONField(default=dict, help_text="Action data")
     
+    # World context (4-World OS Architecture)
+    world = models.CharField(max_length=20, blank=True, default='admin', help_text="OS world: public, app, admin, or kernel")
+    
     # IP and user agent
     ip_address = models.GenericIPAddressField(blank=True, null=True, help_text="IP address")
     user_agent = models.TextField(blank=True, help_text="User agent")

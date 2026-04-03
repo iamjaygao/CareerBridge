@@ -36,7 +36,7 @@ import StudentLayout from './components/layout/StudentLayout';
 import MentorLayout from './components/layout/MentorLayout';
 import StaffLayout from './components/layout/StaffLayout';
 import AdminLayout from './components/layout/AdminLayout';
-import SuperAdminLayout from './components/layout/SuperAdminLayout';
+import KernelWorldLayout from './layouts/KernelWorldLayout';
 
 // Routes / Guards
 import StudentRoute from './components/student/StudentRoute';
@@ -45,6 +45,7 @@ import StaffRoute from './components/staff/StaffRoute';
 import AdminRoute from './components/admin/AdminRoute';
 import SuperAdminRoute from './components/superadmin/SuperAdminRoute';
 import { getLandingPathByRole } from './utils/roleLanding';
+import { useNavigate } from 'react-router-dom';
 
 /* ===========================
    Lazy Pages
@@ -109,15 +110,30 @@ const AdminPromotionsPage = lazy(() => import('./pages/admin/promotions/Promotio
 const AdminPayoutsPage = lazy(() => import('./pages/admin/payouts/PayoutsPage'));
 const AnalyticsPage = lazy(() => import('./pages/analytics/AnalyticsPage'));
 
-// SuperAdmin
+// SuperAdmin - Kernel Control Plane
+const KernelPulsePage = lazy(() => import('./pages/superadmin/KernelPulsePage'));
+const WorkloadRuntimeConsolePage = lazy(() => import('./pages/superadmin/WorkloadRuntimeConsolePage'));
+const GovernanceAuditPage = lazy(() => import('./pages/superadmin/GovernanceAuditPage'));
+const BusPowerPage = lazy(() => import('./pages/superadmin/BusPowerPage'));
+const BusConsolePage = lazy(() => import('./pages/superadmin/BusConsolePage'));
+const GovernanceControlPage = lazy(() => import('./pages/superadmin/GovernanceControlPage'));
+// SuperAdmin - Platform Overview
+const SuperAdminDashboard = lazy(() => import('./pages/superadmin/SuperAdminDashboard'));
 const CommandCenter = lazy(() => import('./pages/superadmin/CommandCenter'));
-const SuperAdminSystemSettingsPage = lazy(() => import('./pages/admin/system/SystemSettingsPage'));
-const SuperAdminUsersPage = lazy(() => import('./pages/superadmin/UsersPage'));
-const SuperAdminMentorsPage = lazy(() => import('./pages/superadmin/MentorsPage'));
-const SuperAdminAppointmentsPage = lazy(() => import('./pages/superadmin/AppointmentsPage'));
-const SuperAdminAssessmentPage = lazy(() => import('./pages/superadmin/AssessmentPage'));
-const SuperAdminJobsPage = lazy(() => import('./pages/superadmin/JobsPage'));
-const SuperAdminSystemPage = lazy(() => import('./pages/superadmin/SystemPage'));
+const OSStatusDashboard = lazy(() => import('./pages/superadmin/OSStatusDashboard'));
+const PlatformControlCenter = lazy(() => import('./pages/superadmin/PlatformControlCenter'));
+// SuperAdmin - User Management
+const UsersPage = lazy(() => import('./pages/superadmin/UsersPage'));
+const MentorsPage = lazy(() => import('./pages/superadmin/MentorsPage'));
+const AppointmentsPage = lazy(() => import('./pages/superadmin/AppointmentsPage'));
+const JobsPage = lazy(() => import('./pages/superadmin/JobsPage'));
+const AssessmentPage = lazy(() => import('./pages/superadmin/AssessmentPage'));
+// SuperAdmin - Peer Mock
+const PeerMockConsolePage = lazy(() => import('./pages/superadmin/PeerMockConsolePage'));
+const PeerMockRuntimePage = lazy(() => import('./pages/superadmin/PeerMockRuntimePage'));
+// SuperAdmin - System
+const SystemPage = lazy(() => import('./pages/superadmin/SystemPage'));
+const SystemAuditPage = lazy(() => import('./pages/superadmin/SystemAuditPage'));
 
 // Notifications (shared)
 const NotificationsPage = lazy(() => import('./pages/notifications/NotificationsPage'));
@@ -131,6 +147,7 @@ const ChatRoomPage = lazy(() => import('./pages/chat/ChatRoomPage'));
 const ResumeListPage = lazy(() => import('./pages/resumes/ResumeListPage'));
 const UploadResumePage = lazy(() => import('./pages/resumes/UploadResumePage'));
 const ResumeAnalysisPage = lazy(() => import('./pages/resumes/ResumeAnalysisPage'));
+const JDMatchPage = lazy(() => import('./pages/resumes/JDMatchPage'));
 
 // Appointments (student)
 const AppointmentDetailPage = lazy(() => import('./pages/appointments/AppointmentDetailPage'));
@@ -155,9 +172,9 @@ const ProtectedGate: React.FC = () => {
 };
 
 const DashboardRedirect: React.FC = () => {
-  const role = useSelector((state: RootState) => state.auth.user?.role);
-  if (!role) return <Navigate to="/login" replace />;
-  return <Navigate to={getLandingPathByRole(role)} replace />;
+  const user = useSelector((state: RootState) => state.auth.user);
+  if (!user) return <Navigate to="/login" replace />;
+  return <Navigate to={getLandingPathByRole(user)} replace />;
 };
 
 const RoleRedirect: React.FC<{ targetByRole: Record<string, string> }> = ({ targetByRole }) => {
@@ -206,6 +223,72 @@ const ChatRoomRedirect: React.FC = () => {
 };
 
 /* ===========================
+   World Router Hard Correction (Phase-A)
+   Ensures SuperAdmin never gets stuck in wrong world
+=========================== */
+
+/**
+ * WorldRouter: Hard-corrects world routing mismatches
+ * 
+ * Purpose: If a SuperAdmin accidentally lands in /admin or /dashboard
+ * (due to old links, history, or routing bugs), this auto-redirects
+ * them to their correct world (/superadmin) WITHOUT showing 403.
+ * 
+ * Phase-A requirement: SuperAdmin must ONLY see kernel control plane.
+ */
+const WorldRouter: React.FC = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { user, authLoaded } = useSelector((state: RootState) => state.auth);
+
+  useEffect(() => {
+    // Wait for auth to load
+    if (!authLoaded || !user) return;
+
+    const path = location.pathname;
+
+    // Phase-A: SuperAdmin world correction
+    // If SuperAdmin lands in wrong world → auto-redirect to /superadmin
+    const isSuperAdmin = Boolean(user.is_superuser) || user.role === 'superadmin';
+    const isStaffOrAdmin = Boolean(user.is_staff) || user.role === 'admin';
+
+    if (isSuperAdmin) {
+      // SuperAdmin must ONLY be in /superadmin world (or public/auth routes)
+      const wrongWorlds = ['/admin', '/dashboard', '/student', '/mentor', '/staff'];
+      const isInWrongWorld = wrongWorlds.some(prefix => path.startsWith(prefix));
+      
+      if (isInWrongWorld || path === '/') {
+        console.warn(`[WORLD-ROUTER] SuperAdmin in wrong world: ${path} → /superadmin`);
+        navigate('/superadmin', { replace: true });
+        return;
+      }
+    } else if (isStaffOrAdmin) {
+      // Staff/Admin must not be in superadmin or dashboard
+      const wrongWorlds = ['/superadmin', '/dashboard', '/student', '/mentor'];
+      const isInWrongWorld = wrongWorlds.some(prefix => path.startsWith(prefix));
+      
+      if (isInWrongWorld) {
+        console.warn(`[WORLD-ROUTER] Staff/Admin in wrong world: ${path} → /admin`);
+        navigate('/admin', { replace: true });
+        return;
+      }
+    } else {
+      // Regular user must not be in admin/superadmin
+      const wrongWorlds = ['/superadmin', '/admin', '/staff'];
+      const isInWrongWorld = wrongWorlds.some(prefix => path.startsWith(prefix));
+      
+      if (isInWrongWorld) {
+        console.warn(`[WORLD-ROUTER] Regular user in wrong world: ${path} → /dashboard`);
+        navigate('/dashboard', { replace: true });
+        return;
+      }
+    }
+  }, [authLoaded, user, location.pathname, navigate]);
+
+  return null;
+};
+
+/* ===========================
    App Content (Logic & Routes)
 =========================== */
 
@@ -233,6 +316,7 @@ const AppInner: React.FC = () => {
 
   return (
     <Router>
+      <WorldRouter />
       <Suspense fallback={<LoadingSpinner />}>
         <Routes>
           {/* ================= Public ================= */}
@@ -338,6 +422,7 @@ const AppInner: React.FC = () => {
                 <Route path="/student/appointments/:id/reschedule" element={<RescheduleAppointmentPage />} />
                 <Route path="/student/resumes" element={<ResumeListPage />} />
                 <Route path="/student/resumes/upload" element={<UploadResumePage />} />
+                <Route path="/student/resumes/jd-match" element={<JDMatchPage />} />
                 <Route path="/student/resumes/:id/analysis" element={<ResumeAnalysisPage />} />
                 <Route path="/student/chat" element={<ChatListPage />} />
                 <Route path="/student/chat/:id" element={<ChatRoomPage />} />
@@ -402,20 +487,42 @@ const AppInner: React.FC = () => {
             </Route>
           </Route>
 
-          {/* ================= SuperAdmin ================= */}
+          {/* ================= SuperAdmin (Kernel World) ================= */}
           <Route element={<ProtectedGate />}>
             <Route element={<SuperAdminRoute />}>
-              <Route element={<SuperAdminLayout />}>
-                <Route path="/superadmin" element={<CommandCenter />} />
-                <Route path="/superadmin/users" element={<SuperAdminUsersPage />} />
-                <Route path="/superadmin/mentors" element={<SuperAdminMentorsPage />} />
-                <Route path="/superadmin/appointments" element={<SuperAdminAppointmentsPage />} />
-                <Route path="/superadmin/assessment" element={<SuperAdminAssessmentPage />} />
-                <Route path="/superadmin/jobs" element={<SuperAdminJobsPage />} />
-                <Route path="/superadmin/system-console" element={<SuperAdminSystemPage />} />
-                <Route path="/superadmin/system" element={<SuperAdminSystemSettingsPage />} />
-                <Route path="/superadmin/analytics" element={<AnalyticsPage />} />
-                <Route path="/superadmin/notifications" element={<NotificationsPage />} />
+              <Route element={<KernelWorldLayout />}>
+                {/* Kernel Control Plane */}
+                <Route path="/superadmin/kernel-pulse" element={<KernelPulsePage />} />
+                <Route path="/superadmin/workload-runtime" element={<WorkloadRuntimeConsolePage />} />
+                <Route path="/superadmin/audit-logs" element={<GovernanceAuditPage />} />
+                <Route path="/superadmin/bus-power" element={<Navigate to="/superadmin/governance-control" replace />} />
+                <Route path="/superadmin/bus-console/:busId" element={<BusConsolePage />} />
+                <Route path="/superadmin/governance-control" element={<GovernanceControlPage />} />
+
+                {/* Platform Overview */}
+                <Route path="/superadmin/dashboard" element={<Navigate to="/superadmin/command-center" replace />} />
+                <Route path="/superadmin/command-center" element={<CommandCenter />} />
+                <Route path="/superadmin/os-status" element={<OSStatusDashboard />} />
+                <Route path="/superadmin/platform-control" element={<Navigate to="/superadmin/os-status" replace />} />
+
+                {/* User Management */}
+                <Route path="/superadmin/users" element={<UsersPage />} />
+                <Route path="/superadmin/mentors" element={<MentorsPage />} />
+                <Route path="/superadmin/appointments" element={<AppointmentsPage />} />
+                <Route path="/superadmin/jobs" element={<JobsPage />} />
+                <Route path="/superadmin/assessments" element={<AssessmentPage />} />
+
+                {/* Peer Mock */}
+                <Route path="/superadmin/peer-mock" element={<PeerMockConsolePage />} />
+                <Route path="/superadmin/peer-mock-runtime" element={<PeerMockRuntimePage />} />
+
+                {/* System */}
+                <Route path="/superadmin/system" element={<SystemPage />} />
+                <Route path="/superadmin/system-audit" element={<Navigate to="/superadmin/audit-logs" replace />} />
+
+                {/* Route Guard: Redirect all other /superadmin/* paths to kernel-pulse */}
+                <Route path="/superadmin/*" element={<Navigate to="/superadmin/kernel-pulse" replace />} />
+                <Route path="/superadmin" element={<Navigate to="/superadmin/kernel-pulse" replace />} />
               </Route>
             </Route>
           </Route>

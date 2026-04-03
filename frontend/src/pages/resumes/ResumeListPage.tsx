@@ -20,6 +20,7 @@ import {
   Paper,
   Grid,
   Pagination,
+  Stack,
 } from '@mui/material';
 import {
   CloudUpload as UploadIcon,
@@ -29,6 +30,7 @@ import {
   Visibility as ViewIcon,
   Description as DescriptionIcon,
   CheckCircle as CheckCircleIcon,
+  Analytics as MatchIcon,
 } from '@mui/icons-material';
 import { AppDispatch, RootState } from '../../store';
 import { fetchResumes, deleteResume, analyzeResume } from '../../store/slices/resumeSlice';
@@ -242,13 +244,22 @@ const ResumeListPage: React.FC = () => {
         breadcrumbs={[{ label: 'Resumes', path: basePath }]}
         action={
           isAuthenticated && (
-            <Button
-              variant="contained"
-              startIcon={<UploadIcon />}
-              onClick={handleUpload}
-            >
-              Upload Resume
-            </Button>
+            <Stack direction="row" spacing={1}>
+              <Button
+                variant="outlined"
+                startIcon={<MatchIcon />}
+                onClick={() => navigate('/student/resumes/jd-match')}
+              >
+                Match JD
+              </Button>
+              <Button
+                variant="contained"
+                startIcon={<UploadIcon />}
+                onClick={handleUpload}
+              >
+                Upload Resume
+              </Button>
+            </Stack>
           )
         }
       />
@@ -359,6 +370,14 @@ const ResumeListPage: React.FC = () => {
                     <ViewIcon />
                   </IconButton>
                 )}
+                <IconButton
+                  size="small"
+                  onClick={() => navigate(`/student/resumes/jd-match?resume_id=${resume.id}`)}
+                  title="Match with Job Description"
+                  color="info"
+                >
+                  <MatchIcon />
+                </IconButton>
                 <IconButton
                   size="small"
                   onClick={() => handleAnalyze(resume.id)}

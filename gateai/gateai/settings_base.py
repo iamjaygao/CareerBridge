@@ -25,6 +25,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'adminpanel',
     'kernel',
+    'peer_mock',  # Phase-B: Peer Mock Runtime
     'appointments',  # Domain models (Appointment, TimeSlot) - Day 1 isolation
     'decision_slots',  # OS Kernel (ResourceLock only)
     'payments',
@@ -144,6 +145,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # Governance middleware (Phase-A: freeze commercial modules)
+    'kernel.governance.middleware.GovernanceMiddleware',
 ]
 
 ROOT_URLCONF = 'gateai.urls'
@@ -213,9 +216,7 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, '..', 'static'),
-]
+STATICFILES_DIRS = []
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 

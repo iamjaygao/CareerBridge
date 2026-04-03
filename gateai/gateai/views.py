@@ -92,11 +92,11 @@ def health_check(request):
     if include_external:
         try:
             # Check JobCrawler health
-            from careerbridge.external_services.third_party_apis.job_crawler import job_crawler_service
+            from gateai.external_services.third_party_apis.job_crawler import job_crawler_service
             job_crawler_health = job_crawler_service.check_health()
-            
+
             # Check ResumeMatcher health
-            from careerbridge.external_services.third_party_apis.resume_matcher import resume_matcher_service
+            from gateai.external_services.third_party_apis.resume_matcher import resume_matcher_service
             resume_matcher_health = resume_matcher_service.check_health()
             
             external_health = {

@@ -4,21 +4,19 @@ import { Outlet } from 'react-router-dom';
 
 import { RootState } from '../../store';
 import { canAccessMentor } from '../../utils/adminPermissions';
-import { useRole } from '../../contexts/RoleContext';
 
 import LoadingSpinner from '../common/LoadingSpinner';
 import ForbiddenPage from '../../pages/error/ForbiddenPage';
 
 /**
  * Protected route component for mentor pages
- * - Uses activeRole for impersonation support
+ * - Authorizes based on backend user role only
  * - Acts as a route guard (NOT a layout)
  */
 const MentorRoute: React.FC = () => {
   const { user, isAuthenticated, authLoaded } = useSelector(
     (state: RootState) => state.auth
   );
-  const { activeRole } = useRole();
 
   // Still loading auth state
   if (!authLoaded) {
@@ -31,7 +29,7 @@ const MentorRoute: React.FC = () => {
   }
 
   // No mentor access
-  if (!canAccessMentor(user, activeRole)) {
+  if (!canAccessMentor(user)) {
     return <ForbiddenPage />;
   }
 

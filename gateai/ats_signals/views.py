@@ -178,6 +178,157 @@ class ResumeDownloadView(generics.GenericAPIView):
         filename = resume.file.name.split('/')[-1]
         return FileResponse(resume.file.open('rb'), as_attachment=True, filename=filename)
 
+
+class JDMatchView(generics.GenericAPIView):
+    """
+    Match a resume against a job description using GPT-4o-mini.
+
+    POST /api/ats_signals/jd-match/
+    Body: { resume_id, job_description }
+    Returns structured gap analysis: match_score, hard_gaps, soft_gaps,
+    strengths, recommendations.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [AIAnalysisRateThrottle]
+
+    def _extract_text(self, resume) -> str | None:
+        """
+        Extract plain text from the resume.
+        Priority: existing ResumeAnalysis.extracted_text → pdfplumber → error.
+        """
+        # 1. Use pre-extracted text if already analyzed
+        try:
+            if resume.analysis and resume.analysis.extracted_text:
+                return resume.analysis.extracted_text
+        except ResumeAnalysis.DoesNotExist:
+            pass
+
+        # 2. Extract directly from file via pdfplumber
+        if not resume.file:
+            return None
+        try:
+            import pdfplumber
+            text_parts = []
+            with pdfplumber.open(resume.file.open('rb')) as pdf:
+                for page in pdf.pages:
+                    t = page.extract_text()
+                    if t:
+                        text_parts.append(t)
+            return '\n'.join(text_parts).strip() or None
+        except Exception as e:
+            logger.warning("pdfplumber extraction failed", extra={"error": str(e)})
+            return None
+
+    @swagger_auto_schema(
+        operation_description="Match a resume against a job description using GPT-4o-mini",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=['resume_id', 'job_description'],
+            properties={
+                'resume_id': openapi.Schema(type=openapi.TYPE_INTEGER),
+                'job_description': openapi.Schema(type=openapi.TYPE_STRING),
+            }
+        ),
+        responses={200: "Structured gap analysis JSON"}
+    )
+    def post(self, request, *args, **kwargs):
+        import os
+        import json
+        from openai import OpenAI
+
+        resume_id = request.data.get('resume_id')
+        job_description = (request.data.get('job_description') or '').strip()
+
+        # Validate inputs
+        if not resume_id:
+            return Response({'error': 'resume_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+        if not job_description:
+            return Response({'error': 'job_description is required'}, status=status.HTTP_400_BAD_REQUEST)
+        if len(job_description) < 50:
+            return Response({'error': 'job_description is too short (min 50 chars)'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Fetch resume (ownership enforced)
+        resume = get_object_or_404(Resume, id=resume_id, user=request.user)
+
+        # Extract resume text
+        resume_text = self._extract_text(resume)
+        if not resume_text:
+            return Response(
+                {'error': 'Could not extract text from resume. Ensure the PDF contains selectable text.'},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY
+            )
+
+        # Check OpenAI is configured
+        api_key = os.environ.get('OPENAI_API_KEY')
+        if not api_key:
+            return Response({'error': 'OpenAI API is not configured on this server'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        try:
+            client = OpenAI(api_key=api_key)
+
+            system_prompt = (
+                "You are an expert technical recruiter and career coach. "
+                "Analyze the resume against the job description and return a JSON object "
+                "with EXACTLY this structure — no extra keys, no markdown fences:\n\n"
+                "{\n"
+                '  "match_score": <integer 0-100>,\n'
+                '  "hard_gaps": [\n'
+                '    {"issue": "<missing requirement>", "reason": "<why it matters for this JD>"}\n'
+                "  ],\n"
+                '  "soft_gaps": [\n'
+                '    {"issue": "<weakness>", "suggestion": "<specific rewrite or action>"}\n'
+                "  ],\n"
+                '  "strengths": [\n'
+                '    {"point": "<strength>", "why": "<why this JD values it>"}\n'
+                "  ],\n"
+                '  "recommendations": [\n'
+                '    {"action": "<specific actionable step>", "priority": "high|medium|low"}\n'
+                "  ]\n"
+                "}\n\n"
+                "Rules:\n"
+                "- match_score: realistic hiring probability (0=no chance, 100=perfect fit)\n"
+                "- hard_gaps: requirements explicitly in the JD that are absent from the resume\n"
+                "- soft_gaps: things present but weak, vague, or unquantified\n"
+                "- strengths: genuine advantages this candidate has for THIS specific role\n"
+                "- recommendations: ordered by priority, each action must be specific and executable\n"
+                "- Be honest and direct. Do not pad the response."
+            )
+
+            user_prompt = (
+                f"## RESUME\n{resume_text[:6000]}\n\n"
+                f"## JOB DESCRIPTION\n{job_description[:4000]}"
+            )
+
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                response_format={"type": "json_object"},
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=0.2,
+                max_tokens=1500,
+            )
+
+            analysis = json.loads(response.choices[0].message.content)
+
+            logger.info(
+                "JD match completed",
+                extra={"user_id": request.user.id, "resume_id": resume_id,
+                       "match_score": analysis.get("match_score")}
+            )
+
+            return Response({
+                'resume_id': resume.id,
+                'resume_title': resume.title,
+                'analysis': analysis,
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.exception("JD match analysis failed",
+                             extra={"user_id": request.user.id, "resume_id": resume_id})
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 class ResumeAnalysisView(generics.CreateAPIView):
     """Analyze a resume using AI"""
     serializer_class = ResumeAnalysisRequestSerializer

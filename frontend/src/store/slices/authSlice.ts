@@ -7,7 +7,7 @@ import { User } from '../../types';
 // Config
 // =======================
 const API_BASE_URL =
-  process.env.REACT_APP_API_URL || 'http://localhost:8001/api/v1';
+  process.env.REACT_APP_API_URL || '/api/v1';
 
 // =======================
 // Types
@@ -67,8 +67,8 @@ export const loginUser = createAsyncThunk(
         { headers: { 'Content-Type': 'application/json' }, timeout: 10000 }
       );
 
-      const { user, tokens } = response.data;
-      const { access, refresh } = tokens || {};
+      const { user, access, refresh } = response.data;
+
 
       if (!access) {
         throw new Error('Login response missing access token');

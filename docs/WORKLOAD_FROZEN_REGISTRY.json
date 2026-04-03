@@ -1,0 +1,914 @@
+{
+  "version": "0.1",
+  "generated_at": "2026-01-14T02:17:09.817Z",
+  "scan_summary": {
+    "total_workloads": 32,
+    "by_status": {
+      "FROZEN": 30,
+      "UNKNOWN_FROZEN_SIGNAL": 2
+    },
+    "by_world": {
+      "admin": 4,
+      "app": 23,
+      "kernel": 5
+    }
+  },
+  "workloads": [
+    {
+      "name": "admin",
+      "kind": "frontend",
+      "world": "admin",
+      "status": "FROZEN",
+      "reason": "Phase-A freeze (detected)",
+      "entrypoints": {
+        "frontend_routes": [],
+        "backend_prefixes": []
+      },
+      "signals": {
+        "code_refs": [
+          "frontend/src/pages/admin/ExportsPage.tsx:210",
+          "frontend/src/pages/admin/MentorApplicationsPage.tsx:441",
+          "frontend/src/pages/admin/UserManagementPage.tsx:482",
+          "frontend/src/pages/admin/UserManagementPage.tsx:491",
+          "frontend/src/pages/admin/UserManagementPage.tsx:532",
+          "frontend/src/pages/admin/UserManagementPage.tsx:551",
+          "frontend/src/pages/admin/UserManagementPage.tsx:647",
+          "frontend/src/pages/admin/UserManagementPage.tsx:659",
+          "frontend/src/pages/admin/UserManagementPage.tsx:671",
+          "frontend/src/pages/admin/UserManagementPage.tsx:753"
+        ],
+        "keywords": [
+          "disabled",
+          "LEGACY"
+        ]
+      }
+    },
+    {
+      "name": "adminpanel",
+      "kind": "backend",
+      "world": "admin",
+      "status": "FROZEN",
+      "reason": "Phase-A freeze (detected)",
+      "entrypoints": {
+        "frontend_routes": [],
+        "backend_prefixes": []
+      },
+      "signals": {
+        "code_refs": [
+          "gateai/adminpanel/governance_views.py:24",
+          "gateai/adminpanel/governance_views.py:61",
+          "gateai/adminpanel/governance_views.py:68",
+          "gateai/adminpanel/governance_views.py:68",
+          "gateai/adminpanel/governance_views.py:85",
+          "gateai/adminpanel/governance_views.py:97",
+          "gateai/adminpanel/governance_views.py:97",
+          "gateai/adminpanel/governance_views.py:107",
+          "gateai/adminpanel/governance_views.py:107",
+          "gateai/adminpanel/governance_views.py:108"
+        ],
+        "keywords": [
+          "404",
+          "FROZEN",
+          "frozen",
+          "LEGACY"
+        ]
+      }
+    },
+    {
+      "name": "analytics",
+      "kind": "frontend",
+      "world": "app",
+      "status": "FROZEN",
+      "reason": "Phase-A freeze (detected)",
+      "entrypoints": {
+        "frontend_routes": [],
+        "backend_prefixes": []
+      },
+      "signals": {
+        "code_refs": [
+          "frontend/src/pages/analytics/AnalyticsPage.tsx:480",
+          "frontend/src/pages/analytics/AnalyticsPage.tsx:486",
+          "frontend/src/pages/analytics/AnalyticsPage.tsx:505",
+          "frontend/src/pages/analytics/AnalyticsPage.tsx:511",
+          "frontend/src/pages/analytics/AnalyticsPage.tsx:530",
+          "frontend/src/pages/analytics/AnalyticsPage.tsx:536",
+          "frontend/src/pages/analytics/AnalyticsPage.tsx:563",
+          "frontend/src/pages/analytics/AnalyticsPage.tsx:571",
+          "docs/GATEAI_OS_CONTRACT.md:198",
+          "docs/GATEAI_OS_CONTRACT.md:204"
+        ],
+        "keywords": [
+          "disabled",
+          "404",
+          "LEGACY",
+          "deprecated",
+          "freeze",
+          "FROZEN",
+          "frozen",
+          "Frozen module",
+          "Phase-A freeze"
+        ]
+      }
+    },
+    {
+      "name": "appointments",
+      "kind": "backend",
+      "world": "app",
+      "status": "FROZEN",
+      "reason": "Phase-A freeze (detected)",
+      "entrypoints": {
+        "frontend_routes": [],
+        "backend_prefixes": []
+      },
+      "signals": {
+        "code_refs": [
+          "gateai/appointments/views.py:5",
+          "gateai/appointments/views.py:169",
+          "gateai/appointments/views.py:209",
+          "gateai/appointments/views.py:311",
+          "gateai/appointments/views.py:440",
+          "frontend/src/pages/appointments/AppointmentDetailPage.tsx:367",
+          "frontend/src/pages/appointments/AppointmentDetailPage.tsx:413",
+          "frontend/src/pages/appointments/AppointmentDetailPage.tsx:421",
+          "frontend/src/pages/appointments/CreateAppointmentPage.tsx:376",
+          "frontend/src/pages/appointments/CreateAppointmentPage.tsx:379"
+        ],
+        "keywords": [
+          "404",
+          "disabled",
+          "FROZEN",
+          "frozen",
+          "LEGACY",
+          "deprecated",
+          "freeze",
+          "Frozen module",
+          "Phase-A freeze"
+        ]
+      }
+    },
+    {
+      "name": "ats_signals",
+      "kind": "backend",
+      "world": "app",
+      "status": "FROZEN",
+      "reason": "Phase-A freeze (detected)",
+      "entrypoints": {
+        "frontend_routes": [],
+        "backend_prefixes": []
+      },
+      "signals": {
+        "code_refs": [
+          "gateai/ats_signals/services/legacy_compat.py:2",
+          "gateai/ats_signals/services/legacy_compat.py:4",
+          "gateai/ats_signals/services/legacy_compat.py:4",
+          "gateai/ats_signals/services/legacy_compat.py:9",
+          "gateai/ats_signals/services/legacy_compat.py:10",
+          "gateai/ats_signals/services/legacy_compat.py:26",
+          "gateai/ats_signals/services/legacy_compat.py:77",
+          "gateai/ats_signals/services/legacy_compat.py:79",
+          "gateai/ats_signals/services/legacy_compat.py:81",
+          "gateai/ats_signals/services/legacy_compat.py:84"
+        ],
+        "keywords": [
+          "LEGACY",
+          "deprecated",
+          "404",
+          "not_implemented"
+        ]
+      }
+    },
+    {
+      "name": "auth",
+      "kind": "frontend",
+      "world": "app",
+      "status": "FROZEN",
+      "reason": "Phase-A freeze (detected)",
+      "entrypoints": {
+        "frontend_routes": [],
+        "backend_prefixes": []
+      },
+      "signals": {
+        "code_refs": [
+          "frontend/src/pages/auth/EmailVerificationPage.tsx:199",
+          "frontend/src/pages/auth/EmailVerificationPage.tsx:234",
+          "frontend/src/pages/auth/EmailVerificationPage.tsx:245",
+          "frontend/src/pages/auth/LoginPage.tsx:176",
+          "frontend/src/pages/auth/LoginPage.tsx:188",
+          "frontend/src/pages/auth/LoginPage.tsx:196",
+          "frontend/src/pages/auth/PasswordResetPage.tsx:173",
+          "frontend/src/pages/auth/PasswordResetPage.tsx:225",
+          "frontend/src/pages/auth/RegisterPage.tsx:204"
+        ],
+        "keywords": [
+          "disabled"
+        ]
+      }
+    },
+    {
+      "name": "chat",
+      "kind": "backend",
+      "world": "app",
+      "status": "FROZEN",
+      "reason": "Phase-A freeze (detected)",
+      "entrypoints": {
+        "frontend_routes": [],
+        "backend_prefixes": []
+      },
+      "signals": {
+        "code_refs": [
+          "gateai/chat/views.py:4"
+        ],
+        "keywords": [
+          "404"
+        ]
+      }
+    },
+    {
+      "name": "dashboard",
+      "kind": "frontend",
+      "world": "app",
+      "status": "FROZEN",
+      "reason": "Phase-A freeze (detected)",
+      "entrypoints": {
+        "frontend_routes": [],
+        "backend_prefixes": []
+      },
+      "signals": {
+        "code_refs": [
+          "frontend/src/pages/dashboard/AssessmentDashboardPage.tsx:329",
+          "docs/BOUNDARY_MAP.md:111",
+          "docs/BOUNDARY_MAP.md:111",
+          "docs/PHASE_A1_SUPERADMIN_SMOKE.md:77",
+          "docs/PHASE_A1_SUPERADMIN_SMOKE.md:87",
+          "docs/PHASE_A1_SUPERADMIN_SMOKE.md:87",
+          "docs/PHASE_A1_SUPERADMIN_SMOKE.md:87",
+          "docs/PHASE_A1_SUPERADMIN_SMOKE.md:88",
+          "docs/PHASE_A1_SUPERADMIN_SMOKE.md:102",
+          "docs/PHASE_A1_SUPERADMIN_SMOKE.md:105"
+        ],
+        "keywords": [
+          "disabled",
+          "FROZEN",
+          "frozen",
+          "404",
+          "Frozen module",
+          "freeze",
+          "Phase-A freeze",
+          "LEGACY"
+        ]
+      }
+    },
+    {
+      "name": "decision_slots",
+      "kind": "backend",
+      "world": "kernel",
+      "status": "FROZEN",
+      "reason": "Phase-A freeze (detected)",
+      "entrypoints": {
+        "frontend_routes": [],
+        "backend_prefixes": []
+      },
+      "signals": {
+        "code_refs": [
+          "gateai/decision_slots/kernel_callbacks.py:61",
+          "gateai/decision_slots/management/commands/purge_legacy_timeslots.py:2",
+          "gateai/decision_slots/management/commands/purge_legacy_timeslots.py:13",
+          "gateai/decision_slots/management/commands/purge_legacy_timeslots.py:35",
+          "gateai/decision_slots/management/commands/purge_legacy_timeslots.py:42",
+          "gateai/decision_slots/migrations/0006_remove_resourcelock_decision_sl_resourc_fd49f7_idx_and_more.py:28",
+          "gateai/decision_slots/migrations/0007_backfill_resourcelock_decision_ids.py:10",
+          "gateai/decision_slots/migrations/0007_backfill_resourcelock_decision_ids.py:15",
+          "gateai/decision_slots/migrations/0007_backfill_resourcelock_decision_ids.py:16",
+          "gateai/decision_slots/migrations/0007_backfill_resourcelock_decision_ids.py:19"
+        ],
+        "keywords": [
+          "LEGACY",
+          "deprecated",
+          "404"
+        ]
+      }
+    },
+    {
+      "name": "error",
+      "kind": "frontend",
+      "world": "app",
+      "status": "FROZEN",
+      "reason": "Phase-A freeze (detected)",
+      "entrypoints": {
+        "frontend_routes": [],
+        "backend_prefixes": []
+      },
+      "signals": {
+        "code_refs": [
+          "frontend/src/pages/error/NotFoundPage.tsx:57",
+          "frontend/src/pages/error/NotFoundPage.tsx:67"
+        ],
+        "keywords": [
+          "404"
+        ]
+      }
+    },
+    {
+      "name": "external_services",
+      "kind": "backend",
+      "world": "app",
+      "status": "FROZEN",
+      "reason": "Phase-A freeze (detected)",
+      "entrypoints": {
+        "frontend_routes": [],
+        "backend_prefixes": []
+      },
+      "signals": {
+        "code_refs": [
+          "gateai/external_services/health_check.py:43",
+          "gateai/external_services/health_check.py:141"
+        ],
+        "keywords": [
+          "disabled"
+        ]
+      }
+    },
+    {
+      "name": "frontend-misc",
+      "kind": "frontend",
+      "world": "kernel",
+      "status": "FROZEN",
+      "reason": "Phase-A freeze (detected)",
+      "entrypoints": {
+        "frontend_routes": [],
+        "backend_prefixes": []
+      },
+      "signals": {
+        "code_refs": [
+          "frontend/src/App.tsx:118",
+          "frontend/src/App.tsx:507",
+          "frontend/src/components/appointments/AppointmentCard.tsx:283",
+          "frontend/src/components/appointments/BookingDialog.tsx:253",
+          "frontend/src/components/appointments/BookingDialog.tsx:518",
+          "frontend/src/components/appointments/BookingDialog.tsx:525",
+          "frontend/src/components/appointments/BookingDialog.tsx:531",
+          "frontend/src/components/appointments/BookingDialog.tsx:538",
+          "frontend/src/components/chat/ChatWindow.tsx:261",
+          "frontend/src/components/common/AdvancedSearch.tsx:256"
+        ],
+        "keywords": [
+          "LEGACY",
+          "disabled",
+          "FROZEN",
+          "frozen",
+          "deprecated",
+          "404",
+          "Frozen module",
+          "freeze",
+          "Phase-A freeze"
+        ]
+      }
+    },
+    {
+      "name": "gateai",
+      "kind": "backend",
+      "world": "app",
+      "status": "FROZEN",
+      "reason": "Phase-A freeze (detected)",
+      "entrypoints": {
+        "frontend_routes": [],
+        "backend_prefixes": []
+      },
+      "signals": {
+        "code_refs": [
+          "gateai/gateai/engines/job_ingestion_urls.py:25",
+          "gateai/gateai/engines/job_ingestion_urls.py:29",
+          "gateai/gateai/engines/signal_core_urls.py:29",
+          "gateai/gateai/kernel_events.py:36",
+          "gateai/gateai/settings_base.py:147",
+          "gateai/gateai/settings_test.py:6",
+          "gateai/gateai/views.py:33",
+          "gateai/gateai/views.py:35",
+          "gateai/gateai/views.py:37",
+          "gateai/gateai/views.py:40"
+        ],
+        "keywords": [
+          "404",
+          "deprecated",
+          "freeze",
+          "disabled",
+          "LEGACY",
+          "not_implemented"
+        ]
+      }
+    },
+    {
+      "name": "human_loop",
+      "kind": "backend",
+      "world": "admin",
+      "status": "FROZEN",
+      "reason": "Phase-A freeze (detected)",
+      "entrypoints": {
+        "frontend_routes": [],
+        "backend_prefixes": []
+      },
+      "signals": {
+        "code_refs": [
+          "gateai/human_loop/admin.py:45",
+          "gateai/human_loop/migrations/0001_initial.py:433",
+          "gateai/human_loop/migrations/0001_initial.py:436",
+          "gateai/human_loop/models.py:84",
+          "gateai/human_loop/serializers.py:21",
+          "gateai/human_loop/serializers.py:104",
+          "gateai/human_loop/serializers.py:104",
+          "gateai/human_loop/services/contract.py:95",
+          "gateai/human_loop/services/contract.py:96",
+          "gateai/human_loop/services/contract.py:97"
+        ],
+        "keywords": [
+          "disabled",
+          "LEGACY",
+          "FROZEN",
+          "frozen",
+          "freeze",
+          "404"
+        ]
+      }
+    },
+    {
+      "name": "jobs",
+      "kind": "fullstack",
+      "world": "app",
+      "status": "UNKNOWN_FROZEN_SIGNAL",
+      "reason": "Detected in documentation",
+      "entrypoints": {
+        "frontend_routes": [],
+        "backend_prefixes": []
+      },
+      "signals": {
+        "code_refs": [
+          "docs/ABI_FREEZE_PULSE_v0_1.md:1",
+          "docs/ABI_FREEZE_PULSE_v0_1.md:4",
+          "docs/ABI_FREEZE_PULSE_v0_1.md:4",
+          "docs/ABI_FREEZE_PULSE_v0_1.md:12",
+          "docs/ABI_FREEZE_PULSE_v0_1.md:12",
+          "docs/ABI_FREEZE_PULSE_v0_1.md:106",
+          "docs/ABI_FREEZE_PULSE_v0_1.md:106",
+          "docs/ABI_FREEZE_PULSE_v0_1.md:120",
+          "docs/ABI_FREEZE_PULSE_v0_1.md:120",
+          "docs/ABI_FREEZE_PULSE_v0_1.md:127"
+        ],
+        "keywords": [
+          "freeze",
+          "FROZEN",
+          "frozen",
+          "404",
+          "Frozen module"
+        ]
+      }
+    },
+    {
+      "name": "kernel",
+      "kind": "backend",
+      "world": "kernel",
+      "status": "FROZEN",
+      "reason": "Phase-A freeze (detected)",
+      "entrypoints": {
+        "frontend_routes": [],
+        "backend_prefixes": []
+      },
+      "signals": {
+        "code_refs": [
+          "gateai/kernel/4_WORLD_OS_ARCHITECTURE.md:175",
+          "gateai/kernel/4_WORLD_OS_ARCHITECTURE.md:211",
+          "gateai/kernel/4_WORLD_OS_ARCHITECTURE.md:211",
+          "gateai/kernel/4_WORLD_OS_ARCHITECTURE.md:350",
+          "gateai/kernel/4_WORLD_OS_ARCHITECTURE.md:355",
+          "gateai/kernel/4_WORLD_UPGRADE_SUMMARY.md:82",
+          "gateai/kernel/4_WORLD_UPGRADE_SUMMARY.md:82",
+          "gateai/kernel/4_WORLD_UPGRADE_SUMMARY.md:124",
+          "gateai/kernel/4_WORLD_UPGRADE_SUMMARY.md:124",
+          "gateai/kernel/4_WORLD_UPGRADE_SUMMARY.md:124"
+        ],
+        "keywords": [
+          "404",
+          "FROZEN",
+          "frozen",
+          "freeze",
+          "Frozen module",
+          "LEGACY",
+          "disabled"
+        ]
+      }
+    },
+    {
+      "name": "legacy-admin-dashboard",
+      "kind": "frontend",
+      "world": "admin",
+      "status": "FROZEN",
+      "reason": "Phase-A: Isolated from SuperAdmin kernel world",
+      "entrypoints": {
+        "frontend_routes": [
+          "/admin/legacy-dashboard"
+        ],
+        "backend_prefixes": []
+      },
+      "signals": {
+        "code_refs": [
+          "(hardcoded known frozen)"
+        ],
+        "keywords": [
+          "frozen"
+        ]
+      }
+    },
+    {
+      "name": "mentor",
+      "kind": "frontend",
+      "world": "app",
+      "status": "FROZEN",
+      "reason": "Phase-A freeze (detected)",
+      "entrypoints": {
+        "frontend_routes": [],
+        "backend_prefixes": []
+      },
+      "signals": {
+        "code_refs": [
+          "frontend/src/pages/mentor/AppointmentsPage.tsx:502",
+          "frontend/src/pages/mentor/AvailabilityPage.tsx:463",
+          "frontend/src/pages/mentor/AvailabilityPage.tsx:469",
+          "frontend/src/pages/mentor/AvailabilityPage.tsx:476",
+          "frontend/src/pages/mentor/AvailabilityPage.tsx:604",
+          "frontend/src/pages/mentor/ProfilePage.tsx:508",
+          "frontend/src/pages/mentor/ProfilePage.tsx:779",
+          "frontend/src/pages/mentor/ProfilePage.tsx:907",
+          "frontend/src/pages/mentor/ProfilePage.tsx:922",
+          "frontend/src/pages/mentor/ResourcesPage.tsx:136"
+        ],
+        "keywords": [
+          "disabled"
+        ]
+      }
+    },
+    {
+      "name": "mentors",
+      "kind": "backend",
+      "world": "app",
+      "status": "FROZEN",
+      "reason": "Phase-A freeze (detected)",
+      "entrypoints": {
+        "frontend_routes": [],
+        "backend_prefixes": []
+      },
+      "signals": {
+        "code_refs": [
+          "gateai/mentors/__init__.py:4",
+          "gateai/mentors/__init__.py:16",
+          "frontend/src/pages/mentors/MentorDetailPage.tsx:89",
+          "frontend/src/pages/mentors/MentorDetailPage.tsx:194",
+          "frontend/src/pages/mentors/MentorDetailPage.tsx:218",
+          "frontend/src/pages/mentors/MentorDetailPage.tsx:246",
+          "frontend/src/pages/mentors/MentorDetailPage.tsx:499",
+          "frontend/src/pages/mentors/MentorDetailPage.tsx:541",
+          "docs/API.md:107",
+          "docs/BOUNDARY_MAP.md:111"
+        ],
+        "keywords": [
+          "deprecated",
+          "disabled",
+          "404",
+          "FROZEN",
+          "frozen",
+          "LEGACY",
+          "freeze"
+        ]
+      }
+    },
+    {
+      "name": "notifications",
+      "kind": "backend",
+      "world": "app",
+      "status": "FROZEN",
+      "reason": "Phase-A freeze (detected)",
+      "entrypoints": {
+        "frontend_routes": [],
+        "backend_prefixes": []
+      },
+      "signals": {
+        "code_refs": [
+          "gateai/notifications/__init__.py:4",
+          "gateai/notifications/__init__.py:17",
+          "frontend/src/pages/notifications/NotificationsPage.tsx:222"
+        ],
+        "keywords": [
+          "deprecated",
+          "disabled"
+        ]
+      }
+    },
+    {
+      "name": "payments",
+      "kind": "backend",
+      "world": "app",
+      "status": "FROZEN",
+      "reason": "Phase-A freeze (detected)",
+      "entrypoints": {
+        "frontend_routes": [],
+        "backend_prefixes": []
+      },
+      "signals": {
+        "code_refs": [
+          "gateai/payments/services.py:92",
+          "gateai/payments/tests.py:28",
+          "gateai/payments/tests.py:48",
+          "gateai/payments/views.py:7",
+          "gateai/payments/views.py:57",
+          "gateai/payments/views.py:169",
+          "gateai/payments/views.py:291",
+          "gateai/payments/views.py:402",
+          "gateai/payments/views.py:572",
+          "gateai/payments/views.py:646"
+        ],
+        "keywords": [
+          "disabled",
+          "404"
+        ]
+      }
+    },
+    {
+      "name": "peer-mock-runtime",
+      "kind": "frontend",
+      "world": "kernel",
+      "status": "FROZEN",
+      "reason": "Placeholder - not implemented",
+      "entrypoints": {
+        "frontend_routes": [
+          "/superadmin/runtime/peer"
+        ],
+        "backend_prefixes": []
+      },
+      "signals": {
+        "code_refs": [
+          "(hardcoded known frozen)"
+        ],
+        "keywords": [
+          "frozen"
+        ]
+      }
+    },
+    {
+      "name": "pricing",
+      "kind": "frontend",
+      "world": "app",
+      "status": "FROZEN",
+      "reason": "Phase-A freeze (detected)",
+      "entrypoints": {
+        "frontend_routes": [],
+        "backend_prefixes": []
+      },
+      "signals": {
+        "code_refs": [
+          "frontend/src/pages/pricing/PricingPage.tsx:60",
+          "frontend/src/pages/pricing/PricingPage.tsx:78",
+          "frontend/src/pages/pricing/PricingPage.tsx:267",
+          "frontend/src/pages/pricing/PricingPage.tsx:271",
+          "frontend/src/pages/pricing/PricingPage.tsx:281"
+        ],
+        "keywords": [
+          "disabled"
+        ]
+      }
+    },
+    {
+      "name": "profile",
+      "kind": "frontend",
+      "world": "app",
+      "status": "FROZEN",
+      "reason": "Phase-A freeze (detected)",
+      "entrypoints": {
+        "frontend_routes": [],
+        "backend_prefixes": []
+      },
+      "signals": {
+        "code_refs": [
+          "frontend/src/pages/profile/ProfilePage.tsx:241",
+          "frontend/src/pages/profile/ProfilePage.tsx:252",
+          "frontend/src/pages/profile/ProfilePage.tsx:259",
+          "frontend/src/pages/profile/ProfilePage.tsx:262",
+          "frontend/src/pages/profile/ProfilePage.tsx:269",
+          "frontend/src/pages/profile/ProfilePage.tsx:281",
+          "frontend/src/pages/profile/ProfilePage.tsx:295",
+          "frontend/src/pages/profile/ProfilePage.tsx:311",
+          "frontend/src/pages/profile/ProfilePage.tsx:323",
+          "frontend/src/pages/profile/ProfilePage.tsx:372"
+        ],
+        "keywords": [
+          "disabled"
+        ]
+      }
+    },
+    {
+      "name": "resumes",
+      "kind": "backend",
+      "world": "app",
+      "status": "FROZEN",
+      "reason": "Phase-A freeze (detected)",
+      "entrypoints": {
+        "frontend_routes": [],
+        "backend_prefixes": []
+      },
+      "signals": {
+        "code_refs": [
+          "gateai/resumes/__init__.py:4",
+          "gateai/resumes/__init__.py:17",
+          "frontend/src/pages/resumes/ResumeListPage.tsx:366",
+          "frontend/src/pages/resumes/UploadResumePage.tsx:225",
+          "frontend/src/pages/resumes/UploadResumePage.tsx:232",
+          "docs/API.md:107",
+          "docs/GATEAI_OS_CONTRACT.md:198",
+          "docs/GATEAI_OS_CONTRACT.md:204",
+          "docs/GATEAI_OS_CONTRACT.md:206",
+          "docs/GATEAI_OS_CONTRACT.md:208"
+        ],
+        "keywords": [
+          "deprecated",
+          "disabled",
+          "404",
+          "LEGACY",
+          "freeze"
+        ]
+      }
+    },
+    {
+      "name": "search",
+      "kind": "fullstack",
+      "world": "app",
+      "status": "UNKNOWN_FROZEN_SIGNAL",
+      "reason": "Detected in documentation",
+      "entrypoints": {
+        "frontend_routes": [],
+        "backend_prefixes": []
+      },
+      "signals": {
+        "code_refs": [
+          "docs/MIGRATION_RISKS.md:18",
+          "docs/MIGRATION_RISKS.md:21",
+          "docs/MIGRATION_RISKS.md:55",
+          "docs/MIGRATION_RISKS.md:71",
+          "docs/MIGRATION_RISKS.md:72",
+          "docs/MIGRATION_RISKS.md:260",
+          "docs/PHASE_A1_SUPERADMIN_SMOKE.md:77",
+          "docs/PHASE_A1_SUPERADMIN_SMOKE.md:87",
+          "docs/PHASE_A1_SUPERADMIN_SMOKE.md:87",
+          "docs/PHASE_A1_SUPERADMIN_SMOKE.md:87"
+        ],
+        "keywords": [
+          "404",
+          "FROZEN",
+          "frozen",
+          "Frozen module"
+        ]
+      }
+    },
+    {
+      "name": "settings",
+      "kind": "frontend",
+      "world": "app",
+      "status": "FROZEN",
+      "reason": "Phase-A freeze (detected)",
+      "entrypoints": {
+        "frontend_routes": [],
+        "backend_prefixes": []
+      },
+      "signals": {
+        "code_refs": [
+          "frontend/src/pages/settings/ConsentManagementPage.tsx:246",
+          "frontend/src/pages/settings/SettingsPage.tsx:366"
+        ],
+        "keywords": [
+          "disabled"
+        ]
+      }
+    },
+    {
+      "name": "signal_delivery",
+      "kind": "backend",
+      "world": "app",
+      "status": "FROZEN",
+      "reason": "Phase-A freeze (detected)",
+      "entrypoints": {
+        "frontend_routes": [],
+        "backend_prefixes": []
+      },
+      "signals": {
+        "code_refs": [
+          "gateai/signal_delivery/management/commands/purge_role_based_business_notifications.py:2",
+          "gateai/signal_delivery/views.py:5"
+        ],
+        "keywords": [
+          "LEGACY",
+          "404"
+        ]
+      }
+    },
+    {
+      "name": "staff",
+      "kind": "frontend",
+      "world": "app",
+      "status": "FROZEN",
+      "reason": "Phase-A freeze (detected)",
+      "entrypoints": {
+        "frontend_routes": [],
+        "backend_prefixes": []
+      },
+      "signals": {
+        "code_refs": [
+          "frontend/src/pages/staff/appointments/AppointmentsPage.tsx:412",
+          "frontend/src/pages/staff/mentors/MentorApprovalsPage.tsx:303",
+          "frontend/src/pages/staff/support/UserSupportPage.tsx:519"
+        ],
+        "keywords": [
+          "disabled"
+        ]
+      }
+    },
+    {
+      "name": "student",
+      "kind": "frontend",
+      "world": "app",
+      "status": "FROZEN",
+      "reason": "Phase-A freeze (detected)",
+      "entrypoints": {
+        "frontend_routes": [],
+        "backend_prefixes": []
+      },
+      "signals": {
+        "code_refs": [
+          "frontend/src/pages/student/AssessmentPage.tsx:255",
+          "frontend/src/pages/student/AssessmentPage.tsx:414",
+          "frontend/src/pages/student/AssessmentPage.tsx:420",
+          "frontend/src/pages/student/ProfilePage.tsx:222",
+          "frontend/src/pages/student/ProfilePage.tsx:302",
+          "frontend/src/pages/student/ProfilePage.tsx:311",
+          "frontend/src/pages/student/ProfilePage.tsx:325",
+          "frontend/src/pages/student/ProfilePage.tsx:396",
+          "frontend/src/pages/student/ProfilePage.tsx:414",
+          "frontend/src/pages/student/ResumeAnalysisDetailPage.tsx:69"
+        ],
+        "keywords": [
+          "disabled",
+          "404"
+        ]
+      }
+    },
+    {
+      "name": "superadmin",
+      "kind": "frontend",
+      "world": "kernel",
+      "status": "FROZEN",
+      "reason": "Phase-A freeze (detected)",
+      "entrypoints": {
+        "frontend_routes": [],
+        "backend_prefixes": []
+      },
+      "signals": {
+        "code_refs": [
+          "frontend/src/pages/superadmin/KernelPulsePage.tsx:9",
+          "frontend/src/pages/superadmin/KernelPulsePage.tsx:9",
+          "frontend/src/pages/superadmin/KernelPulsePage.tsx:9",
+          "frontend/src/pages/superadmin/KernelPulsePage.tsx:10",
+          "frontend/src/pages/superadmin/OSStatusDashboard.tsx:35",
+          "frontend/src/pages/superadmin/OSStatusDashboard.tsx:35",
+          "frontend/src/pages/superadmin/OSStatusDashboard.tsx:116",
+          "frontend/src/pages/superadmin/OSStatusDashboard.tsx:116",
+          "frontend/src/pages/superadmin/OSStatusDashboard.tsx:116",
+          "frontend/src/pages/superadmin/OSStatusDashboard.tsx:119"
+        ],
+        "keywords": [
+          "FROZEN",
+          "frozen",
+          "Frozen module",
+          "LEGACY",
+          "disabled",
+          "404",
+          "freeze",
+          "Phase-A freeze"
+        ]
+      }
+    },
+    {
+      "name": "users",
+      "kind": "backend",
+      "world": "app",
+      "status": "FROZEN",
+      "reason": "Phase-A freeze (detected)",
+      "entrypoints": {
+        "frontend_routes": [],
+        "backend_prefixes": []
+      },
+      "signals": {
+        "code_refs": [
+          "gateai/users/views.py:18"
+        ],
+        "keywords": [
+          "404"
+        ]
+      }
+    }
+  ]
+}
