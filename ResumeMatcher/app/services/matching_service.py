@@ -2,11 +2,14 @@
 Matching service for resume-job matching
 """
 
+import json
+import os
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Dict, Optional
 import uuid
 import structlog
 from datetime import datetime
+from openai import AsyncOpenAI
 
 from app.models.match import Match, MatchFeedback
 from app.services.matchers.semantic_matcher import SemanticMatcher
@@ -200,48 +203,88 @@ class MatchingService:
         semantic_score: float,
         keyword_score: float
     ) -> Dict:
-        """Generate detailed analysis of the match"""
-        # Mock analysis - in real implementation, this would use AI
-        return {
-            "skills_match": {
-                "python": 0.8,
-                "django": 0.6,
-                "postgresql": 0.9
-            },
-            "experience_match": {
-                "years_experience": 3,
-                "relevant_experience": 0.7
-            },
-            "education_match": {
-                "degree_level": "bachelor",
-                "field_relevance": 0.8
-            },
-            "missing_skills": ["kubernetes", "docker"],
-            "recommendations": [
-                "Add more cloud computing experience",
-                "Include project management skills"
-            ]
-        }
+        """Generate detailed gap analysis using GPT-4o-mini."""
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            logger.error("OPENAI_API_KEY not set, cannot generate analysis")
+            return {"error": "OPENAI_API_KEY not configured"}
+
+        client = AsyncOpenAI(api_key=api_key)
+
+        system_prompt = (
+            "You are an expert technical recruiter and career coach. "
+            "Analyze the resume against the job description and return a JSON object "
+            "with EXACTLY this structure — no extra keys, no markdown fences:\n\n"
+            "{\n"
+            '  "match_score": <integer 0-100>,\n'
+            '  "hard_gaps": [\n'
+            '    {"issue": "<missing requirement>", "reason": "<why it matters for this JD>"}\n'
+            "  ],\n"
+            '  "soft_gaps": [\n'
+            '    {"issue": "<weakness>", "suggestion": "<specific rewrite or action>"}\n'
+            "  ],\n"
+            '  "strengths": [\n'
+            '    {"point": "<strength>", "why": "<why this JD values it>"}\n'
+            "  ],\n"
+            '  "recommendations": [\n'
+            '    {"action": "<specific actionable step>", "priority": "high|medium|low"}\n'
+            "  ]\n"
+            "}\n\n"
+            "Rules:\n"
+            "- match_score must reflect realistic hiring probability (0=no chance, 100=perfect fit)\n"
+            "- hard_gaps: requirements the JD explicitly asks for that are absent from the resume\n"
+            "- soft_gaps: things that exist but are weak, vague, or unquantified\n"
+            "- strengths: genuine advantages this candidate has for THIS specific role\n"
+            "- recommendations: ordered by priority, each action must be specific and executable\n"
+            "- Be honest and direct. Do not pad the response."
+        )
+
+        user_prompt = (
+            f"## RESUME\n{resume_text[:6000]}\n\n"
+            f"## JOB DESCRIPTION\n{job_description[:4000]}\n\n"
+            f"(Embedding similarity score for context: {round(semantic_score * 100, 1)}%)"
+        )
+
+        try:
+            response = await client.chat.completions.create(
+                model="gpt-4o-mini",
+                response_format={"type": "json_object"},
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=0.2,
+                max_tokens=1500,
+            )
+            raw = response.choices[0].message.content
+            analysis = json.loads(raw)
+            logger.info("GPT-4o-mini analysis completed", match_score=analysis.get("match_score"))
+            return analysis
+
+        except Exception as e:
+            logger.error("GPT analysis failed", error=str(e))
+            return {"error": str(e)}
     
     @classmethod
     async def _store_match(cls, match_result: Dict, user_id: str, db: AsyncSession):
         """Store match result in database"""
         try:
+            analysis = match_result.get("analysis", {})
             match = Match(
                 match_id=match_result["match_id"],
-                resume_text="",  # Store hash or reference
-                job_description="",  # Store hash or reference
+                resume_text="",
+                job_description="",
                 job_title=match_result.get("job_title"),
                 company=match_result.get("company"),
                 overall_score=match_result["overall_score"],
-                skills_score=match_result["analysis"]["skills_match"].get("overall", 0),
-                experience_score=match_result["analysis"]["experience_match"].get("relevant_experience", 0),
-                education_score=match_result["analysis"]["education_match"].get("field_relevance", 0),
-                skills_match=match_result["analysis"]["skills_match"],
-                experience_match=match_result["analysis"]["experience_match"],
-                education_match=match_result["analysis"]["education_match"],
-                missing_skills=match_result["analysis"]["missing_skills"],
-                recommendations=match_result["analysis"]["recommendations"],
+                skills_score=analysis.get("match_score", 0) / 100,
+                experience_score=0,
+                education_score=0,
+                skills_match={"strengths": analysis.get("strengths", [])},
+                experience_match={"hard_gaps": analysis.get("hard_gaps", [])},
+                education_match={"soft_gaps": analysis.get("soft_gaps", [])},
+                missing_skills=[g.get("issue", "") for g in analysis.get("hard_gaps", [])],
+                recommendations=[r.get("action", "") for r in analysis.get("recommendations", [])],
                 user_id=user_id,
                 source="api"
             )
