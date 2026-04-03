@@ -93,7 +93,7 @@ class ExternalServiceClient:
         if not service_config:
             raise RuntimeError(f"No active service configuration for '{self.service_type}'")
 
-        from careerbridge.external_services.utils import make_api_request, ExternalServiceError
+        from external_services.utils import make_api_request, ExternalServiceError
 
         url = f"{service_config.base_url.rstrip('/')}/{endpoint.lstrip('/')}"
         headers: Dict[str, str] = {
@@ -247,7 +247,7 @@ class ResumeMatcherServiceClient:
     """
 
     def __init__(self):
-        from careerbridge.external_services.config import config
+        from external_services.config import config
 
         self.base_url = config.resume_matcher.base_url.rstrip("/")
         self.api_key = config.resume_matcher.api_key

@@ -110,11 +110,30 @@ const AdminPromotionsPage = lazy(() => import('./pages/admin/promotions/Promotio
 const AdminPayoutsPage = lazy(() => import('./pages/admin/payouts/PayoutsPage'));
 const AnalyticsPage = lazy(() => import('./pages/analytics/AnalyticsPage'));
 
-// SuperAdmin - Phase-A UI Constitution: Only 3 allowed UI elements
+// SuperAdmin - Kernel Control Plane
 const KernelPulsePage = lazy(() => import('./pages/superadmin/KernelPulsePage'));
 const WorkloadRuntimeConsolePage = lazy(() => import('./pages/superadmin/WorkloadRuntimeConsolePage'));
 const GovernanceAuditPage = lazy(() => import('./pages/superadmin/GovernanceAuditPage'));
+const BusPowerPage = lazy(() => import('./pages/superadmin/BusPowerPage'));
+const BusConsolePage = lazy(() => import('./pages/superadmin/BusConsolePage'));
+const GovernanceControlPage = lazy(() => import('./pages/superadmin/GovernanceControlPage'));
+// SuperAdmin - Platform Overview
+const SuperAdminDashboard = lazy(() => import('./pages/superadmin/SuperAdminDashboard'));
+const CommandCenter = lazy(() => import('./pages/superadmin/CommandCenter'));
+const OSStatusDashboard = lazy(() => import('./pages/superadmin/OSStatusDashboard'));
+const PlatformControlCenter = lazy(() => import('./pages/superadmin/PlatformControlCenter'));
+// SuperAdmin - User Management
+const UsersPage = lazy(() => import('./pages/superadmin/UsersPage'));
+const MentorsPage = lazy(() => import('./pages/superadmin/MentorsPage'));
+const AppointmentsPage = lazy(() => import('./pages/superadmin/AppointmentsPage'));
+const JobsPage = lazy(() => import('./pages/superadmin/JobsPage'));
+const AssessmentPage = lazy(() => import('./pages/superadmin/AssessmentPage'));
+// SuperAdmin - Peer Mock
 const PeerMockConsolePage = lazy(() => import('./pages/superadmin/PeerMockConsolePage'));
+const PeerMockRuntimePage = lazy(() => import('./pages/superadmin/PeerMockRuntimePage'));
+// SuperAdmin - System
+const SystemPage = lazy(() => import('./pages/superadmin/SystemPage'));
+const SystemAuditPage = lazy(() => import('./pages/superadmin/SystemAuditPage'));
 
 // Notifications (shared)
 const NotificationsPage = lazy(() => import('./pages/notifications/NotificationsPage'));
@@ -128,6 +147,7 @@ const ChatRoomPage = lazy(() => import('./pages/chat/ChatRoomPage'));
 const ResumeListPage = lazy(() => import('./pages/resumes/ResumeListPage'));
 const UploadResumePage = lazy(() => import('./pages/resumes/UploadResumePage'));
 const ResumeAnalysisPage = lazy(() => import('./pages/resumes/ResumeAnalysisPage'));
+const JDMatchPage = lazy(() => import('./pages/resumes/JDMatchPage'));
 
 // Appointments (student)
 const AppointmentDetailPage = lazy(() => import('./pages/appointments/AppointmentDetailPage'));
@@ -402,6 +422,7 @@ const AppInner: React.FC = () => {
                 <Route path="/student/appointments/:id/reschedule" element={<RescheduleAppointmentPage />} />
                 <Route path="/student/resumes" element={<ResumeListPage />} />
                 <Route path="/student/resumes/upload" element={<UploadResumePage />} />
+                <Route path="/student/resumes/jd-match" element={<JDMatchPage />} />
                 <Route path="/student/resumes/:id/analysis" element={<ResumeAnalysisPage />} />
                 <Route path="/student/chat" element={<ChatListPage />} />
                 <Route path="/student/chat/:id" element={<ChatRoomPage />} />
@@ -470,20 +491,35 @@ const AppInner: React.FC = () => {
           <Route element={<ProtectedGate />}>
             <Route element={<SuperAdminRoute />}>
               <Route element={<KernelWorldLayout />}>
-                {/* Phase-A UI Constitution: Only 3 UI elements allowed in Kernel Control Plane */}
-                
-                {/* 1. Kernel Pulse - Read-only Observability */}
+                {/* Kernel Control Plane */}
                 <Route path="/superadmin/kernel-pulse" element={<KernelPulsePage />} />
-                
-                {/* 2. Workload Runtime Console - Frozen Workload Registry */}
                 <Route path="/superadmin/workload-runtime" element={<WorkloadRuntimeConsolePage />} />
-                
-                {/* 3. Governance Audit Logs - Compliance & Audit Trail */}
                 <Route path="/superadmin/audit-logs" element={<GovernanceAuditPage />} />
-                
-                {/* Phase-B: Peer Mock Runtime Console */}
+                <Route path="/superadmin/bus-power" element={<Navigate to="/superadmin/governance-control" replace />} />
+                <Route path="/superadmin/bus-console/:busId" element={<BusConsolePage />} />
+                <Route path="/superadmin/governance-control" element={<GovernanceControlPage />} />
+
+                {/* Platform Overview */}
+                <Route path="/superadmin/dashboard" element={<Navigate to="/superadmin/command-center" replace />} />
+                <Route path="/superadmin/command-center" element={<CommandCenter />} />
+                <Route path="/superadmin/os-status" element={<OSStatusDashboard />} />
+                <Route path="/superadmin/platform-control" element={<Navigate to="/superadmin/os-status" replace />} />
+
+                {/* User Management */}
+                <Route path="/superadmin/users" element={<UsersPage />} />
+                <Route path="/superadmin/mentors" element={<MentorsPage />} />
+                <Route path="/superadmin/appointments" element={<AppointmentsPage />} />
+                <Route path="/superadmin/jobs" element={<JobsPage />} />
+                <Route path="/superadmin/assessments" element={<AssessmentPage />} />
+
+                {/* Peer Mock */}
                 <Route path="/superadmin/peer-mock" element={<PeerMockConsolePage />} />
-                
+                <Route path="/superadmin/peer-mock-runtime" element={<PeerMockRuntimePage />} />
+
+                {/* System */}
+                <Route path="/superadmin/system" element={<SystemPage />} />
+                <Route path="/superadmin/system-audit" element={<Navigate to="/superadmin/audit-logs" replace />} />
+
                 {/* Route Guard: Redirect all other /superadmin/* paths to kernel-pulse */}
                 <Route path="/superadmin/*" element={<Navigate to="/superadmin/kernel-pulse" replace />} />
                 <Route path="/superadmin" element={<Navigate to="/superadmin/kernel-pulse" replace />} />

@@ -45,9 +45,9 @@ const PeerMockConsolePage: React.FC = () => {
 
       try {
         const [healthRes, statusRes, sessionsRes] = await Promise.all([
-          apiClient.get('/peer-mock/health/'),
-          apiClient.get('/peer-mock/status/'),
-          apiClient.get('/peer-mock/sessions/')
+          apiClient.get('/api/v1/peer-mock/health/'),
+          apiClient.get('/api/v1/peer-mock/status/'),
+          apiClient.get('/api/v1/peer-mock/sessions/')
         ]);
 
         setHealth(healthRes.data);

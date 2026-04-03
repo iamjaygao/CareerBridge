@@ -2,7 +2,7 @@ from celery import shared_task
 from django.utils import timezone
 from django.db import transaction
 from django.db.models import Count
-from .models import TimeSlot, Appointment
+from appointments.models import TimeSlot, Appointment
 from signal_delivery.services.dispatcher import notify
 from signal_delivery.services.rules import NotificationType
 

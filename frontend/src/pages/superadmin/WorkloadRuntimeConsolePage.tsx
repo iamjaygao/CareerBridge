@@ -16,6 +16,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import apiClient from '../../services/api/client';
 import {
   Box,
   Paper,
@@ -39,13 +40,13 @@ import {
   IconButton,
   Tooltip,
   Stack,
+  Switch,
+  Snackbar,
 } from '@mui/material';
 import {
   ExpandMore,
   Refresh,
   Code,
-  CheckCircle,
-  PowerSettingsNew,
   Rocket,
 } from '@mui/icons-material';
 
@@ -88,8 +89,12 @@ const WorkloadRuntimeConsolePage: React.FC = () => {
   const [registry, setRegistry] = useState<Registry | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [unfreezeMarks, setUnfreezeMarks] = useState<Set<string>>(new Set());
   const [expandedBuses, setExpandedBuses] = useState<Set<string>>(new Set());
+  const [busStates, setBusStates] = useState<Record<string, 'ON' | 'OFF'>>({});
+  const [togglingBus, setTogglingBus] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
+    open: false, message: '', severity: 'success',
+  });
 
   /**
    * Load registry from static file (no backend API call)
@@ -100,7 +105,7 @@ const WorkloadRuntimeConsolePage: React.FC = () => {
 
     try {
       const response = await fetch('/registry/WORKLOAD_FROZEN_BUS_REGISTRY.json');
-      
+
       if (!response.ok) {
         throw new Error(`Failed to load registry: ${response.status}`);
       }
@@ -115,8 +120,49 @@ const WorkloadRuntimeConsolePage: React.FC = () => {
     }
   };
 
+  /**
+   * Load live bus power states from kernel API
+   */
+  const loadBusStates = async () => {
+    try {
+      const res = await apiClient.get('/kernel/console/buses/');
+      const map: Record<string, 'ON' | 'OFF'> = {};
+      for (const bus of res.data) {
+        map[bus.bus_name] = bus.state;
+      }
+      setBusStates(map);
+    } catch (e) {
+      // Silently fail — static registry state remains visible
+      console.warn('Could not load live bus states:', e);
+    }
+  };
+
+  /**
+   * Toggle a bus ON/OFF via kernel API
+   */
+  const toggleBusPower = async (busId: string, currentState: 'ON' | 'OFF') => {
+    if (busId === 'KERNEL_CORE_BUS') return;
+    const newState = currentState === 'ON' ? 'OFF' : 'ON';
+    setTogglingBus(busId);
+    try {
+      const res = await apiClient.patch('/kernel/console/buses/', { [busId]: newState });
+      if (res.data.errors?.length) {
+        setToast({ open: true, message: res.data.errors[0], severity: 'error' });
+      } else {
+        setBusStates(prev => ({ ...prev, [busId]: newState }));
+        setToast({ open: true, message: `${busId.replace('_BUS', '')} turned ${newState}`, severity: 'success' });
+      }
+    } catch (e: any) {
+      setToast({ open: true, message: e?.response?.data?.detail || 'Update failed', severity: 'error' });
+    } finally {
+      setTogglingBus(null);
+    }
+  };
+
   useEffect(() => {
     loadRegistry();
+    loadBusStates();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /**
@@ -134,19 +180,16 @@ const WorkloadRuntimeConsolePage: React.FC = () => {
     });
   };
 
-  /**
-   * Toggle unfreeze candidate mark (UI-only)
-   */
-  const toggleUnfreezeMark = (busId: string) => {
-    setUnfreezeMarks(prev => {
-      const next = new Set(prev);
-      if (next.has(busId)) {
-        next.delete(busId);
-      } else {
-        next.add(busId);
-      }
-      return next;
-    });
+  // Console route for each bus (shown as Rocket button when bus is ON)
+  const BUS_CONSOLE_ROUTES: Record<string, { path: string; tooltip: string; color: string }> = {
+    KERNEL_CORE_BUS:  { path: '/superadmin/kernel-pulse',             tooltip: 'Kernel Pulse Console',        color: '#4C6EF5' },
+    AI_BUS:           { path: '/superadmin/bus-console/AI_BUS',       tooltip: 'AI Capability Console',       color: '#9333EA' },
+    ADMIN_BUS:        { path: '/superadmin/bus-console/ADMIN_BUS',    tooltip: 'Admin Operations Console',    color: '#F59E0B' },
+    PUBLIC_WEB_BUS:   { path: '/superadmin/bus-console/PUBLIC_WEB_BUS', tooltip: 'Public Web Console',        color: '#06B6D4' },
+    MENTOR_BUS:       { path: '/superadmin/bus-console/MENTOR_BUS',   tooltip: 'Mentor Bus Console',          color: '#EC4899' },
+    PAYMENT_BUS:      { path: '/superadmin/bus-console/PAYMENT_BUS',  tooltip: 'Payment Bus Console',         color: '#10B981' },
+    SEARCH_BUS:       { path: '/superadmin/bus-console/SEARCH_BUS',   tooltip: 'Search & Discovery Console',  color: '#F97316' },
+    PEER_MOCK_BUS:    { path: '/superadmin/peer-mock',                 tooltip: 'Peer Mock Console',           color: '#22C55E' },
   };
 
   /**
@@ -267,33 +310,21 @@ const WorkloadRuntimeConsolePage: React.FC = () => {
           </Card>
         </Grid>
         <Grid item xs={12} md={4}>
-          <Card sx={{ borderLeft: '4px solid #F59E0B', borderRadius: 0 }}>
+          <Card sx={{ borderLeft: '4px solid #22C55E', borderRadius: 0 }}>
             <CardContent>
               <Typography variant="h6" color="text.secondary" sx={{ fontFamily: 'monospace', fontSize: '0.875rem' }}>
-                Unfreeze Candidates
+                Buses ON
               </Typography>
               <Typography variant="h3" sx={{ fontWeight: 700, fontFamily: 'monospace' }}>
-                {unfreezeMarks.size}
+                {Object.values(busStates).filter(s => s === 'ON').length || '—'}
               </Typography>
               <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
-                Marked for consideration
+                Live from kernel API
               </Typography>
             </CardContent>
           </Card>
         </Grid>
       </Grid>
-
-      {/* Unfreeze Candidates Alert */}
-      {unfreezeMarks.size > 0 && (
-        <Alert severity="info" sx={{ mb: 3 }}>
-          <Typography variant="body2">
-            <strong>{unfreezeMarks.size}</strong> bus(es) marked as unfreeze candidates (UI-only, no backend change).
-          </Typography>
-          <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
-            This is for planning purposes only. Phase-A freeze policy remains immutable.
-          </Typography>
-        </Alert>
-      )}
 
       {/* Bus Table */}
       <Paper sx={{ mb: 3, borderRadius: 0, borderLeft: '4px solid #4C6EF5' }}>
@@ -314,116 +345,101 @@ const WorkloadRuntimeConsolePage: React.FC = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {busEntries.map(([busId, busData]) => (
-                <TableRow 
-                  key={busId}
-                  sx={{
-                    bgcolor: unfreezeMarks.has(busId) ? 'action.hover' : 'inherit',
-                    cursor: 'pointer',
-                    '&:hover': {
-                      bgcolor: 'action.selected',
-                    },
-                  }}
-                  onClick={() => toggleBusExpansion(busId)}
-                >
-                  <TableCell>
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <Typography variant="body2" sx={{ fontSize: '1.5rem' }}>
-                        {getBusIcon(busId)}
-                      </Typography>
-                      <Box>
-                        <Typography variant="body2" sx={{ fontWeight: 600, fontFamily: 'monospace' }}>
-                          {getBusDisplayName(busId)}
+              {busEntries.map(([busId, busData]) => {
+                const liveState = busStates[busId] ?? busData.state;
+                const isOn = liveState === 'ON';
+                const isLocked = busId === 'KERNEL_CORE_BUS';
+                const isToggling = togglingBus === busId;
+
+                return (
+                  <TableRow
+                    key={busId}
+                    sx={{
+                      cursor: 'pointer',
+                      '&:hover': { bgcolor: 'action.selected' },
+                    }}
+                    onClick={() => toggleBusExpansion(busId)}
+                  >
+                    <TableCell>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <Typography variant="body2" sx={{ fontSize: '1.5rem' }}>
+                          {getBusIcon(busId)}
                         </Typography>
-                      </Box>
-                    </Stack>
-                  </TableCell>
-                  <TableCell sx={{ width: 100 }} align="right">
-                    <Typography 
-                      variant="body2" 
-                      sx={{ 
-                        color: busData.state === 'ON' ? '#22C55E' : '#9CA3AF',
-                        fontFamily: 'monospace',
-                        fontSize: '0.75rem',
-                        fontWeight: 600
-                      }}
-                    >
-                      {busData.state}
-                    </Typography>
-                  </TableCell>
-                  <TableCell sx={{ width: 100 }} align="right">
-                    <Typography 
-                      variant="body2" 
-                      sx={{ 
-                        color: 'text.secondary',
-                        fontFamily: 'monospace',
-                        fontSize: '0.75rem'
-                      }}
-                    >
-                      {busData.workloads.length}
-                    </Typography>
-                  </TableCell>
-                  <TableCell sx={{ width: 120 }} align="right" onClick={(e) => e.stopPropagation()}>
-                    <Stack direction="row" spacing={1} justifyContent="flex-end">
-                      {busId === 'PEER_MOCK_BUS' && busData.state === 'ON' && (
-                        <Tooltip title="Open Peer Mock Console">
-                          <IconButton
-                            size="small"
-                            onClick={() => navigate('/superadmin/peer-mock')}
-                            sx={{ 
-                              border: '1px solid #22C55E',
-                              borderRadius: 0,
-                              bgcolor: 'transparent',
-                              '&:hover': {
-                                bgcolor: 'rgba(34, 197, 94, 0.04)'
-                              }
-                            }}
-                          >
-                            <Rocket sx={{ fontSize: '1rem', color: '#22C55E' }} />
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 600, fontFamily: 'monospace' }}>
+                            {getBusDisplayName(busId)}
+                          </Typography>
+                        </Box>
+                      </Stack>
+                    </TableCell>
+                    <TableCell sx={{ width: 100 }} align="right">
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          color: isOn ? '#22C55E' : '#9CA3AF',
+                          fontFamily: 'monospace',
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                        }}
+                      >
+                        {liveState}
+                      </Typography>
+                    </TableCell>
+                    <TableCell sx={{ width: 100 }} align="right">
+                      <Typography
+                        variant="body2"
+                        sx={{ color: 'text.secondary', fontFamily: 'monospace', fontSize: '0.75rem' }}
+                      >
+                        {busData.workloads.length}
+                      </Typography>
+                    </TableCell>
+                    <TableCell sx={{ width: 140 }} align="right" onClick={(e) => e.stopPropagation()}>
+                      <Stack direction="row" spacing={1} justifyContent="flex-end" alignItems="center">
+                        {isOn && BUS_CONSOLE_ROUTES[busId] && (
+                          <Tooltip title={BUS_CONSOLE_ROUTES[busId].tooltip}>
+                            <IconButton
+                              size="small"
+                              onClick={() => navigate(BUS_CONSOLE_ROUTES[busId].path)}
+                              sx={{
+                                border: `1px solid ${BUS_CONSOLE_ROUTES[busId].color}`,
+                                borderRadius: 0,
+                                '&:hover': { bgcolor: `${BUS_CONSOLE_ROUTES[busId].color}10` },
+                              }}
+                            >
+                              <Rocket sx={{ fontSize: '1rem', color: BUS_CONSOLE_ROUTES[busId].color }} />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                        {isToggling ? (
+                          <CircularProgress size={20} />
+                        ) : (
+                          <Tooltip title={isLocked ? 'Kernel Core cannot be turned off' : (isOn ? 'Turn OFF' : 'Turn ON')}>
+                            <span>
+                              <Switch
+                                size="small"
+                                checked={isOn}
+                                disabled={isLocked}
+                                onChange={() => toggleBusPower(busId, liveState)}
+                                color="success"
+                              />
+                            </span>
+                          </Tooltip>
+                        )}
+                        <Tooltip title={expandedBuses.has(busId) ? 'Collapse' : 'Expand workloads'}>
+                          <IconButton size="small">
+                            <ExpandMore
+                              sx={{
+                                transform: expandedBuses.has(busId) ? 'rotate(180deg)' : 'rotate(0deg)',
+                                transition: 'transform 0.3s',
+                              }}
+                            />
                           </IconButton>
                         </Tooltip>
-                      )}
-                      {busId === 'KERNEL_CORE_BUS' && busData.state === 'ON' && (
-                        <Tooltip title="Kernel Core Console">
-                          <IconButton
-                            size="small"
-                            onClick={(e) => { e.stopPropagation(); }}
-                            sx={{ 
-                              border: '1px solid #4C6EF5',
-                              borderRadius: 0,
-                              bgcolor: 'transparent',
-                              '&:hover': {
-                                bgcolor: 'rgba(76, 110, 245, 0.04)'
-                              }
-                            }}
-                          >
-                            <Rocket sx={{ fontSize: '1rem', color: '#4C6EF5' }} />
-                          </IconButton>
-                        </Tooltip>
-                      )}
-                      <Tooltip title={unfreezeMarks.has(busId) ? 'Unmark' : 'Mark as unfreeze candidate'}>
-                        <IconButton
-                          size="small"
-                          color={unfreezeMarks.has(busId) ? 'success' : 'default'}
-                          onClick={() => toggleUnfreezeMark(busId)}
-                        >
-                          <CheckCircle />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title={expandedBuses.has(busId) ? 'Collapse' : 'Expand workloads'}>
-                        <IconButton size="small">
-                          <ExpandMore 
-                            sx={{
-                              transform: expandedBuses.has(busId) ? 'rotate(180deg)' : 'rotate(0deg)',
-                              transition: 'transform 0.3s',
-                            }}
-                          />
-                        </IconButton>
-                      </Tooltip>
-                    </Stack>
-                  </TableCell>
-                </TableRow>
-              ))}
+                      </Stack>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </TableContainer>
@@ -433,16 +449,17 @@ const WorkloadRuntimeConsolePage: React.FC = () => {
       <Typography variant="h6" sx={{ mb: 2 }}>
         Bus Details
       </Typography>
-      {busEntries.map(([busId, busData]) => (
-        <Accordion 
-          key={busId} 
-          sx={{ 
+      {busEntries.map(([busId, busData]) => {
+        const liveState = busStates[busId] ?? busData.state;
+        const isOn = liveState === 'ON';
+        return (
+        <Accordion
+          key={busId}
+          sx={{
             mb: 1,
-            borderLeft: busData.state === 'ON' ? '4px solid #22C55E' : '4px solid #9CA3AF',
+            borderLeft: isOn ? '4px solid #22C55E' : '4px solid #9CA3AF',
             borderRadius: 0,
-            '&:before': {
-              display: 'none'
-            }
+            '&:before': { display: 'none' },
           }}
           expanded={expandedBuses.has(busId)}
           onChange={() => toggleBusExpansion(busId)}
@@ -458,17 +475,17 @@ const WorkloadRuntimeConsolePage: React.FC = () => {
               <Typography variant="body2" sx={{ color: 'text.secondary', ml: 2 }}>
                 {busData.workloads.length} workloads
               </Typography>
-              <Typography 
-                variant="body2" 
-                sx={{ 
-                  color: busData.state === 'ON' ? '#22C55E' : '#9CA3AF',
+              <Typography
+                variant="body2"
+                sx={{
+                  color: isOn ? '#22C55E' : '#9CA3AF',
                   fontFamily: 'monospace',
                   fontSize: '0.75rem',
                   fontWeight: 600,
-                  ml: 2
+                  ml: 2,
                 }}
               >
-                {busData.state}
+                {liveState}
               </Typography>
             </Box>
           </AccordionSummary>
@@ -530,16 +547,33 @@ const WorkloadRuntimeConsolePage: React.FC = () => {
             </TableContainer>
           </AccordionDetails>
         </Accordion>
-      ))}
+        );
+      })}
 
       {/* Footer Note */}
       <Alert severity="info" sx={{ mt: 4 }}>
         <Typography variant="body2">
-          <strong>Phase-A.2 Note:</strong> This console displays bus-grouped frozen workloads.
-          No runtime API calls are made. Unfreeze marks are UI-only and do not modify backend state.
-          Buses represent capability domains (ON/OFF), workloads are implementation modules.
+          <strong>Workload Runtime Console:</strong> Bus power states are live from the kernel API.
+          Use the toggle on each bus row to turn capability buses ON or OFF.
+          KERNEL_CORE_BUS is always ON and cannot be changed.
         </Typography>
       </Alert>
+
+      {/* Toast */}
+      <Snackbar
+        open={toast.open}
+        autoHideDuration={3000}
+        onClose={() => setToast(t => ({ ...t, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          severity={toast.severity}
+          onClose={() => setToast(t => ({ ...t, open: false }))}
+          sx={{ width: '100%' }}
+        >
+          {toast.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };
