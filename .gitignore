@@ -66,3 +66,11 @@ venv/
 */venv/
 */node_modules/
 careerbridge/media/resumes/*
+# Binary and document artifacts
+phrase/
+*.pdf
+*.docx
+*.xlsx
+
+# Django collectstatic output (generated at deploy time)
+gateai/staticfiles/
