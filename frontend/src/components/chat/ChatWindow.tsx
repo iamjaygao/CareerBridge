@@ -65,7 +65,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatRoomId, onClose }) => {
   };
 
   const connectWebSocket = () => {
-    const wsUrl = `ws://localhost:8000/ws/chat/${chatRoomId}/`;
+    const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${wsProto}//${window.location.host}/ws/chat/${chatRoomId}/`;
     const websocket = new WebSocket(wsUrl);
 
     websocket.onopen = () => {

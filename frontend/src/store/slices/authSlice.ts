@@ -7,7 +7,7 @@ import { User } from '../../types';
 // Config
 // =======================
 const API_BASE_URL =
-  process.env.REACT_APP_API_URL || 'http://localhost:8001/api/v1';
+  process.env.REACT_APP_API_URL || '/api/v1';
 
 // =======================
 // Types

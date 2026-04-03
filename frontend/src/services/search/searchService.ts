@@ -39,7 +39,7 @@ export interface SearchQuery {
 import { fetchWithRetry } from '../api/searchService';
 
 class SearchService {
-  private baseURL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8001/api/v1';
+  private baseURL = process.env.REACT_APP_API_BASE_URL || '/api/v1';
   private searchCache = new Map<string, SearchSuggestion[]>();
   private cacheExpiry = 5 * 60 * 1000; // 5 minutes
 

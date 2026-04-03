@@ -2,7 +2,7 @@ import axios from 'axios';
 import { assertNoLegacyApi } from '../../os/assertNoLegacyApi';
 import { validateApiCall } from '../../os/probeGuard';
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8001/api/v1';
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || '/api/v1';
 
 // Store reference for updating Redux state after token refresh
 let storeRef: any = null;

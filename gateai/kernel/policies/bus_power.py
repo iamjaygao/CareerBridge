@@ -1,170 +1,168 @@
 """
 Bus Power Master Switch Policy
 
-Phase-A: Install bus power control infrastructure (全 OFF 模式)
+Phase-A: Bus states are now stored in DB (BusPowerState model).
+Only SuperAdmin can modify via /kernel/console/buses/.
 
-Purpose:
-- Centralized power control for all capability buses
-- Phase-A: All buses OFF except KERNEL_CORE_BUS
-- Preparation for future capability activation
-
-Constraint:
-- Read-only policy (no write interface)
-- Default all OFF
-- KERNEL_CORE_BUS always ON
-
-Architecture:
-Each "bus" represents a logical capability domain.
-When a bus is OFF, all requests to that domain return 404.
-When a bus is ON, requests proceed to normal governance/routing.
-
-Phase-A State: Installation only, not activation.
+Falls back to hardcoded defaults when DB is unavailable (startup safety).
 """
 
-# Bus Power Policy (Phase-A: 总闸安装，全 OFF)
-# GateAI Capability Constitution - Canonical 8 Buses
-BUS_POWER = {
-    # Kernel Core Bus (Always ON)
+import time
+import logging
+
+logger = logging.getLogger(__name__)
+
+# ── Hardcoded defaults (used as seed data and DB-unavailable fallback) ────────
+BUS_POWER_DEFAULTS = {
     "KERNEL_CORE_BUS": "ON",
-    
-    # Public Web Bus (Landing, Marketing) (OFF)
-    "PUBLIC_WEB_BUS": "OFF",
-    
-    # Admin Operations Bus (Staff, Audit, Ops, Console) (OFF)
-    "ADMIN_BUS": "OFF",
-    
-    # AI Capability Bus (ATS, Signals, Engines, Decision Slots) (OFF)
-    "AI_BUS": "OFF",
-    
-    # Peer Mock Runtime Bus (Simulation, Testing) (ON - Phase-A experimental capability)
-    "PEER_MOCK_BUS": "ON",
-    
-    # Mentor/Human Loop Bus (Appointments, Availability) (OFF)
-    "MENTOR_BUS": "OFF",
-    
-    # Payment/Transaction Bus (Stripe, Billing) (OFF)
-    "PAYMENT_BUS": "OFF",
-    
-    # Search/Discovery Bus (Search, Analytics) (OFF)
-    "SEARCH_BUS": "OFF",
+    "PUBLIC_WEB_BUS":  "OFF",
+    "ADMIN_BUS":       "OFF",
+    "AI_BUS":          "OFF",
+    "PEER_MOCK_BUS":   "ON",
+    "MENTOR_BUS":      "OFF",
+    "PAYMENT_BUS":     "OFF",
+    "SEARCH_BUS":      "OFF",
 }
+
+# Keep BUS_POWER as alias so existing imports don't break
+BUS_POWER = BUS_POWER_DEFAULTS
+
+# ── In-process cache ──────────────────────────────────────────────────────────
+_cache: dict = {}
+_cache_ts: float = 0.0
+_CACHE_TTL: int = 5  # seconds
+
+
+def _load_from_db() -> dict | None:
+    """
+    Load bus states from BusPowerState table.
+    Returns None if DB is not ready (e.g. during startup before migrations).
+    """
+    try:
+        from kernel.governance.models import BusPowerState
+        rows = BusPowerState.objects.values("bus_name", "state")
+        if not rows:
+            return None
+        return {r["bus_name"]: r["state"] for r in rows}
+    except Exception:
+        return None
+
+
+def _seed_db_if_empty() -> None:
+    """
+    Seed BusPowerState with hardcoded defaults on first run.
+    Safe to call multiple times (noop when records already exist).
+    """
+    try:
+        from kernel.governance.models import BusPowerState
+        if BusPowerState.objects.exists():
+            return
+        BusPowerState.objects.bulk_create([
+            BusPowerState(bus_name=bus, state=state)
+            for bus, state in BUS_POWER_DEFAULTS.items()
+        ])
+        logger.info("BusPowerState seeded with defaults")
+    except Exception as e:
+        logger.warning("Could not seed BusPowerState: %s", e)
+
+
+def _get_bus_states() -> dict:
+    """
+    Return current bus states with 5-second in-process cache.
+    Falls back to hardcoded defaults if DB is unavailable.
+    """
+    global _cache, _cache_ts
+
+    now = time.time()
+    if _cache and (now - _cache_ts) < _CACHE_TTL:
+        return _cache
+
+    _seed_db_if_empty()
+    states = _load_from_db()
+
+    if states:
+        _cache = states
+        _cache_ts = now
+        return states
+
+    # DB not ready — use hardcoded defaults (don't cache so we retry next request)
+    return BUS_POWER_DEFAULTS
+
+
+def invalidate_cache() -> None:
+    """Force next request to re-read from DB (call after any bus state change)."""
+    global _cache, _cache_ts
+    _cache = {}
+    _cache_ts = 0.0
 
 
 def resolve_bus(path: str) -> str:
     """
     Resolve request path to bus identifier.
-    
-    GateAI Capability Constitution - Canonical 8 Buses
-    
-    Phase-A: All non-kernel buses are OFF.
-    This function provides the routing logic for future activation.
-    
-    Args:
-        path: HTTP request path
-        
-    Returns:
-        Bus identifier (e.g., "KERNEL_CORE_BUS", "AI_BUS")
-        Returns "UNKNOWN" if path doesn't match any known bus
-        
+
     Resolution Rules (Priority Order):
-    1. Kernel Core Bus (highest priority)
-    2. Peer Mock Runtime Bus (simulation/testing)
-    3. AI Capability Bus (engines, signals, decision slots)
-    4. Mentor Bus (appointments, human loop, availability)
-    5. Payment Bus (stripe, billing, transactions)
-    6. Search Bus (search, analytics)
-    7. Admin Bus (staff, audit, ops, console)
-    8. Public Web Bus (marketing, landing, fallback)
+    1. Kernel Core Bus  (highest priority)
+    2. Peer Mock Runtime Bus
+    3. AI Capability Bus
+    4. Mentor Bus
+    5. Payment Bus
+    6. Search Bus
+    7. Admin Bus
+    8. Public Web Bus
     """
-    
-    # 1. Kernel Core Bus (Always ON)
-    if path.startswith('/kernel/') or path.startswith('/superadmin/'):
+    if path.startswith("/kernel/") or path.startswith("/superadmin/"):
         return "KERNEL_CORE_BUS"
-    
-    # 2. Peer Mock Runtime Bus (simulation, testing, mocking)
-    if (path.startswith('/api/v1/peer-mock/') or
-        any(keyword in path.lower() for keyword in ['/peer', '/mock', '/simulator', '/runtime-mock'])):
+
+    if (path.startswith("/api/v1/peer-mock/") or
+            any(k in path.lower() for k in ["/peer", "/mock", "/simulator", "/runtime-mock"])):
         return "PEER_MOCK_BUS"
-    
-    # 3. AI Capability Bus (consolidated: AI, ATS, Signals, Engines, Decision Slots, Chat)
-    if (path.startswith('/api/v1/ai/') or 
-        path.startswith('/api/v1/ats-signals/') or
-        path.startswith('/api/v1/signals/') or
-        path.startswith('/api/v1/signal-delivery/') or
-        path.startswith('/api/v1/decision-slots/') or
-        path.startswith('/api/v1/chat/') or
-        path.startswith('/api/engines/')):
+
+    if (path.startswith("/api/v1/ai/") or
+            path.startswith("/api/v1/ats-signals/") or
+            path.startswith("/api/v1/signals/") or
+            path.startswith("/api/v1/signal-delivery/") or
+            path.startswith("/api/v1/decision-slots/") or
+            path.startswith("/api/v1/chat/") or
+            path.startswith("/api/engines/")):
         return "AI_BUS"
-    
-    # 4. Mentor Bus (appointments, human loop, availability)
-    if (path.startswith('/api/v1/mentors/') or 
-        path.startswith('/api/v1/human-loop/') or
-        path.startswith('/api/v1/appointments/') or
-        path.startswith('/api/v1/availability/')):
+
+    if (path.startswith("/api/v1/mentors/") or
+            path.startswith("/api/v1/human-loop/") or
+            path.startswith("/api/v1/appointments/") or
+            path.startswith("/api/v1/availability/")):
         return "MENTOR_BUS"
-    
-    # 5. Payment Bus (payments, billing, stripe)
-    if (path.startswith('/api/v1/payments/') or
-        path.startswith('/api/v1/billing/') or
-        path.startswith('/api/v1/stripe/')):
+
+    if (path.startswith("/api/v1/payments/") or
+            path.startswith("/api/v1/billing/") or
+            path.startswith("/api/v1/stripe/")):
         return "PAYMENT_BUS"
-    
-    # 6. Search Bus (search, analytics)
-    if (path.startswith('/api/v1/search/') or
-        path.startswith('/api/v1/analytics/')):
+
+    if (path.startswith("/api/v1/search/") or
+            path.startswith("/api/v1/analytics/")):
         return "SEARCH_BUS"
-    
-    # 7. Admin Bus (consolidated: admin, staff, audit, ops, console)
-    if (path.startswith('/admin/') or
-        path.startswith('/staff/') or
-        path.startswith('/audit/') or
-        path.startswith('/ops/') or
-        path.startswith('/console/')):
+
+    if (path.startswith("/admin/") or
+            path.startswith("/staff/") or
+            path.startswith("/audit/") or
+            path.startswith("/ops/") or
+            path.startswith("/console/")):
         return "ADMIN_BUS"
-    
-    # 8. Public Web Bus (marketing, landing, etc.)
-    if path.startswith('/') and not path.startswith('/api/'):
+
+    if path.startswith("/") and not path.startswith("/api/"):
         return "PUBLIC_WEB_BUS"
-    
-    # Unknown path - don't block (for backward compatibility)
+
     return "UNKNOWN"
 
 
 def is_bus_powered(bus: str) -> bool:
-    """
-    Check if a bus is powered ON.
-    
-    Args:
-        bus: Bus identifier
-        
-    Returns:
-        True if bus is ON, False otherwise
-    """
     if bus == "UNKNOWN":
-        # Don't block unknown paths (fail-open for compatibility)
         return True
-    
-    return BUS_POWER.get(bus, "OFF") == "ON"
+    return _get_bus_states().get(bus, "OFF") == "ON"
 
 
 def get_bus_state(bus: str) -> str:
-    """
-    Get the power state of a bus.
-    
-    Args:
-        bus: Bus identifier
-        
-    Returns:
-        "ON" or "OFF"
-    """
-    return BUS_POWER.get(bus, "OFF")
+    return _get_bus_states().get(bus, "OFF")
 
 
 def get_all_buses() -> dict:
-    """
-    Get all bus power states.
-    
-    Returns:
-        Dict of bus -> state
-    """
-    return BUS_POWER.copy()
+    return _get_bus_states().copy()

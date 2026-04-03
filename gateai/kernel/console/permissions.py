@@ -21,6 +21,5 @@ class KernelPermission(BasePermission):
         return (
             request.user and
             request.user.is_authenticated and
-            request.user.is_superuser and
-            getattr(request, 'world', None) == 'kernel'
+            request.user.is_superuser
         )

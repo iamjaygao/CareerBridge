@@ -23,7 +23,7 @@ import ErrorAlert from '../../components/common/ErrorAlert';
 import { handleApiError } from '../../services/utils/errorHandler';
 import type { ApiError } from '../../services/utils/errorHandler';
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8001/api/v1';
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || '/api/v1';
 
 interface ExportItem {
   id: number;

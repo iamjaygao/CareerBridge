@@ -1,0 +1,46 @@
+# Node
+node_modules/
+frontend/node_modules/
+gateai/node_modules/
+npm-debug.log*
+
+# Python
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+gateai/db.sqlite3
+gateai/celerybeat-schedule.db
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Frontend build output (built inside Docker)
+frontend/build/
+
+# Env files — secrets stay out of the build context
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test / coverage
+coverage/
+htmlcov/
+.pytest_cache/
+
+# Docs
+docs/
+*.md
+
+# IDE
+.cursor/
+.vscode/
+.idea/

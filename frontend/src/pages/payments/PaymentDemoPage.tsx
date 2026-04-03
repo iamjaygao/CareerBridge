@@ -3,7 +3,7 @@ import { loadStripe, Stripe } from '@stripe/stripe-js';
 import { Elements, useStripe, useElements, CardElement } from '@stripe/react-stripe-js';
 import { Alert, CircularProgress } from '@mui/material';
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8001/api/v1';
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || '/api/v1';
 
 const CheckoutInner: React.FC = () => {
   const stripe = useStripe();

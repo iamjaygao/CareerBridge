@@ -94,10 +94,13 @@ urlpatterns = [
 
     # GateAI Kernel API (Phase-A: Kernel Control Plane)
     path('api/v1/kernel/', include('kernel.urls')),
-    
+
+    # GateAI Kernel Console — API path (apiClient uses /api/v1 baseURL)
+    path('api/v1/kernel/console/', include('kernel.console.urls')),
+
     # GateAI Kernel Syscalls (legacy direct path)
     path('kernel/', include('kernel.urls')),
-    
+
     # GateAI Kernel Console (Root Control Plane)
     path('kernel/console/', include('kernel.console.urls')),
 

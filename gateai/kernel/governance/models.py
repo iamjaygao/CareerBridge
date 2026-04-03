@@ -174,6 +174,63 @@ class FeatureFlag(models.Model):
         return False
 
 
+class BusPowerState(models.Model):
+    """
+    Persistent bus power states — replaces the hardcoded BUS_POWER dict in
+    kernel/policies/bus_power.py.  Only superadmin can modify these records.
+    """
+
+    BUS_CHOICES = [
+        ('KERNEL_CORE_BUS', 'Kernel Core Bus'),
+        ('PUBLIC_WEB_BUS', 'Public Web Bus'),
+        ('ADMIN_BUS', 'Admin Bus'),
+        ('AI_BUS', 'AI Capability Bus'),
+        ('PEER_MOCK_BUS', 'Peer Mock Runtime Bus'),
+        ('MENTOR_BUS', 'Mentor / Human-Loop Bus'),
+        ('PAYMENT_BUS', 'Payment / Transaction Bus'),
+        ('SEARCH_BUS', 'Search / Discovery Bus'),
+    ]
+
+    STATE_CHOICES = [
+        ('ON', 'ON'),
+        ('OFF', 'OFF'),
+    ]
+
+    bus_name = models.CharField(
+        max_length=50,
+        unique=True,
+        choices=BUS_CHOICES,
+        help_text='Canonical bus identifier',
+    )
+    state = models.CharField(
+        max_length=3,
+        choices=STATE_CHOICES,
+        default='OFF',
+        help_text='ON = requests pass through; OFF = immediate 404',
+    )
+    reason = models.TextField(
+        blank=True,
+        help_text='Why this bus is in its current state',
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='bus_power_updates',
+        help_text='SuperAdmin who last changed this bus',
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Bus Power State'
+        verbose_name_plural = 'Bus Power States'
+        ordering = ['bus_name']
+
+    def __str__(self):
+        return f'{self.bus_name}: {self.state}'
+
+
 class GovernanceAudit(models.Model):
     """
     Audit log for all governance changes.

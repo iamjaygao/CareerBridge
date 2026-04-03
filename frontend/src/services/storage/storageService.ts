@@ -21,7 +21,7 @@ export interface StorageConfig {
 }
 
 class StorageService {
-  private baseURL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+  private baseURL = process.env.REACT_APP_API_URL || '/api/v1';
   private config: StorageConfig = {
     bucket: process.env.REACT_APP_S3_BUCKET || 'careerbridge-uploads',
     region: process.env.REACT_APP_S3_REGION || 'us-east-1',
