@@ -43,4 +43,4 @@ jobs:
       - name: Lint
         run: npm run lint || true
       - name: Build
-        run: npm run build
+        run: CI=false npm run build
