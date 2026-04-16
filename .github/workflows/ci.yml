@@ -26,7 +26,7 @@ jobs:
           python -m pyflakes || true
       - name: Run tests
         run: |
-          echo "Skipping tests due to major system refactor"
+          python manage.py test || true
 
   frontend:
     runs-on: ubuntu-latest
@@ -43,4 +43,4 @@ jobs:
       - name: Lint
         run: npm run lint || true
       - name: Build
-        run: CI=false npm run build
+        run: npm run build
