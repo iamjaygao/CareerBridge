@@ -9,6 +9,13 @@ from .persistence import (
     filter_signals_by_ownership,
     user_can_access_decision_slot,
 )
+from .resume_services import (
+    ResumeAnalysisService,
+    ResumeSearchService,
+    ResumeStatsService,
+    ResumeComparisonService,
+    ResumeCacheService,
+)
 
 __all__ = [
     'persist_engine_signals',
@@ -16,5 +23,10 @@ __all__ = [
     'get_critical_signals',
     'filter_signals_by_ownership',
     'user_can_access_decision_slot',
+    'ResumeAnalysisService',
+    'ResumeSearchService',
+    'ResumeStatsService',
+    'ResumeComparisonService',
+    'ResumeCacheService',
 ]
 
