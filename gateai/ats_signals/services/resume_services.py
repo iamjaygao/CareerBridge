@@ -6,8 +6,9 @@ from decimal import Decimal
 from django.core.cache import cache
 from django.utils import timezone
 from django.db.models import Q, Avg, Count
-from .models import Resume, ResumeAnalysis, ResumeFeedback
-from external_services.ai_services.openai_service import openai_service
+from ..models import Resume, ResumeAnalysis, ResumeFeedback
+from external_services.ai_services.openai_service import OpenAIService as _OpenAIService
+openai_service = _OpenAIService()
 
 # DEPRECATED: ResumeAnalysisService is deprecated. Use ResumeAuditEngine via /api/engines/signal-core/resume-audit/
 # This class is kept for backward compatibility only. New code should use the OS Engine API.

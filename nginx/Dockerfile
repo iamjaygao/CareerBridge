@@ -1,11 +1,11 @@
-FROM node:20-alpine AS frontend-builder
+FROM node:20.19-alpine AS frontend-builder
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
 RUN npm ci --legacy-peer-deps
 COPY frontend/ .
 RUN npm run build
 
-FROM nginx:alpine
+FROM nginx:1.27-alpine
 COPY nginx/nginx.conf /etc/nginx/nginx.conf
 COPY --from=frontend-builder /app/frontend/build /app/frontend
 EXPOSE 80 443

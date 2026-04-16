@@ -37,7 +37,6 @@ class TimeSlot(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
-        db_table = 'decision_slots_timeslot'  # Preserve existing table
         ordering = ['start_time']
         indexes = [
             models.Index(fields=['mentor', 'start_time']),
@@ -130,7 +129,6 @@ class Appointment(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
-        db_table = 'decision_slots_appointment'  # Preserve existing table
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['user', 'status']),
@@ -255,7 +253,6 @@ class AppointmentRequest(models.Model):
     expires_at = models.DateTimeField(help_text="Request expiration time")
     
     class Meta:
-        db_table = 'decision_slots_appointmentrequest'  # Preserve existing table
         ordering = ['-created_at']
     
     def __str__(self):

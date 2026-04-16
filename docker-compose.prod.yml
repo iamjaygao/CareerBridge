@@ -1,7 +1,46 @@
-services:
-  # PostgreSQL Database
+# ── Shared environment anchors ────────────────────────────────────────────────
+# All Django services (app + celery) share these vars. Override per-service below.
+x-django-env: &django-env
+  DATABASE_URL: "postgresql://careerbridge_user:${POSTGRES_PASSWORD}@postgres:5432/careerbridge"
+  REDIS_URL: "redis://redis:6379/0"
+  SECRET_KEY: "${SECRET_KEY}"
+  DEBUG: "${DEBUG:-False}"
+  ALLOWED_HOSTS: "${ALLOWED_HOSTS}"
+  CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS}"
+  CSRF_TRUSTED_ORIGINS: "${CSRF_TRUSTED_ORIGINS}"
+  CELERY_BROKER_URL: "redis://redis:6379/3"
+  CELERY_RESULT_BACKEND: "redis://redis:6379/4"
+  SECURE_SSL_REDIRECT: "${SECURE_SSL_REDIRECT:-False}"
+  SESSION_COOKIE_SECURE: "${SESSION_COOKIE_SECURE:-False}"
+  CSRF_COOKIE_SECURE: "${CSRF_COOKIE_SECURE:-False}"
+
+x-django-app-env: &django-app-env
+  <<: *django-env
+  JOB_CRAWLER_BASE_URL: "${JOB_CRAWLER_BASE_URL}"
+  JOB_CRAWLER_API_KEY: "${JOB_CRAWLER_API_KEY}"
+  RESUME_MATCHER_BASE_URL: "${RESUME_MATCHER_BASE_URL}"
+  RESUME_MATCHER_API_KEY: "${RESUME_MATCHER_API_KEY}"
+  OPENAI_API_KEY: "${OPENAI_API_KEY}"
+  STRIPE_SECRET_KEY: "${STRIPE_SECRET_KEY}"
+  STRIPE_PUBLISHABLE_KEY: "${STRIPE_PUBLISHABLE_KEY}"
+  STRIPE_WEBHOOK_SECRET: "${STRIPE_WEBHOOK_SECRET}"
+  EMAIL_HOST_USER: "${EMAIL_HOST_USER}"
+  EMAIL_HOST_PASSWORD: "${EMAIL_HOST_PASSWORD}"
+
+x-django-volumes: &django-volumes
+  - ./gateai/media:/app/media
+  - ./gateai/logs:/app/logs
+
+x-db-depends: &db-depends
   postgres:
-    image: postgres:15
+    condition: service_healthy
+  redis:
+    condition: service_healthy
+
+services:
+  # ── PostgreSQL ───────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15.7
     environment:
       POSTGRES_DB: careerbridge
       POSTGRES_USER: careerbridge_user
@@ -19,9 +58,9 @@ services:
       timeout: 5s
       retries: 5
 
-  # Redis Cache
+  # ── Redis ────────────────────────────────────────────────────────────────────
   redis:
-    image: redis:7-alpine
+    image: redis:7.2-alpine
     ports:
       - "127.0.0.1:6379:6379"
     volumes:
@@ -35,111 +74,63 @@ services:
       timeout: 5s
       retries: 5
 
-  # GateAI Main Application
+  # ── GateAI Application ───────────────────────────────────────────────────────
   careerbridge:
     build:
       context: .
       dockerfile: gateai/Dockerfile
+    image: careerbridge-app          # named so celery services can reuse it
     environment:
-      - DATABASE_URL=postgresql://careerbridge_user:${POSTGRES_PASSWORD}@postgres:5432/careerbridge
-      - REDIS_URL=redis://redis:6379/0
-      - SECRET_KEY=${SECRET_KEY}
-      - DEBUG=${DEBUG}
-      - ALLOWED_HOSTS=${ALLOWED_HOSTS}
-      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
-      - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS}
-      - JOB_CRAWLER_BASE_URL=${JOB_CRAWLER_BASE_URL}
-      - JOB_CRAWLER_API_KEY=${JOB_CRAWLER_API_KEY}
-      - RESUME_MATCHER_BASE_URL=${RESUME_MATCHER_BASE_URL}
-      - RESUME_MATCHER_API_KEY=${RESUME_MATCHER_API_KEY}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
-      - STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY}
-      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
-      - EMAIL_HOST_USER=${EMAIL_HOST_USER}
-      - EMAIL_HOST_PASSWORD=${EMAIL_HOST_PASSWORD}
-      - CELERY_BROKER_URL=redis://redis:6379/3
-      - CELERY_RESULT_BACKEND=redis://redis:6379/4
-      - SECURE_SSL_REDIRECT=${SECURE_SSL_REDIRECT}
-      - SESSION_COOKIE_SECURE=${SESSION_COOKIE_SECURE}
-      - CSRF_COOKIE_SECURE=${CSRF_COOKIE_SECURE}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      <<: *django-app-env
+      GUNICORN_WORKERS: "${GUNICORN_WORKERS:-3}"
+      GUNICORN_TIMEOUT: "${GUNICORN_TIMEOUT:-120}"
+    depends_on: *db-depends
     networks:
       - careerbridge_network
     restart: unless-stopped
     volumes:
       - ./gateai/media:/app/media
       - ./gateai/logs:/app/logs
-      - static_volume:/app/staticfiles
+      - ./gateai/staticfiles:/app/staticfiles
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health/ || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 60s
 
+  # ── Celery Worker ────────────────────────────────────────────────────────────
+  # Reuses the image built by careerbridge — no separate build step.
   celery_worker:
-    build:
-      context: .
-      dockerfile: gateai/Dockerfile
-    command: celery -A gateai worker -l info
+    image: careerbridge-app
+    command: celery -A gateai worker -l info --concurrency=${CELERY_CONCURRENCY:-4}
     environment:
-      - DATABASE_URL=postgresql://careerbridge_user:${POSTGRES_PASSWORD}@postgres:5432/careerbridge
-      - REDIS_URL=redis://redis:6379/0
-      - SECRET_KEY=${SECRET_KEY}
-      - DEBUG=${DEBUG}
-      - ALLOWED_HOSTS=${ALLOWED_HOSTS}
-      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
-      - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS}
-      - CELERY_BROKER_URL=redis://redis:6379/3
-      - CELERY_RESULT_BACKEND=redis://redis:6379/4
-      - SECURE_SSL_REDIRECT=${SECURE_SSL_REDIRECT}
-      - SESSION_COOKIE_SECURE=${SESSION_COOKIE_SECURE}
-      - CSRF_COOKIE_SECURE=${CSRF_COOKIE_SECURE}
+      <<: *django-app-env
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
+      <<: *db-depends
+      careerbridge:
         condition: service_healthy
     networks:
       - careerbridge_network
     restart: unless-stopped
-    volumes:
-      - ./gateai/media:/app/media
-      - ./gateai/logs:/app/logs
+    volumes: *django-volumes
 
+  # ── Celery Beat ──────────────────────────────────────────────────────────────
   celery_beat:
-    build:
-      context: .
-      dockerfile: gateai/Dockerfile
-    command: celery -A gateai beat -l info
+    image: careerbridge-app
+    command: celery -A gateai beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
     environment:
-      - DATABASE_URL=postgresql://careerbridge_user:${POSTGRES_PASSWORD}@postgres:5432/careerbridge
-      - REDIS_URL=redis://redis:6379/0
-      - SECRET_KEY=${SECRET_KEY}
-      - DEBUG=${DEBUG}
-      - ALLOWED_HOSTS=${ALLOWED_HOSTS}
-      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
-      - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS}
-      - CELERY_BROKER_URL=redis://redis:6379/3
-      - CELERY_RESULT_BACKEND=redis://redis:6379/4
+      <<: *django-env
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
+      <<: *db-depends
+      careerbridge:
         condition: service_healthy
     networks:
       - careerbridge_network
     restart: unless-stopped
-    volumes:
-      - ./gateai/media:/app/media
-      - ./gateai/logs:/app/logs
+    volumes: *django-volumes
 
-  # Nginx Reverse Proxy
+  # ── Nginx Reverse Proxy ──────────────────────────────────────────────────────
   nginx:
     build:
       context: .
@@ -157,9 +148,9 @@ services:
       - careerbridge_network
     restart: unless-stopped
 
-  # Monitoring - Prometheus
+  # ── Prometheus ───────────────────────────────────────────────────────────────
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.51.2
     ports:
       - "127.0.0.1:9090:9090"
     volumes:
@@ -176,9 +167,9 @@ services:
       - careerbridge_network
     restart: unless-stopped
 
-  # Monitoring - Grafana
+  # ── Grafana ──────────────────────────────────────────────────────────────────
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:10.4.2
     ports:
       - "127.0.0.1:3000:3000"
     environment:
@@ -203,4 +194,3 @@ volumes:
 networks:
   careerbridge_network:
     driver: bridge
-
