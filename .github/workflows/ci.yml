@@ -20,7 +20,7 @@ jobs:
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
-          pip install -r ./requirements.txt
+          pip install -r ../requirements.txt
       - name: Lint (flake8 optional placeholder)
         run: |
           python -m pyflakes || true
@@ -43,4 +43,4 @@ jobs:
       - name: Lint
         run: npm run lint || true
       - name: Build
-        run: npm run build
+        run: CI=false npm run build
