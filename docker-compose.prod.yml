@@ -89,8 +89,9 @@ services:
       - careerbridge_network
     restart: unless-stopped
     volumes:
-      - *django-volumes
-      - static_volume:/app/staticfiles
+      - ./gateai/media:/app/media
+      - ./gateai/logs:/app/logs
+      - ./gateai/staticfiles:/app/staticfiles
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health/ || exit 1"]
       interval: 30s
