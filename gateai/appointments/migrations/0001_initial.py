@@ -9,7 +9,6 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('decision_slots', '0005_delete_appointment_delete_appointmentrequest_and_more'),
         ('human_loop', '0002_initial'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
@@ -48,7 +47,6 @@ class Migration(migrations.Migration):
                 ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='appointments', to=settings.AUTH_USER_MODEL)),
             ],
             options={
-                'db_table': 'decision_slots_appointment',
                 'ordering': ['-created_at'],
             },
         ),
@@ -73,7 +71,6 @@ class Migration(migrations.Migration):
                 ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='appointment_requests', to=settings.AUTH_USER_MODEL)),
             ],
             options={
-                'db_table': 'decision_slots_appointmentrequest',
                 'ordering': ['-created_at'],
             },
         ),
@@ -97,7 +94,6 @@ class Migration(migrations.Migration):
                 ('reserved_appointment', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='reserved_slot', to='appointments.appointment')),
             ],
             options={
-                'db_table': 'decision_slots_timeslot',
                 'ordering': ['start_time'],
             },
         ),
