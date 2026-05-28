@@ -1,36 +1,18 @@
 # CareerBridge
 
-An AI-powered career mentorship platform where students connect with professional mentors for mock interviews, resume analysis, and 1-on-1 coaching sessions.
+A production-style full-stack platform built with Django REST, React, PostgreSQL, Redis, Celery, Docker, Stripe, and OpenAI, supporting mentor booking, resume analysis, payments, real-time chat, and governance-controlled feature rollout.
 
 ![Stack](https://img.shields.io/badge/Django-5.2-green) ![Stack](https://img.shields.io/badge/React-18-blue) ![Stack](https://img.shields.io/badge/Docker-Compose-2496ED) ![Stack](https://img.shields.io/badge/PostgreSQL-15-336791)
 
 ---
 
-## Screenshots
+## Engineering Highlights
 
-| Landing Page | Sign In |
-|---|---|
-| ![Landing](docs/screenshots/01_homepage.webp) | ![Login](docs/screenshots/02_login.webp) |
-
-| Student Dashboard | Governance Console |
-|---|---|
-| ![Dashboard](docs/screenshots/03_dashboard.webp) | ![Governance](docs/screenshots/04_governance.webp) |
-
-| Django Admin |
-|---|
-| ![Admin](docs/screenshots/05_django_admin.webp) |
-
----
-
-## Features
-
-- **Mentor Discovery & Booking** — Browse mentor profiles by expertise, book time slots, and manage appointments
-- **AI Resume Analysis** — ATS compatibility scoring and keyword optimization via OpenAI
-- **Peer Mock Interviews** — Practice sessions with real-time feedback
-- **Real-time Chat** — WebSocket-based messaging between students and mentors
-- **Payments** — Stripe checkout for paid mentor sessions
-- **Admin Dashboard** — Staff and superadmin management with role-based access control
-- **Governance Engine** — Feature flag system with bus-powered capability management
+- Built a full-stack career platform with 13 backend service domains, covering authentication, mentor booking, payments, chat, resume analysis, peer mock interviews, and admin workflows.
+- Containerized the system as an 8-service Docker deployment with Django, React, PostgreSQL, Redis, Nginx, Celery, Prometheus, and Grafana.
+- Implemented async task processing with Celery + Redis for notifications, AI analysis, scheduled jobs, and background workflows.
+- Integrated Stripe payment flows with strict appointment binding to prevent orphaned payment intents and preserve transaction consistency.
+- Added governance middleware and role-based access control across student, mentor, staff, admin, and superadmin workflows.
 
 ---
 
@@ -63,6 +45,44 @@ External APIs: OpenAI · Stripe · JobCrawler · ResumeMatcher
 ```
 
 **User Roles:** `student` · `mentor` · `staff` · `admin` · `superadmin`
+
+---
+
+## Screenshots
+
+| Landing Page | Sign In |
+|---|---|
+| ![Landing](docs/screenshots/01_homepage.webp) | ![Login](docs/screenshots/02_login.webp) |
+
+| Student Dashboard | Governance Console |
+|---|---|
+| ![Dashboard](docs/screenshots/03_dashboard.webp) | ![Governance](docs/screenshots/04_governance.webp) |
+
+| Django Admin |
+|---|
+| ![Admin](docs/screenshots/05_django_admin.webp) |
+
+---
+
+## Features
+
+- **Mentor Discovery & Booking** — Browse mentor profiles by expertise, book time slots, and manage appointments
+- **AI Resume Analysis** — ATS compatibility scoring and keyword optimization via OpenAI
+- **Peer Mock Interviews** — Practice sessions with real-time feedback
+- **Real-time Chat** — WebSocket-based messaging between students and mentors
+- **Payments** — Stripe checkout for paid mentor sessions
+- **Admin Dashboard** — Staff and superadmin management with role-based access control
+- **Governance Engine** — Feature flag system with bus-powered capability management
+
+---
+
+## Architecture Decisions
+
+- **Domain-separated Django backend** — Organized the backend into clear modules for users, appointments, payments, chat, resume analysis, peer mock interviews, and governance.
+- **Async-first background processing** — Used Celery + Redis for notifications, AI analysis, scheduled jobs, and long-running workflows.
+- **Payment consistency by design** — Bound every Stripe payment intent to an appointment context to prevent orphaned transactions.
+- **Governance-controlled rollout** — Added feature flags and role-based capability control for safer admin and superadmin operations.
+- **Production-oriented deployment** — Containerized the platform with Docker, Nginx, PostgreSQL, Redis, Celery, Prometheus, and Grafana.
 
 ---
 
@@ -147,16 +167,6 @@ With `DEBUG=True`, Swagger UI is available at:
 http://localhost/swagger/
 http://localhost/redoc/
 ```
-
----
-
-## Key Engineering Decisions
-
-- **Microservice-ready architecture** — Django monolith with clear domain boundaries, with ResumeMatcher and JobCrawler as separate FastAPI services
-- **Governance middleware** — All feature flags and capability states are managed via a kernel governance layer, enabling safe feature rollouts
-- **Async task processing** — Celery + Redis for email notifications, AI analysis, and scheduled tasks
-- **Strict payment binding** — Every payment is attached to a known appointment context; orphaned intents are not allowed
-- **WebSocket support** — Django Channels for real-time chat with automatic reconnection
 
 ---
 
