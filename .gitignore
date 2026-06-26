@@ -74,3 +74,4 @@ phrase/
 
 # Django collectstatic output (generated at deploy time)
 gateai/staticfiles/
+careerbridge/
