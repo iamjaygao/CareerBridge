@@ -112,7 +112,6 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           onClick={onConfirm}
           color={getColor()}
           variant="contained"
-          autoFocus
           disabled={loading}
         >
           {confirmLabel}

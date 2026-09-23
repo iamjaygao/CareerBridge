@@ -1,3 +1,5 @@
+import { fetchWithRetry } from '../api/searchService';
+
 export interface SearchSuggestion {
   id: string;
   text: string;
@@ -35,8 +37,6 @@ export interface SearchQuery {
   page?: number;
   limit?: number;
 }
-
-import { fetchWithRetry } from '../api/searchService';
 
 class SearchService {
   private baseURL = process.env.REACT_APP_API_BASE_URL || '/api/v1';

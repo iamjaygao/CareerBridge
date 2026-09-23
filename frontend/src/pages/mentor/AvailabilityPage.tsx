@@ -628,7 +628,7 @@ const MentorAvailabilityPage: React.FC = () => {
           <Button onClick={handleCancelClear} variant="outlined">
             Cancel
           </Button>
-          <Button onClick={handleConfirmClear} variant="contained" color="error" autoFocus>
+          <Button onClick={handleConfirmClear} variant="contained" color="error">
             Clear Availability
           </Button>
         </DialogActions>

@@ -169,6 +169,9 @@ const LoginPage: React.FC = () => {
               fullWidth
               label="Username or Email"
               autoComplete="username"
+              // Single-purpose page: focusing the first field on load is the
+              // accepted exception to jsx-a11y/no-autofocus.
+              // eslint-disable-next-line jsx-a11y/no-autofocus
               autoFocus
               {...register('login')}
               error={!!errors.login}

@@ -40,7 +40,7 @@ jobs:
           node-version: '20'
       - name: Install deps
         run: npm ci --legacy-peer-deps
-      - name: Lint
-        run: npm run lint || true
+      - name: Lint (blocks on errors, incl. jsx-a11y accessibility rules)
+        run: npm run lint
       - name: Build
         run: CI=false npm run build
