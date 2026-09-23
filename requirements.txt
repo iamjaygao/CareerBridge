@@ -22,6 +22,15 @@ requests==2.31.0
 python-decouple==3.8
 python-dotenv==1.0.0
 
+# --- Resume Parsing ---
+# Imported at runtime by ats_signals (views.py, legacy_compat.py,
+# resume_services.py). Every import site is wrapped in try/except, so a missing
+# package degrades silently into "no text extracted" instead of raising —
+# these must stay declared.
+pdfplumber==0.11.10
+PyPDF2==3.0.1
+python-docx==1.2.0
+
 # --- Payments ---
 stripe==10.5.0
 
