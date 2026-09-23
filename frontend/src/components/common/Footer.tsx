@@ -44,6 +44,7 @@ const Footer: React.FC = () => {
           <Grid item xs={12} md={4}>
             <Typography
               variant="h6"
+              component="p"
               sx={{
                 fontWeight: 700,
                 fontSize: '1.25rem',
@@ -58,6 +59,7 @@ const Footer: React.FC = () => {
             </Typography>
             <Typography
               variant="subtitle2"
+              component="p"
               sx={{
                 fontWeight: 600,
                 fontSize: '0.875rem',
@@ -148,6 +150,7 @@ const Footer: React.FC = () => {
           <Grid item xs={12} sm={6} md={2}>
             <Typography
               variant="subtitle2"
+              component="h2"
               sx={{
                 fontWeight: 600,
                 fontSize: '0.875rem',
@@ -207,6 +210,7 @@ const Footer: React.FC = () => {
           <Grid item xs={12} sm={6} md={2}>
             <Typography
               variant="subtitle2"
+              component="h2"
               sx={{
                 fontWeight: 600,
                 fontSize: '0.875rem',
@@ -280,6 +284,7 @@ const Footer: React.FC = () => {
           <Grid item xs={12} sm={6} md={2}>
             <Typography
               variant="subtitle2"
+              component="h2"
               sx={{
                 fontWeight: 600,
                 fontSize: '0.875rem',
@@ -339,6 +344,7 @@ const Footer: React.FC = () => {
           <Grid item xs={12} sm={6} md={2}>
             <Typography
               variant="subtitle2"
+              component="h2"
               sx={{
                 fontWeight: 600,
                 fontSize: '0.875rem',

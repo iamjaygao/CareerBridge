@@ -199,11 +199,11 @@ const LandingPage: React.FC = () => {
         <Grid container spacing={6} alignItems="center">
           <Grid item xs={12} md={6}>
             <Chip
-              icon={<AutoAwesomeIcon sx={{ color: 'primary.main' }} />}
+              icon={<AutoAwesomeIcon sx={{ color: '#0d47a1' }} />}
               label="Career clarity engine"
               sx={{
                 bgcolor: 'rgba(25, 118, 210, 0.08)',
-                color: 'primary.main',
+                color: '#0d47a1',
                 fontWeight: 600,
                 mb: 3,
               }}
@@ -225,6 +225,7 @@ const LandingPage: React.FC = () => {
             </Typography>
             <Typography
               variant="h6"
+              component="p"
               sx={{
                 color: 'text.secondary',
                 fontSize: { xs: '1rem', md: '1.2rem' },
@@ -285,6 +286,7 @@ const LandingPage: React.FC = () => {
                 <Box key={stat.label}>
                   <Typography
                     variant="h6"
+                    component="p"
                     sx={{ fontWeight: 700, color: 'text.primary', mb: 0.5 }}
                   >
                     {stat.value}
@@ -361,7 +363,7 @@ const LandingPage: React.FC = () => {
                             size="small"
                             sx={{
                               bgcolor: 'rgba(25, 118, 210, 0.12)',
-                              color: 'primary.main',
+                              color: '#0d47a1',
                               fontWeight: 600,
                             }}
                           />
@@ -418,7 +420,7 @@ const LandingPage: React.FC = () => {
                 }}
               >
                 <CardContent sx={{ p: 0 }}>
-                  <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
+                  <Typography variant="h5" component="h3" sx={{ fontWeight: 700, mb: 1 }}>
                     {audience.title}
                   </Typography>
                   <Typography sx={{ color: 'text.secondary', mb: 3 }}>
@@ -456,6 +458,7 @@ const LandingPage: React.FC = () => {
         >
           <Typography
             variant="h3"
+            component="h2"
             sx={{
               fontWeight: 700,
               mb: 4,
@@ -492,7 +495,7 @@ const LandingPage: React.FC = () => {
                     {index + 1}
                   </Box>
                   <Box>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 0.5 }}>
+                    <Typography variant="subtitle1" component="h3" sx={{ fontWeight: 700, mb: 0.5 }}>
                       {step.title}
                     </Typography>
                     <Typography variant="body2" sx={{ color: 'text.secondary' }}>
@@ -512,6 +515,7 @@ const LandingPage: React.FC = () => {
           <Grid item xs={12} md={5}>
             <Typography
               variant="h3"
+              component="h2"
               sx={{
                 fontWeight: 700,
                 mb: 2,
@@ -557,7 +561,7 @@ const LandingPage: React.FC = () => {
                     }}
                   >
                     <VerifiedUserIcon sx={{ color: 'primary.main', mb: 1 }} />
-                    <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+                    <Typography variant="subtitle1" component="h3" sx={{ fontWeight: 700, mb: 1 }}>
                       {pillar.title}
                     </Typography>
                     <Typography variant="body2" sx={{ color: 'text.secondary' }}>
@@ -576,6 +580,7 @@ const LandingPage: React.FC = () => {
         <Box sx={{ textAlign: 'center', mb: 5 }}>
           <Typography
             variant="h3"
+            component="h2"
             sx={{
               fontWeight: 700,
               mb: 2,
@@ -598,7 +603,7 @@ const LandingPage: React.FC = () => {
                   bgcolor: 'rgba(25, 118, 210, 0.08)',
                 }}
               >
-                <Typography variant="h4" sx={{ fontWeight: 700, color: 'primary.main' }}>
+                <Typography variant="h4" component="p" sx={{ fontWeight: 700, color: 'primary.main' }}>
                   {stat.value}
                 </Typography>
                 <Typography variant="body2" sx={{ color: 'text.secondary' }}>
@@ -638,7 +643,7 @@ const LandingPage: React.FC = () => {
                 >
                   "{testimonial.text}"
                 </Typography>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                <Typography variant="subtitle2" component="p" sx={{ fontWeight: 700 }}>
                   {testimonial.name}
                 </Typography>
                 <Typography variant="caption" sx={{ color: 'text.secondary' }}>
@@ -654,6 +659,7 @@ const LandingPage: React.FC = () => {
       <Container maxWidth="md" sx={{ mt: { xs: 10, md: 14 } }}>
         <Typography
           variant="h3"
+          component="h2"
           sx={{
             fontWeight: 700,
             textAlign: 'center',
@@ -677,7 +683,7 @@ const LandingPage: React.FC = () => {
                   animationDelay: `${0.1 + index * 0.1}s`,
                 }}
               >
-                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+                <Typography variant="subtitle1" component="h3" sx={{ fontWeight: 700, mb: 1 }}>
                   {faq.question}
                 </Typography>
                 <Typography variant="body2" sx={{ color: 'text.secondary' }}>
@@ -704,6 +710,7 @@ const LandingPage: React.FC = () => {
         >
           <Typography
             variant="h3"
+            component="h2"
             sx={{
               fontWeight: 700,
               mb: 2,
