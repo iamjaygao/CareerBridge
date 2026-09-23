@@ -8,9 +8,9 @@ A production-style full-stack platform built with Django REST, React, PostgreSQL
 
 ## Engineering Highlights
 
-- Built a full-stack career platform with 13 backend service domains, covering authentication, mentor booking, payments, chat, resume analysis, peer mock interviews, and admin workflows.
+- Built a full-stack career platform with 12 backend service domains, covering authentication, mentor booking, payments, chat, resume analysis, peer mock interviews, and admin workflows.
 - Containerized the system as an 8-service Docker deployment with Django, React, PostgreSQL, Redis, Nginx, Celery, Prometheus, and Grafana.
-- Implemented async task processing with Celery + Redis for notifications, AI analysis, scheduled jobs, and background workflows.
+- Implemented async task processing with Celery + Redis driving eight scheduled beat jobs for staff/admin alerting, notification fan-out, and background workflows.
 - Integrated Stripe payment flows with strict appointment binding to prevent orphaned payment intents and preserve transaction consistency.
 - Added governance middleware and role-based access control across student, mentor, staff, admin, and superadmin workflows.
 
@@ -38,11 +38,15 @@ React SPA (TypeScript)
      Nginx (reverse proxy)
        ↓
 Django REST API (gateai/)     ←→   PostgreSQL
-       ↓                      ←→   Redis (cache + Celery broker)
+       ↓                      ←→   Redis (Celery broker/result + Channels layer)
   Celery Workers
        ↓
-External APIs: OpenAI · Stripe · JobCrawler · ResumeMatcher
+External APIs: OpenAI · Stripe
 ```
+
+> Redis backs the Celery broker/result store and the Channels layer for
+> WebSockets. Django's cache framework is not yet pointed at it and still
+> falls back to the per-process default.
 
 **User Roles:** `student` · `mentor` · `staff` · `admin` · `superadmin`
 
@@ -67,7 +71,8 @@ External APIs: OpenAI · Stripe · JobCrawler · ResumeMatcher
 ## Features
 
 - **Mentor Discovery & Booking** — Browse mentor profiles by expertise, book time slots, and manage appointments
-- **AI Resume Analysis** — ATS compatibility scoring and keyword optimization via OpenAI
+- **Resume Audit** — deterministic ATS scoring (structure, content, keyword, ATS-compatibility) behind a Pydantic-validated engine contract with a required fallback path. No LLM in this path.
+- **AI JD Match** — LLM gap analysis (GPT-4o-mini, JSON mode) scoring a resume against a pasted job description and returning hard gaps, soft gaps, strengths and prioritized actions
 - **Peer Mock Interviews** — Practice sessions with real-time feedback
 - **Real-time Chat** — WebSocket-based messaging between students and mentors
 - **Payments** — Stripe checkout for paid mentor sessions
@@ -79,7 +84,7 @@ External APIs: OpenAI · Stripe · JobCrawler · ResumeMatcher
 ## Architecture Decisions
 
 - **Domain-separated Django backend** — Organized the backend into clear modules for users, appointments, payments, chat, resume analysis, peer mock interviews, and governance.
-- **Async-first background processing** — Used Celery + Redis for notifications, AI analysis, scheduled jobs, and long-running workflows.
+- **Async-first background processing** — Used Celery + Redis for notification fan-out, scheduled staff/admin alerts, and long-running workflows. LLM calls are still synchronous and are the next candidate to move onto the queue.
 - **Payment consistency by design** — Bound every Stripe payment intent to an appointment context to prevent orphaned transactions.
 - **Governance-controlled rollout** — Added feature flags and role-based capability control for safer admin and superadmin operations.
 - **Production-oriented deployment** — Containerized the platform with Docker, Nginx, PostgreSQL, Redis, Celery, Prometheus, and Grafana.
@@ -129,7 +134,7 @@ Copy `env.production.template` to `.env` and fill in:
 |----------|----------|-------------|
 | `POSTGRES_PASSWORD` | ✅ | PostgreSQL password |
 | `SECRET_KEY` | ✅ | Django secret key (50+ chars) |
-| `OPENAI_API_KEY` | ✅ | For AI resume analysis |
+| `OPENAI_API_KEY` | ✅ | For AI JD Match (the resume audit engine runs without it) |
 | `STRIPE_SECRET_KEY` | ✅ | For payment processing |
 | `STRIPE_PUBLISHABLE_KEY` | ✅ | For frontend Stripe.js |
 | `AWS_ACCESS_KEY_ID` | Optional | For S3 file storage |
