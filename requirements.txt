@@ -27,7 +27,9 @@ python-dotenv==1.0.0
 # resume_services.py). Every import site is wrapped in try/except, so a missing
 # package degrades silently into "no text extracted" instead of raising —
 # these must stay declared.
-pdfplumber==0.11.10
+# pdfplumber is held at 0.11.9: 0.11.10 requires Pillow>=12.2.0, which
+# conflicts with the pillow==11.3.0 pin above that Django's ImageField uses.
+pdfplumber==0.11.9
 PyPDF2==3.0.1
 python-docx==1.2.0
 
