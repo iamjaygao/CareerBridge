@@ -4,6 +4,7 @@ import { Outlet } from 'react-router-dom';
 
 import StaffSidebar from './StaffSidebar';
 import StaffTopbar from './StaffTopbar';
+import SkipLink from '../common/SkipLink';
 
 const StaffLayout: React.FC = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -14,6 +15,8 @@ const StaffLayout: React.FC = () => {
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'grey.50' }}>
+      <SkipLink />
+
       {/* Staff Sidebar */}
       <StaffSidebar
         mobileOpen={mobileOpen}
@@ -23,12 +26,15 @@ const StaffLayout: React.FC = () => {
       {/* Main content area */}
       <Box
         component="main"
+        id="main-content"
+        tabIndex={-1}
         sx={{
           flexGrow: 1,
           width: { md: `calc(100% - 260px)` },
           minWidth: 0,
           display: 'flex',
           flexDirection: 'column',
+          '&:focus': { outline: 'none' },
         }}
       >
         {/* Staff Topbar */}

@@ -47,7 +47,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ mobileOpen, onMobileClose }
   ];
 
   const drawer = (
-    <Box>
+    <Box component="nav" aria-label="Admin navigation">
       <Toolbar
         sx={{
           px: 3,

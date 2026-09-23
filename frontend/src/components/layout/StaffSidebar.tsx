@@ -44,7 +44,7 @@ const StaffSidebar: React.FC<StaffSidebarProps> = ({ mobileOpen, onMobileClose }
   ];
 
   const drawer = (
-    <Box>
+    <Box component="nav" aria-label="Staff navigation">
       <Toolbar
         sx={{
           px: 3,

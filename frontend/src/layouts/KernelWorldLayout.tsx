@@ -26,6 +26,7 @@ import { Menu as MenuIcon, Person, Settings, Logout } from '@mui/icons-material'
 import { RootState } from '../store';
 import { logout } from '../store/slices/authSlice';
 import KernelWorldSidebar from './KernelWorldSidebar';
+import SkipLink from '../components/common/SkipLink';
 
 const KernelWorldLayout: React.FC = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -68,6 +69,8 @@ const KernelWorldLayout: React.FC = () => {
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: '#F8FAFC' }}>
+      <SkipLink />
+
       {/* Kernel World Sidebar - Pure Kernel Menu Only */}
       <KernelWorldSidebar
         mobileOpen={mobileOpen}
@@ -77,12 +80,15 @@ const KernelWorldLayout: React.FC = () => {
       {/* Main content area */}
       <Box
         component="main"
+        id="main-content"
+        tabIndex={-1}
         sx={{
           flexGrow: 1,
           width: { md: `calc(100% - 260px)` },
           minWidth: 0,
           display: 'flex',
           flexDirection: 'column',
+          '&:focus': { outline: 'none' },
         }}
       >
         {/* Kernel World TopBar - No Notifications, No Search */}

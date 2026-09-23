@@ -50,7 +50,7 @@ const StudentSidebar: React.FC<StudentSidebarProps> = ({ mobileOpen, onMobileClo
   ];
 
   const drawer = (
-    <Box>
+    <Box component="nav" aria-label="Student navigation">
       <Toolbar
         sx={{
           px: 3,

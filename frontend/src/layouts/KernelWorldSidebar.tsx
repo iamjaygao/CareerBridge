@@ -100,7 +100,7 @@ const KernelWorldSidebar: React.FC<KernelWorldSidebarProps> = ({ mobileOpen, onM
   ];
 
   const drawer = (
-    <Box>
+    <Box component="nav" aria-label="Kernel navigation">
       <Toolbar
         sx={{
           px: 3,

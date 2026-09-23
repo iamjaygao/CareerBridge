@@ -47,7 +47,7 @@ const MentorSidebar: React.FC<MentorSidebarProps> = ({ mobileOpen, onMobileClose
   ];
 
   const drawer = (
-    <Box>
+    <Box component="nav" aria-label="Mentor navigation">
       <Toolbar
         sx={{
           px: 3,
