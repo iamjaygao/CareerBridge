@@ -19,7 +19,7 @@ from django.urls import path, include
 from django.views.generic import RedirectView
 from . import views
 from .external_services.health_check import health_checker
-from django.http import JsonResponse, HttpResponseForbidden, HttpResponseNotFound
+from .metrics import metrics_view
 from django.conf import settings
 
 #swagger UI setup for drf-yasg  
@@ -100,15 +100,8 @@ urlpatterns = [
     path('api/engines/signal-core/', include('gateai.engines.signal_core_urls')), # Reserved: Signal Core Engine
     path('api/engines/job-ingestion/', include('gateai.engines.job_ingestion_urls')), # Reserved: Job Ingestion Engine
 
-    # service metrics (admin-only, debug-only)
-    path('api/v1/services/metrics/',
-         (lambda request: (
-             HttpResponseNotFound() if not getattr(settings, 'DEBUG', False)
-             else (JsonResponse(__import__('careerbridge.external_services.utils', fromlist=['get_service_metrics']).get_service_metrics())
-                   if (request.user.is_authenticated and request.user.is_staff)
-                   else HttpResponseForbidden())
-         )),
-         name='service-metrics'),
+    # Prometheus metrics (scraper only; token-protected, not routed by nginx)
+    path('metrics/', metrics_view, name='prometheus-metrics'),
 
     # swagger documentation
     path('swagger<format>/', schema_view.without_ui(cache_timeout=0), name='schema-json'),

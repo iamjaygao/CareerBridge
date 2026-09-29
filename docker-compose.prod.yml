@@ -13,6 +13,13 @@ x-django-env: &django-env
   SECURE_SSL_REDIRECT: "${SECURE_SSL_REDIRECT:-False}"
   SESSION_COOKIE_SECURE: "${SESSION_COOKIE_SECURE:-False}"
   CSRF_COOKIE_SECURE: "${CSRF_COOKIE_SECURE:-False}"
+  # Generic SMTP (required by settings_prod; shared by app, worker and beat)
+  EMAIL_HOST: "${EMAIL_HOST}"
+  EMAIL_PORT: "${EMAIL_PORT}"
+  EMAIL_HOST_USER: "${EMAIL_HOST_USER}"
+  EMAIL_HOST_PASSWORD: "${EMAIL_HOST_PASSWORD}"
+  EMAIL_USE_TLS: "${EMAIL_USE_TLS}"
+  DEFAULT_FROM_EMAIL: "${DEFAULT_FROM_EMAIL}"
 
 x-django-app-env: &django-app-env
   <<: *django-env
@@ -24,12 +31,9 @@ x-django-app-env: &django-app-env
   STRIPE_SECRET_KEY: "${STRIPE_SECRET_KEY}"
   STRIPE_PUBLISHABLE_KEY: "${STRIPE_PUBLISHABLE_KEY}"
   STRIPE_WEBHOOK_SECRET: "${STRIPE_WEBHOOK_SECRET}"
-  EMAIL_HOST_USER: "${EMAIL_HOST_USER}"
-  EMAIL_HOST_PASSWORD: "${EMAIL_HOST_PASSWORD}"
 
 x-django-volumes: &django-volumes
-  - ./gateai/media:/app/media
-  - ./gateai/logs:/app/logs
+  - media_volume:/app/media
 
 x-db-depends: &db-depends
   postgres:
@@ -84,14 +88,16 @@ services:
       <<: *django-app-env
       GUNICORN_WORKERS: "${GUNICORN_WORKERS:-3}"
       GUNICORN_TIMEOUT: "${GUNICORN_TIMEOUT:-120}"
+      METRICS_TOKEN: "${METRICS_TOKEN}"
+      PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus-multiproc
     depends_on: *db-depends
     networks:
       - careerbridge_network
     restart: unless-stopped
     volumes:
-      - ./gateai/media:/app/media
-      - ./gateai/logs:/app/logs
-      - ./gateai/staticfiles:/app/staticfiles
+      # Named volumes: shared with nginx, and writable by the non-root app user.
+      - media_volume:/app/media
+      - static_volume:/app/staticfiles
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health/ || exit 1"]
       interval: 30s
@@ -118,9 +124,11 @@ services:
   # ── Celery Beat ──────────────────────────────────────────────────────────────
   celery_beat:
     image: careerbridge-app
-    command: celery -A gateai beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    # Schedule is defined in code (CELERY_BEAT_SCHEDULE); state file on a volume.
+    command: celery -A gateai beat -l info --schedule /app/celerybeat/celerybeat-schedule
     environment:
       <<: *django-env
+      CELERY_HEARTBEAT_SECONDS: "${CELERY_HEARTBEAT_SECONDS:-60}"
     depends_on:
       <<: *db-depends
       careerbridge:
@@ -128,7 +136,8 @@ services:
     networks:
       - careerbridge_network
     restart: unless-stopped
-    volumes: *django-volumes
+    volumes:
+      - celerybeat_data:/app/celerybeat
 
   # ── Nginx Reverse Proxy ──────────────────────────────────────────────────────
   nginx:
@@ -141,6 +150,7 @@ services:
     volumes:
       - ./nginx/ssl:/etc/nginx/ssl:ro
       - static_volume:/app/staticfiles:ro
+      - media_volume:/app/media:ro
     depends_on:
       careerbridge:
         condition: service_healthy
@@ -155,6 +165,8 @@ services:
       - "127.0.0.1:9090:9090"
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # Same value as METRICS_TOKEN; created by the operator (not committed).
+      - ./monitoring/metrics_token:/etc/prometheus/metrics_token:ro
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -186,6 +198,8 @@ services:
 
 volumes:
   postgres_data:
+  media_volume:
+  celerybeat_data:
   redis_data:
   prometheus_data:
   grafana_data:

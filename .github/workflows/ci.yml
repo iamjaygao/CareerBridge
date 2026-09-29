@@ -83,6 +83,139 @@ jobs:
           name: backend-postgres-test-log
           path: gateai/test-postgres.log
 
+  # Full production stack (docker compose) with throwaway secrets: health,
+  # metrics, beat, Prometheus/Grafana, HTTP-level booking race across gunicorn
+  # workers, and a Postgres backup/restore round trip.
+  stack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      COMPOSE: docker compose -f docker-compose.prod.yml
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Throwaway secrets
+        run: |
+          umask 077
+          rand() { openssl rand -hex 24; }
+          {
+            echo "POSTGRES_PASSWORD=$(rand)"
+            echo "SECRET_KEY=$(rand)$(rand)"
+            echo "ALLOWED_HOSTS=localhost,127.0.0.1,careerbridge"
+            echo "CORS_ALLOWED_ORIGINS=http://localhost"
+            echo "CSRF_TRUSTED_ORIGINS=http://localhost"
+            echo "GRAFANA_PASSWORD=$(rand)"
+            echo "METRICS_TOKEN=$(rand)"
+            echo "GUNICORN_WORKERS=4"
+            echo "CELERY_HEARTBEAT_SECONDS=10"
+            echo "EMAIL_HOST=smtp.invalid"
+            echo "EMAIL_PORT=587"
+            echo "EMAIL_HOST_USER=ci"
+            echo "EMAIL_HOST_PASSWORD=$(rand)"
+            echo "EMAIL_USE_TLS=true"
+            echo "DEFAULT_FROM_EMAIL=CareerBridge CI <no-reply@example.com>"
+          } > .env
+          grep '^METRICS_TOKEN=' .env | cut -d= -f2 | tr -d '\n' > monitoring/metrics_token
+          chmod 644 monitoring/metrics_token   # read by the prometheus container user
+
+      - name: Start memory sampler (docker stats every 2s, whole job)
+        run: |
+          nohup bash -c 'while true; do
+            ts=$(date +%s)
+            docker stats --no-stream --format "{{.Name}}\t{{.MemUsage}}" 2>/dev/null | sed "s/^/$ts\t/"
+            sleep 2
+          done' > /tmp/mem_samples.tsv 2>/dev/null &
+          echo $! > /tmp/mem_sampler.pid
+
+      - name: docker compose up (wait for healthchecks)
+        run: $COMPOSE up -d --build --wait --wait-timeout 900
+
+      - name: Health through nginx
+        run: |
+          curl -fsS http://localhost/health/ | tee /tmp/health.json
+          python3 -c "import json;d=json.load(open('/tmp/health.json'));assert d['status']=='healthy',d"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost/metrics/)" = 404
+
+      - name: Metrics endpoint and gunicorn workers
+        run: |
+          TOKEN=$(cat monitoring/metrics_token)
+          $COMPOSE exec -T careerbridge curl -fsS -H "Authorization: Bearer $TOKEN" http://localhost:8000/metrics/ \
+            | grep -m1 django_http_requests_total_by_method_total
+          test "$($COMPOSE exec -T careerbridge curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/metrics/)" = 401
+          workers=$($COMPOSE logs careerbridge | grep -c 'Booting worker')
+          echo "gunicorn workers booted: $workers"; test "$workers" -ge 4
+
+      - name: Celery beat fires (heartbeat advances)
+        run: |
+          read_hb() { $COMPOSE exec -T careerbridge python manage.py shell -c \
+            "from django.core.cache import cache; from kernel.tasks import HEARTBEAT_CACHE_KEY as K; print(cache.get(K) or '')" | tail -1; }
+          first=""; for i in $(seq 1 30); do first=$(read_hb); [ -n "$first" ] && break; sleep 5; done
+          echo "first heartbeat: $first"; test -n "$first"
+          second="$first"; for i in $(seq 1 12); do sleep 5; second=$(read_hb); [ "$second" != "$first" ] && break; done
+          echo "later heartbeat: $second"; test "$second" != "$first"
+
+      - name: Prometheus scrapes the app
+        run: |
+          q() { curl -fsS --get http://localhost:9090/api/v1/query --data-urlencode "query=$1"; }
+          for i in $(seq 1 24); do
+            up=$(q 'up{job="careerbridge"}' | python3 -c "import json,sys;r=json.load(sys.stdin)['data']['result'];print(r[0]['value'][1] if r else '')")
+            [ "$up" = "1" ] && break; sleep 5
+          done
+          echo "up{job=careerbridge} = $up"; test "$up" = "1"
+          q 'sum(django_http_requests_total_by_method_total)' | python3 -c "import json,sys;r=json.load(sys.stdin)['data']['result'];print(r);assert r and float(r[0]['value'][1])>0"
+
+      - name: Grafana dashboard has data
+        run: |
+          PASS=$(grep '^GRAFANA_PASSWORD=' .env | cut -d= -f2)
+          curl -fsS -u "admin:$PASS" 'http://localhost:3000/api/dashboards/uid/careerbridge-overview' \
+            | python3 -c "import json,sys;d=json.load(sys.stdin);print(d['dashboard']['title']);assert len(d['dashboard']['panels'])>=4"
+          now=$(date +%s)000
+          curl -fsS -u "admin:$PASS" -H 'Content-Type: application/json' http://localhost:3000/api/ds/query -d "{
+            \"from\": \"$(( $(date +%s) - 600 ))000\", \"to\": \"$now\",
+            \"queries\": [{\"refId\": \"A\", \"datasource\": {\"uid\": \"prometheus\"}, \"expr\": \"up{job=\\\"careerbridge\\\"}\", \"range\": true}]
+          }" | python3 -c "import json,sys;r=json.load(sys.stdin)['results']['A'];v=r['frames'][0]['data']['values'];print('points:',len(v[1]));assert len(v[1])>0"
+
+      - name: HTTP booking race across gunicorn workers
+        run: |
+          $COMPOSE exec -T -e RACE_USERS=10 -e RACE_ROUNDS=10 careerbridge python manage.py shell \
+            < scripts/ci/booking_race_setup.py | grep '^RACE_SETUP ' | sed 's/^RACE_SETUP //' > /tmp/race.json
+          python3 scripts/ci/http_booking_race.py /tmp/race.json http://localhost
+
+      - name: Postgres backup and restore round trip
+        run: |
+          scripts/ops/db_fingerprint.sh careerbridge > /tmp/fp_live.txt
+          echo "tables fingerprinted: $(wc -l < /tmp/fp_live.txt)"
+          grep -E '^(users_user|decision_slots_resourcelock|appointments_appointment) ' /tmp/fp_live.txt
+          scripts/ops/backup_postgres.sh /tmp/backup.dump
+          scripts/ops/restore_postgres.sh /tmp/backup.dump careerbridge_restore
+          scripts/ops/db_fingerprint.sh careerbridge_restore > /tmp/fp_restored.txt
+          diff /tmp/fp_live.txt /tmp/fp_restored.txt && echo "restored database is identical"
+
+      - name: Container memory report (peak per container and total)
+        if: always()
+        run: |
+          kill "$(cat /tmp/mem_sampler.pid)" 2>/dev/null || true
+          # True peaks from cgroup v2, when the kernel exposes memory.peak.
+          : > /tmp/mem_cgroup_peak.tsv
+          for id in $(docker ps -q); do
+            name=$(docker inspect -f '{{.Name}}' "$id" | sed 's#^/##')
+            full=$(docker inspect -f '{{.Id}}' "$id")
+            f=$(ls /sys/fs/cgroup/system.slice/docker-"$full".scope/memory.peak 2>/dev/null || true)
+            [ -n "$f" ] && printf '%s\t%s\n' "$name" "$(cat "$f")" >> /tmp/mem_cgroup_peak.tsv
+          done
+          python3 scripts/ci/memory_report.py /tmp/mem_samples.tsv /tmp/mem_cgroup_peak.tsv | tee /tmp/mem_report.md
+          { echo "### Container memory (stack job)"; cat /tmp/mem_report.md; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Stack status and logs
+        if: failure()
+        run: |
+          $COMPOSE ps -a
+          $COMPOSE logs --no-color --tail=200
+
+      - name: Tear down
+        if: always()
+        run: $COMPOSE down -v --remove-orphans
+
   frontend:
     runs-on: ubuntu-latest
     defaults:

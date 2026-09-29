@@ -119,7 +119,8 @@ def health_check(request):
     else:
         health_status["components"]["external_services"] = "restricted"
 
-    return JsonResponse(health_status)
+    # 503 lets load balancers and the Docker healthcheck see the failure.
+    return JsonResponse(health_status, status=200 if health_status["status"] == "healthy" else 503)
 
 @api_view(['GET'])
 def ping_endpoint(request):

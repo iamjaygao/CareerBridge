@@ -1,4 +1,5 @@
 from celery import shared_task
+from kernel.task_guards import bus_gated_task
 from django.utils import timezone
 from django.db.models import Count
 import os
@@ -13,7 +14,7 @@ from .models import DataExport
 from .export_utils import build_export_rows, write_export_file
 
 
-@shared_task
+@bus_gated_task('PAYMENT_BUS')
 def notify_admin_payment_success_drop(drop_threshold: float = 0.2) -> int:
     """Notify admins when payment success rate drops sharply."""
     now = timezone.now()
@@ -65,7 +66,7 @@ def notify_admin_payment_success_drop(drop_threshold: float = 0.2) -> int:
     return notified
 
 
-@shared_task
+@bus_gated_task('ADMIN_BUS')
 def notify_admin_metric_anomaly() -> int:
     """Notify admins when appointment volume is abnormal."""
     today = timezone.now().date()
@@ -109,7 +110,7 @@ def notify_admin_metric_anomaly() -> int:
     return notified
 
 
-@shared_task
+@bus_gated_task('ADMIN_BUS')
 def notify_admin_risk_alerts() -> int:
     """Notify admins about users with repeated cancellations."""
     window_start = timezone.now() - timezone.timedelta(days=7)
@@ -151,7 +152,7 @@ def notify_admin_risk_alerts() -> int:
     return notified
 
 
-@shared_task
+@bus_gated_task('KERNEL_CORE_BUS')  # always runs: KERNEL_CORE_BUS cannot be switched off
 def notify_superadmin_system_alerts() -> int:
     """Notify superadmins when system health is degraded."""
     health = get_unified_system_health(use_cache=False)

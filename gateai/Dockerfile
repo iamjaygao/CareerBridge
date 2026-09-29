@@ -34,7 +34,7 @@ COPY gateai/ /app/
 # Non-root user — security best practice
 RUN groupadd --system appgroup && \
     useradd --system --gid appgroup --no-create-home appuser && \
-    mkdir -p /app/media /app/logs /app/staticfiles && \
+    mkdir -p /app/media /app/logs /app/staticfiles /app/celerybeat && \
     chown -R appuser:appgroup /app
 
 USER appuser
@@ -44,8 +44,10 @@ EXPOSE 8000
 # Gunicorn workers scale with CPU: default 2×cores+1, override via GUNICORN_WORKERS.
 # Timeout 120s covers OpenAI/Stripe API calls.
 # migrate (no --fake-initial) is safe: Django migration lock prevents races.
+# PROMETHEUS_MULTIPROC_DIR (set for the web service only) must start empty.
 CMD ["/bin/sh", "-c", \
-    "python manage.py collectstatic --noinput && \
+    "if [ -n \"$PROMETHEUS_MULTIPROC_DIR\" ]; then rm -rf \"$PROMETHEUS_MULTIPROC_DIR\" && mkdir -p \"$PROMETHEUS_MULTIPROC_DIR\"; fi && \
+     python manage.py collectstatic --noinput && \
      python manage.py migrate && \
      gunicorn gateai.wsgi:application \
        --bind 0.0.0.0:8000 \

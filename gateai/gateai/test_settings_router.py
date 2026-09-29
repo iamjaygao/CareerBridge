@@ -17,6 +17,13 @@ PROD_ENV = {
     'CORS_ALLOWED_ORIGINS': 'https://example.com',
     'CSRF_TRUSTED_ORIGINS': 'https://example.com',
     'DATABASE_URL': 'postgresql://app:pw@db:5432/app',
+    # Fake SMTP settings (required by settings_prod since M3; never used to send).
+    'EMAIL_HOST': 'smtp.example.invalid',
+    'EMAIL_PORT': '587',
+    'EMAIL_HOST_USER': 'test',
+    'EMAIL_HOST_PASSWORD': 'test-only-not-real',
+    'EMAIL_USE_TLS': 'true',
+    'DEFAULT_FROM_EMAIL': 'test@example.invalid',
 }
 
 
