@@ -7,7 +7,7 @@
  */
 
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import WorkloadRuntimeConsolePage from '../WorkloadRuntimeConsolePage';
 
@@ -134,13 +134,21 @@ describe('WorkloadRuntimeConsolePage', () => {
       </MemoryRouter>
     );
 
-    // Wait for data to load
+    // Wait for data to load: the Power Buses table has exactly one data row,
+    // and that row shows the bus by its display name ("AI" for AI_BUS; the
+    // component shortens names via getBusDisplayName on purpose).
     await waitFor(() => {
-      expect(screen.getByText(/AI_BUS/i)).toBeInTheDocument();
+      expect(within(screen.getByRole('table')).getAllByRole('row')).toHaveLength(2); // header + 1 bus
     });
+    const [, busRow] = within(screen.getByRole('table')).getAllByRole('row');
+    expect(within(busRow).getByText('AI')).toBeInTheDocument();
 
-    // Verify summary is displayed
-    expect(screen.getByText('1')).toBeInTheDocument(); // Total buses or workloads
+    // Verify summary is displayed: the Total Buses card shows 1.
+    // The summary cards have no accessible role, so scope to the MUI Card.
+    // eslint-disable-next-line testing-library/no-node-access
+    const totalBusesCard = screen.getByText('Total Buses').closest('.MuiCard-root') as HTMLElement;
+    expect(totalBusesCard).not.toBeNull();
+    expect(within(totalBusesCard).getByText('1')).toBeInTheDocument();
     expect(screen.getByText('OFF')).toBeInTheDocument(); // Bus state
   });
 
