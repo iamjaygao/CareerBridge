@@ -8,7 +8,7 @@ from signal_delivery.services.rules import NotificationType
 from django.contrib.auth import get_user_model
 
 
-@bus_gated_task('AI_BUS')
+@bus_gated_task('CHAT_BUS')
 def notify_staff_unanswered_chats(hours_without_reply: int = 24) -> int:
     """Notify staff when mentors have not replied within a time window."""
     cutoff = timezone.now() - timezone.timedelta(hours=hours_without_reply)
