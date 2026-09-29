@@ -452,46 +452,6 @@ class SysClaimTestCase(TransactionTestCase):
         # 'Z' should be normalized to UTC
         assert lock.expires_at.tzinfo is not None
     
-    def test_outer_atomic_block_prevents_unsafe_query(self):
-        """
-        TASK 1: Test that outer transaction.atomic() prevents post-conflict DB query.
-        
-        DAY-3 SAFETY FIX:
-        If sys_claim is called inside an outer transaction.atomic() decorator/caller,
-        and IntegrityError occurs, we MUST NOT query the DB (broken transaction risk).
-        Instead, return FAILED_RETRYABLE.
-        """
-        # Create conflicting lock
-        ResourceLock.objects.create(
-            decision_id="test:existing",
-            resource_type=ResourceLock.RESOURCE_TYPE_APPOINTMENT,
-            resource_id=1600,
-            owner_id=99,  # Different owner
-            expires_at=timezone.now() + timedelta(hours=1),
-            status='active',
-        )
-        
-        payload = {
-            "decision_id": "test:016",
-            "context_hash": "hash016",
-            "resource_type": ResourceLock.RESOURCE_TYPE_APPOINTMENT,
-            "resource_id": 1600,  # Same resource (conflict)
-            "owner_id": 1,  # Different owner
-            "duration_seconds": 3600,
-        }
-        
-        # Wrap sys_claim in outer atomic block
-        with transaction.atomic():
-            result = sys_claim(payload)
-        
-        # Should return FAILED_RETRYABLE (not crash with "transaction is aborted")
-        assert result.outcome_code == KernelOutcomeCode.FAILED_RETRYABLE
-        assert "atomic" in result.outcome["internal_reason"].lower() or "context" in result.outcome["internal_reason"].lower()
-        
-        # Audit should still be sealed (best-effort)
-        audit = KernelAuditLog.objects.get(event_id=result.audit_id)
-        assert audit.status in ["FAILED", "REJECTED"]  # Any terminal state OK
-    
     def test_expired_lock_does_not_trigger_reentry(self):
         """
         TASK 2: Test that EXPIRED lock does NOT cause re-entry success.

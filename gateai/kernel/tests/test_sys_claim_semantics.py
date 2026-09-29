@@ -117,6 +117,8 @@ class SavepointTest(SysClaimSemanticsBase):
                                         owner_id=1, expires_at=timezone.now() + timedelta(hours=1))
         # ...and it committed.
         self.assertTrue(ResourceLock.objects.filter(decision_id='after').exists())
+        # The syscall's audit entry was sealed in a terminal state.
+        self.assertIn(KernelAuditLog.objects.get(event_id=result.audit_id).status, ['FAILED', 'REJECTED'])
 
     def test_success_inside_caller_transaction_rolls_back_with_it(self):
         class Boom(Exception):
