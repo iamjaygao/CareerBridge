@@ -13,7 +13,8 @@ from django.test import TestCase, Client, override_settings
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework_simplejwt.tokens import RefreshToken
-from kernel.governance.models import PlatformState, FeatureFlag, GovernanceAudit
+from kernel.governance.models import PlatformState, FeatureFlag, GovernanceAudit, BusPowerState
+from kernel.policies.bus_power import BUS_POWER_DEFAULTS, invalidate_cache
 
 User = get_user_model()
 
@@ -280,6 +281,15 @@ class BetaFeatureAccessTest(TestCase):
     
     def setUp(self):
         """Initialize test data"""
+        # SEARCH_BUS on, so requests reach the BETA gate rather than a bus 404.
+        BusPowerState.objects.all().delete()
+        BusPowerState.objects.bulk_create([
+            BusPowerState(bus_name=n, state=v)
+            for n, v in {**BUS_POWER_DEFAULTS, 'SEARCH_BUS': 'ON'}.items()
+        ])
+        invalidate_cache()
+        self.addCleanup(invalidate_cache)
+
         self.superuser = User.objects.create_user(
             username='superadmin',
             email='beta-super@test.com',
@@ -311,37 +321,39 @@ class BetaFeatureAccessTest(TestCase):
         )
         
         # Create BETA feature
-        FeatureFlag.objects.create(
+        self.flag = FeatureFlag.objects.create(
             key='SEARCH',
             state='BETA',
             visibility='user',
             reason='Beta testing',
             updated_by=self.superuser
         )
+
+    def get_search(self, user):
+        # JWT: DRF authenticates JWT only, so a session login would look anonymous.
+        client = Client(HTTP_AUTHORIZATION='Bearer ' + str(RefreshToken.for_user(user).access_token))
+        return client.get('/api/v1/search/')
+
+    def assert_404_is_from_beta_gate(self, user):
+        self.assertEqual(self.get_search(user).status_code, 404)
+        # Same user, same bus, same route: only the flag state changes.
+        FeatureFlag.objects.filter(pk=self.flag.pk).update(state='ON')
+        self.assertEqual(self.get_search(user).status_code, 200)
     
     def test_superuser_can_access_beta_feature(self):
         """Test that superuser can access BETA features"""
-        self.client = Client()
-        self.client.login(username='superadmin', password='testpass123')
-        
-        # Should NOT return 404 (might return other errors, but governance allows it)
-        response = self.client.get('/api/v1/search/')
-        self.assertNotEqual(response.status_code, 404)
+        response = self.get_search(self.superuser)
+        self.assertEqual(response.status_code, 200)
     
     def test_staff_cannot_access_beta_feature(self):
         """Test that staff cannot access BETA features (GOVERNANCE CONSTITUTION)"""
-        self.client = Client()
-        self.client.login(username='staff', password='testpass123')
-        
-        # Should return 404 (BETA features only for superuser)
-        response = self.client.get('/api/v1/search/')
-        self.assertEqual(response.status_code, 404)
+        self.assert_404_is_from_beta_gate(self.staff_user)
     
     def test_regular_user_cannot_access_beta_feature(self):
         """Test that regular user cannot access BETA features"""
-        self.client = Client()
-        self.client.login(username='user', password='testpass123')
-        
-        # Should return 404
-        response = self.client.get('/api/v1/search/')
-        self.assertEqual(response.status_code, 404)
+        self.assert_404_is_from_beta_gate(self.regular_user)
+
+    def test_search_bus_off_hides_beta_feature_from_superuser(self):
+        """Control: with SEARCH_BUS off, even the superuser gets 404."""
+        BusPowerState.objects.filter(bus_name='SEARCH_BUS').update(state='OFF')
+        self.assertEqual(self.get_search(self.superuser).status_code, 404)
