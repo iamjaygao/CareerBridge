@@ -9,6 +9,8 @@ on:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    env:
+      DJANGO_ENV: test
     defaults:
       run:
         working-directory: gateai
