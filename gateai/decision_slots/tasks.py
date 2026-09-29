@@ -62,7 +62,7 @@ def release_expired_slot_holds():
                 slot.save()
 
 
-@bus_gated_task('AI_BUS')
+@bus_gated_task('MENTOR_BUS')
 def notify_staff_upcoming_appointments(hours_ahead: int = 24) -> int:
     """Notify staff about upcoming confirmed appointments."""
     now = timezone.now()
@@ -98,7 +98,7 @@ def notify_staff_upcoming_appointments(hours_ahead: int = 24) -> int:
     return notified
 
 
-@bus_gated_task('AI_BUS')
+@bus_gated_task('MENTOR_BUS')
 def notify_staff_unconfirmed_appointments(hours_old: int = 12, hours_until_start: int = 24) -> int:
     """Notify staff when mentors have not confirmed appointments in time."""
     now = timezone.now()
@@ -135,7 +135,7 @@ def notify_staff_unconfirmed_appointments(hours_old: int = 12, hours_until_start
     return notified
 
 
-@bus_gated_task('AI_BUS')
+@bus_gated_task('MENTOR_BUS')
 def notify_staff_missing_mentor_feedback(hours_after: int = 48) -> int:
     """Notify staff when mentor feedback is missing after session completion."""
     cutoff = timezone.now() - timezone.timedelta(hours=hours_after)
@@ -170,7 +170,7 @@ def notify_staff_missing_mentor_feedback(hours_after: int = 48) -> int:
     return notified
 
 
-@bus_gated_task('AI_BUS')
+@bus_gated_task('MENTOR_BUS')
 def notify_admin_slot_conflicts() -> int:
     """Notify admin when multiple appointments share the same mentor/time."""
     from django.contrib.auth import get_user_model

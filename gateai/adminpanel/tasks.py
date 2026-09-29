@@ -152,7 +152,7 @@ def notify_admin_risk_alerts() -> int:
     return notified
 
 
-@bus_gated_task('ADMIN_BUS')
+@bus_gated_task('KERNEL_CORE_BUS')  # always runs: KERNEL_CORE_BUS cannot be switched off
 def notify_superadmin_system_alerts() -> int:
     """Notify superadmins when system health is degraded."""
     health = get_unified_system_health(use_cache=False)
