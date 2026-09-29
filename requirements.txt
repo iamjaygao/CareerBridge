@@ -61,6 +61,7 @@ pydantic==2.5.0
 pytest==7.4.3
 pytest-django==4.7.0
 pytest-cov==4.1.0
+coverage==7.16.2  # used directly by the backend-postgres CI job
 factory-boy==3.3.0
 
 # --- Development Tools ---

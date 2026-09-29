@@ -189,6 +189,7 @@ class BusPowerState(models.Model):
         ('MENTOR_BUS', 'Mentor / Human-Loop Bus'),
         ('PAYMENT_BUS', 'Payment / Transaction Bus'),
         ('SEARCH_BUS', 'Search / Discovery Bus'),
+        ('CHAT_BUS', 'Chat Bus'),
     ]
 
     STATE_CHOICES = [

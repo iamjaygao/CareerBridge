@@ -18,10 +18,10 @@ User = get_user_model()
 
 
 def power_booking_buses():
-    """decision-slots lives on AI_BUS; initialise governance so it isn't fail-closed."""
+    """decision-slots lives on MENTOR_BUS; initialise governance so it isn't fail-closed."""
     BusPowerState.objects.all().delete()
     BusPowerState.objects.bulk_create([
-        BusPowerState(bus_name=n, state=s) for n, s in {**BUS_POWER_DEFAULTS, 'AI_BUS': 'ON'}.items()
+        BusPowerState(bus_name=n, state=s) for n, s in {**BUS_POWER_DEFAULTS, 'MENTOR_BUS': 'ON'}.items()
     ])
     invalidate_cache()
     if not PlatformState.objects.exists():

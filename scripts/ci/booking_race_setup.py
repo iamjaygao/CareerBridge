@@ -19,8 +19,8 @@ ROUNDS = int(os.environ.get("RACE_ROUNDS", "10"))
 
 if not PlatformState.objects.exists():
     call_command("kernel_init_governance", verbosity=0)
-# decision-slots (booking) lives on AI_BUS; power it for the test only.
-BusPowerState.objects.update_or_create(bus_name="AI_BUS", defaults={"state": "ON"})
+# decision-slots (booking) lives on MENTOR_BUS; power it for the test only.
+BusPowerState.objects.update_or_create(bus_name="MENTOR_BUS", defaults={"state": "ON"})
 
 User = get_user_model()
 stamp = timezone.now().strftime("%Y%m%d%H%M%S")

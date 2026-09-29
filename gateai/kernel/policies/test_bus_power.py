@@ -37,12 +37,16 @@ class TestBusResolution(SimpleTestCase):
         assert resolve_bus('/api/v1/ai/') == 'AI_BUS'
         assert resolve_bus('/api/engines/') == 'AI_BUS'
         assert resolve_bus('/api/v1/ats-signals/') == 'AI_BUS'
-        assert resolve_bus('/api/v1/chat/') == 'AI_BUS'
         assert resolve_bus('/api/v1/signal-delivery/') == 'AI_BUS'
-        assert resolve_bus('/api/v1/decision-slots/') == 'AI_BUS'
+    
+    def test_chat_bus(self):
+        """Chat (HTTP and WebSocket) resolves to CHAT_BUS"""
+        assert resolve_bus('/api/v1/chat/') == 'CHAT_BUS'
+        assert resolve_bus('/ws/chat/lobby/') == 'CHAT_BUS'
     
     def test_mentor_bus(self):
         """Mentor paths should resolve to MENTOR_BUS"""
+        assert resolve_bus('/api/v1/decision-slots/') == 'MENTOR_BUS'
         assert resolve_bus('/api/v1/mentors/') == 'MENTOR_BUS'
         assert resolve_bus('/api/v1/human-loop/') == 'MENTOR_BUS'
         assert resolve_bus('/api/v1/appointments/') == 'MENTOR_BUS'

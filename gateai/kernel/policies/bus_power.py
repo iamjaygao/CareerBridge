@@ -20,6 +20,7 @@ BUS_POWER_DEFAULTS = {
     "PEER_MOCK_BUS":   "OFF",  # off until the peer mock feature launches
     "MENTOR_BUS":      "OFF",
     "PAYMENT_BUS":     "OFF",
+    "CHAT_BUS":        "OFF",
     "SEARCH_BUS":      "OFF",
 }
 
@@ -113,12 +114,17 @@ def resolve_bus(path: str) -> str:
             any(k in path.lower() for k in ["/peer", "/mock", "/simulator", "/runtime-mock"])):
         return "PEER_MOCK_BUS"
 
+    if path.startswith("/api/v1/chat/") or path.startswith("/ws/chat/"):
+        return "CHAT_BUS"
+
+    # Booking belongs to the mentor module (not AI).
+    if path.startswith("/api/v1/decision-slots/"):
+        return "MENTOR_BUS"
+
     if (path.startswith("/api/v1/ai/") or
             path.startswith("/api/v1/ats-signals/") or
             path.startswith("/api/v1/signals/") or
             path.startswith("/api/v1/signal-delivery/") or
-            path.startswith("/api/v1/decision-slots/") or
-            path.startswith("/api/v1/chat/") or
             path.startswith("/api/engines/")):
         return "AI_BUS"
 
