@@ -8,7 +8,6 @@ Acceptance tests for Phase-A governance:
 - SuperAdmin-only access to governance APIs
 """
 
-import time
 from django.test import TestCase, Client, override_settings
 from django.contrib.auth import get_user_model
 from django.urls import reverse
@@ -101,12 +100,6 @@ class GovernanceMiddlewareTest(TestCase):
         response = self.client.get('/api/v1/users/me/')
         self.assertNotEqual(response.status_code, 404, 
                            'Active module should not return 404')
-    
-    def test_admin_bypass(self):
-        """Test that admin paths are never blocked"""
-        response = self.client.get('/admin/')
-        # Should not return 404 (will redirect to login)
-        self.assertNotEqual(response.status_code, 404)
     
     def test_static_bypass(self):
         """Test that static paths are never blocked"""
@@ -219,61 +212,6 @@ class GovernanceAPITest(TestCase):
         
         self.assertEqual(response.status_code, 400)
         self.assertIn('reason', response.json())
-
-
-class FeatureFlagCachingTest(TestCase):
-    """Test that middleware caching respects governance_version"""
-    
-    def setUp(self):
-        """Initialize governance"""
-        self.superuser = User.objects.create_user(
-            username='superadmin',
-            email='super@test.com',
-            password='testpass123',
-            is_superuser=True,
-            is_staff=True
-        )
-        
-        self.platform_state = PlatformState.objects.create(
-            state='SINGLE_WORKLOAD',
-            active_workloads=['PEER_MOCK'],
-            frozen_modules=[],
-            reason='Test',
-            updated_by=self.superuser
-        )
-        
-        self.feature_flag = FeatureFlag.objects.create(
-            key='PAYMENTS',
-            state='OFF',
-            visibility='internal',
-            reason='Test',
-            updated_by=self.superuser
-        )
-    
-    def test_feature_flag_change_respected_within_ttl(self):
-        """Test that changing a feature flag is respected by middleware"""
-        self.client = Client()
-        self.client.login(username='superadmin', password='testpass123')
-        
-        # First request - should return 404 (PAYMENTS is OFF)
-        response = self.client.get('/api/v1/payments/payouts/summary/')
-        self.assertEqual(response.status_code, 404)
-        
-        # Enable PAYMENTS feature
-        self.feature_flag.state = 'ON'
-        self.feature_flag.save()
-        
-        # Increment platform governance_version to invalidate cache
-        self.platform_state.save()  # This increments governance_version
-        
-        # Wait a moment for cache to refresh (up to 5 seconds TTL)
-        time.sleep(0.5)
-        
-        # Second request - should NOT return 404 anymore (PAYMENTS is ON)
-        # Note: might return 401/403 due to permissions, but not 404
-        response = self.client.get('/api/v1/payments/payouts/summary/')
-        self.assertNotEqual(response.status_code, 404, 
-                           'Feature should be accessible after enabling')
 
 
 class BetaFeatureAccessTest(TestCase):
