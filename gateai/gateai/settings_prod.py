@@ -61,3 +61,13 @@ CORS_ALLOWED_ORIGINS = [origin.strip() for origin in cors_origins_env.split(',')
 
 csrf_trusted_env = _require_env('CSRF_TRUSTED_ORIGINS')
 CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in csrf_trusted_env.split(',') if origin.strip()]
+
+# Shared cache across all processes/containers (health check, beat heartbeat,
+# throttling). Without this each process had its own in-memory cache.
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        # Not a secret; same default host as the Celery broker in settings_base.
+        'LOCATION': os.environ.get('REDIS_URL', 'redis://redis:6379/0'),
+    }
+}

@@ -1,4 +1,5 @@
 from celery import shared_task
+from kernel.task_guards import bus_gated_task
 from django.utils import timezone
 
 from chat.models import ChatRoom, Message
@@ -7,7 +8,7 @@ from signal_delivery.services.rules import NotificationType
 from django.contrib.auth import get_user_model
 
 
-@shared_task
+@bus_gated_task('AI_BUS')
 def notify_staff_unanswered_chats(hours_without_reply: int = 24) -> int:
     """Notify staff when mentors have not replied within a time window."""
     cutoff = timezone.now() - timezone.timedelta(hours=hours_without_reply)

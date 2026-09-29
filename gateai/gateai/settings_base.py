@@ -78,8 +78,8 @@ if SENTRY_DSN:
     )
 
 # Celery/Redis
-CELERY_BROKER_URL = os.environ.get('REDIS_URL', 'redis://redis:6379/1')
-CELERY_RESULT_BACKEND = os.environ.get('REDIS_URL', 'redis://redis:6379/1')
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL') or os.environ.get('REDIS_URL', 'redis://redis:6379/1')
+CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND') or os.environ.get('REDIS_URL', 'redis://redis:6379/1')
 CELERY_TASK_ALWAYS_EAGER = False
 CELERY_IMPORTS = (
     'adminpanel.tasks',
@@ -87,8 +87,15 @@ CELERY_IMPORTS = (
     'chat.tasks',
     'human_loop.tasks',
     'signal_delivery.tasks',
+    'kernel.tasks',
 )
 CELERY_BEAT_SCHEDULE = {
+    # Proves beat -> broker -> worker; ops/CI read kernel.tasks.HEARTBEAT_CACHE_KEY.
+    'kernel_beat_heartbeat': {
+        'task': 'kernel.tasks.beat_heartbeat',
+        'schedule': timedelta(seconds=int(os.environ.get('CELERY_HEARTBEAT_SECONDS', '60'))),
+    },
+    # Tasks below belong to unlaunched modules; each is a no-op while its bus is OFF.
     'notify_staff_unanswered_chats': {
         'task': 'chat.tasks.notify_staff_unanswered_chats',
         'schedule': timedelta(hours=1),
