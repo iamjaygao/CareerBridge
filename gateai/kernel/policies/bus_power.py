@@ -105,7 +105,8 @@ def resolve_bus(path: str) -> str:
             path.startswith("/api/v1/kernel/") or
             path.startswith("/api/v1/adminpanel/governance/") or
             path.startswith("/api/v1/users/") or
-            path == "/health/"):  # load balancer / Docker healthcheck: never switched off
+            path == "/health/" or  # load balancer / Docker healthcheck: never switched off
+            path == "/metrics/"):  # Prometheus scrape (token-protected)
         return "KERNEL_CORE_BUS"
 
     if (path.startswith("/api/v1/peer-mock/") or

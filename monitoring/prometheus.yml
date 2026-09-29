@@ -3,15 +3,19 @@ global:
   evaluation_interval: 15s
 
 scrape_configs:
+  # Django app (django-prometheus, multiprocess across gunicorn workers).
+  # Scraped directly on the internal network; nginx does not route /metrics.
   - job_name: 'careerbridge'
+    metrics_path: '/metrics/'
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/metrics_token
     static_configs:
       - targets: ['careerbridge:8000']
-    metrics_path: '/metrics/'
 
-  - job_name: 'postgres'
+  - job_name: 'prometheus'
     static_configs:
-      - targets: ['postgres:5432']
+      - targets: ['localhost:9090']
 
-  - job_name: 'redis'
-    static_configs:
-      - targets: ['redis:6379']
+  # Postgres/Redis need exporters (postgres_exporter, redis_exporter) to be
+  # scraped; their service ports do not speak the Prometheus format.

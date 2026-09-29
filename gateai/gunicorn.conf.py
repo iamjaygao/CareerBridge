@@ -21,8 +21,8 @@ max_requests = 1000
 max_requests_jitter = 50
 
 # Logging
-accesslog = "logs/gunicorn_access.log"
-errorlog = "logs/gunicorn_error.log"
+accesslog = "-"  # stdout: containers log to stdout; no writable dir needed
+errorlog = "-"
 loglevel = "info"
 access_log_format = '%(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s"'
 
@@ -31,7 +31,7 @@ proc_name = "careerbridge"
 
 # Server mechanics
 daemon = False
-pidfile = "logs/gunicorn.pid"
+pidfile = None
 user = None
 group = None
 tmp_upload_dir = None
@@ -49,4 +49,11 @@ graceful_timeout = 30
 # Security
 limit_request_line = 4094
 limit_request_fields = 100
-limit_request_field_size = 8190 
+limit_request_field_size = 8190
+
+
+def child_exit(server, worker):
+    """Drop a dead worker's metric files (prometheus_client multiprocess mode)."""
+    if os.environ.get("PROMETHEUS_MULTIPROC_DIR"):
+        from prometheus_client import multiprocess
+        multiprocess.mark_process_dead(worker.pid)

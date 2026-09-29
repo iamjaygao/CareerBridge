@@ -17,6 +17,7 @@ load_dotenv(BASE_DIR / '.env')
 
 # Application definition
 INSTALLED_APPS = [
+    'django_prometheus',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -76,6 +77,9 @@ if SENTRY_DSN:
         traces_sample_rate=0.2,
         send_default_pii=False,
     )
+
+# Prometheus scrape token (empty = /metrics/ disabled)
+METRICS_TOKEN = os.environ.get('METRICS_TOKEN', '')
 
 # Celery/Redis
 CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL') or os.environ.get('REDIS_URL', 'redis://redis:6379/1')
@@ -149,6 +153,7 @@ AUTHENTICATION_BACKENDS = [
 ]
 
 MIDDLEWARE = [
+    'django_prometheus.middleware.PrometheusBeforeMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
@@ -159,6 +164,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     # Governance middleware (Phase-A: freeze commercial modules)
     'kernel.governance.middleware.GovernanceMiddleware',
+    'django_prometheus.middleware.PrometheusAfterMiddleware',
 ]
 
 ROOT_URLCONF = 'gateai.urls'

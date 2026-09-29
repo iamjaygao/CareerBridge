@@ -78,3 +78,4 @@ gateai/staticfiles/
 careerbridge/
 # Private audit/security docs (never push)
 docs/private/
+monitoring/metrics_token
