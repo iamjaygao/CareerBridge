@@ -1,4 +1,6 @@
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from kernel.governance.permissions import FeatureVisibility
 from rest_framework.response import Response
 from rest_framework import status
 from django.db.models import Count, Q
@@ -8,6 +10,7 @@ import json
 from typing import Dict, List
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated, FeatureVisibility])
 def popular_jobs(request):
     """Get popular job titles from actual job data"""
     try:
@@ -50,6 +53,7 @@ def popular_jobs(request):
         return Response([])
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated, FeatureVisibility])
 def popular_skills(request):
     """Get popular skills from resume and job data"""
     try:
@@ -138,6 +142,7 @@ def popular_skills(request):
         return Response([])
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated, FeatureVisibility])
 def popular_industries(request):
     """Get popular industries from job data"""
     try:
@@ -188,6 +193,7 @@ def popular_industries(request):
 
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated, FeatureVisibility])
 def search_all(request):
     """Lightweight unified search endpoint"""
     query = (request.GET.get('q') or '').strip()
@@ -240,6 +246,7 @@ def search_all(request):
 
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated, FeatureVisibility])
 def search_suggestions(request):
     """Return lightweight suggestions across jobs/skills/industries"""
     query = (request.GET.get('q') or '').strip().lower()
@@ -293,6 +300,7 @@ def search_suggestions(request):
 
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated, FeatureVisibility])
 def trending_searches(request):
     """Return trending search terms (fallback to popular data)"""
     limit = int(request.GET.get('limit') or 10)
@@ -316,6 +324,7 @@ def trending_searches(request):
 
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated, FeatureVisibility])
 def search_filters(request):
     """Return available filter options for search UI"""
     industries: List[str] = []
@@ -375,6 +384,7 @@ def search_filters(request):
 
 
 @api_view(['GET', 'POST', 'DELETE'])
+@permission_classes([IsAuthenticated, FeatureVisibility])
 def search_history(request):
     """Placeholder search history endpoint"""
     if request.method == 'GET':
@@ -397,6 +407,7 @@ def search_history(request):
 
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated, FeatureVisibility])
 def search_analytics(request):
     """Placeholder search analytics endpoint"""
     return Response({
