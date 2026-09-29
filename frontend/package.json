@@ -71,5 +71,12 @@
   "devDependencies": {
     "@types/redux-logger": "^3.0.13"
   },
-  "proxy": "http://127.0.0.1:8001"
+  "proxy": "http://127.0.0.1:8001",
+  "overrides": {
+    "nth-check": "^2.1.1",
+    "postcss": "^8.5.28",
+    "svgo": "^2.8.4",
+    "serialize-javascript": "^7.1.2",
+    "underscore": "^1.13.8"
+  }
 }
