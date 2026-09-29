@@ -71,3 +71,31 @@ CACHES = {
         'LOCATION': os.environ.get('REDIS_URL', 'redis://redis:6379/0'),
     }
 }
+
+# Email: generic SMTP, provider-agnostic. Every value is required; startup
+# fails instead of falling back to Django's localhost:25 default.
+def _require_bool_env(name: str) -> bool:
+    value = _require_env(name).lower()
+    if value in ('true', '1', 'yes'):
+        return True
+    if value in ('false', '0', 'no'):
+        return False
+    raise RuntimeError(f"{name} must be true or false, got {value!r}")
+
+
+def _require_int_env(name: str) -> int:
+    value = _require_env(name)
+    try:
+        return int(value)
+    except ValueError:
+        raise RuntimeError(f"{name} must be an integer, got {value!r}")
+
+
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = _require_env('EMAIL_HOST')
+EMAIL_PORT = _require_int_env('EMAIL_PORT')
+EMAIL_HOST_USER = _require_env('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = _require_env('EMAIL_HOST_PASSWORD')
+EMAIL_USE_TLS = _require_bool_env('EMAIL_USE_TLS')
+DEFAULT_FROM_EMAIL = _require_env('DEFAULT_FROM_EMAIL')
+SERVER_EMAIL = DEFAULT_FROM_EMAIL

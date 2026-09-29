@@ -108,6 +108,12 @@ jobs:
             echo "METRICS_TOKEN=$(rand)"
             echo "GUNICORN_WORKERS=4"
             echo "CELERY_HEARTBEAT_SECONDS=10"
+            echo "EMAIL_HOST=smtp.invalid"
+            echo "EMAIL_PORT=587"
+            echo "EMAIL_HOST_USER=ci"
+            echo "EMAIL_HOST_PASSWORD=$(rand)"
+            echo "EMAIL_USE_TLS=true"
+            echo "DEFAULT_FROM_EMAIL=CareerBridge CI <no-reply@example.com>"
           } > .env
           grep '^METRICS_TOKEN=' .env | cut -d= -f2 | tr -d '\n' > monitoring/metrics_token
           chmod 644 monitoring/metrics_token   # read by the prometheus container user

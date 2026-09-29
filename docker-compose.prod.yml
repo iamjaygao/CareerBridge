@@ -13,6 +13,13 @@ x-django-env: &django-env
   SECURE_SSL_REDIRECT: "${SECURE_SSL_REDIRECT:-False}"
   SESSION_COOKIE_SECURE: "${SESSION_COOKIE_SECURE:-False}"
   CSRF_COOKIE_SECURE: "${CSRF_COOKIE_SECURE:-False}"
+  # Generic SMTP (required by settings_prod; shared by app, worker and beat)
+  EMAIL_HOST: "${EMAIL_HOST}"
+  EMAIL_PORT: "${EMAIL_PORT}"
+  EMAIL_HOST_USER: "${EMAIL_HOST_USER}"
+  EMAIL_HOST_PASSWORD: "${EMAIL_HOST_PASSWORD}"
+  EMAIL_USE_TLS: "${EMAIL_USE_TLS}"
+  DEFAULT_FROM_EMAIL: "${DEFAULT_FROM_EMAIL}"
 
 x-django-app-env: &django-app-env
   <<: *django-env
@@ -24,8 +31,6 @@ x-django-app-env: &django-app-env
   STRIPE_SECRET_KEY: "${STRIPE_SECRET_KEY}"
   STRIPE_PUBLISHABLE_KEY: "${STRIPE_PUBLISHABLE_KEY}"
   STRIPE_WEBHOOK_SECRET: "${STRIPE_WEBHOOK_SECRET}"
-  EMAIL_HOST_USER: "${EMAIL_HOST_USER}"
-  EMAIL_HOST_PASSWORD: "${EMAIL_HOST_PASSWORD}"
 
 x-django-volumes: &django-volumes
   - media_volume:/app/media

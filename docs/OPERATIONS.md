@@ -38,4 +38,4 @@ Scripts are in `scripts/ops/`. They run against the compose stack and use `COMPO
 
 ## Required environment (production)
 
-`SECRET_KEY` (freshly generated; never a value that has appeared in git history), `POSTGRES_PASSWORD`, `ALLOWED_HOSTS` (include `careerbridge` for the internal scrape), `CORS_ALLOWED_ORIGINS`, `CSRF_TRUSTED_ORIGINS`, `METRICS_TOKEN`, `GRAFANA_PASSWORD`. Settings refuse to start when a secret is missing.
+`SECRET_KEY` (freshly generated; never a value that has appeared in git history), `POSTGRES_PASSWORD`, `ALLOWED_HOSTS` (include `careerbridge` for the internal scrape), `CORS_ALLOWED_ORIGINS`, `CSRF_TRUSTED_ORIGINS`, `METRICS_TOKEN`, `GRAFANA_PASSWORD`, and SMTP: `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS` (true/false), `DEFAULT_FROM_EMAIL`. Settings refuse to start when any of these is missing or malformed.
