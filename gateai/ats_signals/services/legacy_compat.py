@@ -43,7 +43,7 @@ def _extract_resume_text(resume: Resume) -> Optional[str]:
 def _extract_pdf_text(resume: Resume) -> Optional[str]:
     """Extract text from PDF file."""
     try:
-        from PyPDF2 import PdfReader
+        from pypdf import PdfReader
     except Exception:
         return None
 

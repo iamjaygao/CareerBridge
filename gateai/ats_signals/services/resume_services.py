@@ -153,7 +153,7 @@ class ResumeAnalysisService:
     @staticmethod
     def _extract_pdf_text(resume: Resume) -> Optional[str]:
         try:
-            from PyPDF2 import PdfReader
+            from pypdf import PdfReader
         except Exception:
             return None
 

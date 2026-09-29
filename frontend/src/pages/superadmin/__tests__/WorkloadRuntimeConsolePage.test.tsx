@@ -7,11 +7,21 @@
  */
 
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import WorkloadRuntimeConsolePage from '../WorkloadRuntimeConsolePage';
 
 // Mock fetch
 global.fetch = jest.fn();
+
+// The page also loads live bus states from the kernel API.
+jest.mock('../../../services/api/client', () => ({
+  __esModule: true,
+  default: {
+    get: jest.fn(() => Promise.resolve({ data: [{ bus_name: 'AI_BUS', state: 'OFF' }] })),
+    patch: jest.fn(),
+  },
+}));
 
 describe('WorkloadRuntimeConsolePage', () => {
   beforeEach(() => {
@@ -56,7 +66,11 @@ describe('WorkloadRuntimeConsolePage', () => {
       json: async () => mockRegistry,
     });
 
-    render(<WorkloadRuntimeConsolePage />);
+    render(
+      <MemoryRouter>
+        <WorkloadRuntimeConsolePage />
+      </MemoryRouter>
+    );
 
     // Wait for loading to complete
     await waitFor(() => {
@@ -114,22 +128,38 @@ describe('WorkloadRuntimeConsolePage', () => {
       json: async () => mockRegistry,
     });
 
-    render(<WorkloadRuntimeConsolePage />);
+    render(
+      <MemoryRouter>
+        <WorkloadRuntimeConsolePage />
+      </MemoryRouter>
+    );
 
-    // Wait for data to load
+    // Wait for data to load: the Power Buses table has exactly one data row,
+    // and that row shows the bus by its display name ("AI" for AI_BUS; the
+    // component shortens names via getBusDisplayName on purpose).
     await waitFor(() => {
-      expect(screen.getByText(/AI_BUS/i)).toBeInTheDocument();
+      expect(within(screen.getByRole('table')).getAllByRole('row')).toHaveLength(2); // header + 1 bus
     });
+    const [, busRow] = within(screen.getByRole('table')).getAllByRole('row');
+    expect(within(busRow).getByText('AI')).toBeInTheDocument();
 
-    // Verify summary is displayed
-    expect(screen.getByText('1')).toBeInTheDocument(); // Total buses or workloads
-    expect(screen.getByText('OFF')).toBeInTheDocument(); // Bus state
+    // Verify summary is displayed: the Total Buses card shows 1.
+    // The summary cards have no accessible role, so scope to the MUI Card.
+    // eslint-disable-next-line testing-library/no-node-access
+    const totalBusesCard = screen.getByText('Total Buses').closest('.MuiCard-root') as HTMLElement;
+    expect(totalBusesCard).not.toBeNull();
+    expect(within(totalBusesCard).getByText('1')).toBeInTheDocument();
+    expect(within(busRow).getByText('OFF')).toBeInTheDocument(); // Bus state, in the bus row
   });
 
   it('should handle registry load error gracefully', async () => {
     (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
 
-    render(<WorkloadRuntimeConsolePage />);
+    render(
+      <MemoryRouter>
+        <WorkloadRuntimeConsolePage />
+      </MemoryRouter>
+    );
 
     // Wait for error to display
     await waitFor(() => {
