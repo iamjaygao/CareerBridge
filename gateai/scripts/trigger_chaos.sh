@@ -4,8 +4,8 @@
 # Scenarios: Idempotency, Resource War, Atomic Trap
 
 BASE_URL=${BASE_URL:-"http://localhost:8001"}
-DISPATCH_URL="$BASE_URL/kernel/dispatch"
-TRAP_URL="$BASE_URL/kernel/sandbox/atomic-trap"
+DISPATCH_URL="$BASE_URL/api/v1/kernel/dispatch"
+TRAP_URL="$BASE_URL/api/v1/kernel/sandbox/atomic-trap"
 
 get_future_date() {
     if date -v+1H >/dev/null 2>&1; then

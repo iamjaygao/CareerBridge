@@ -29,5 +29,6 @@ urlpatterns = [
     
     # Webhooks
     path('webhooks/stripe/', views.stripe_webhook, name='stripe_webhook'),
-    path('webhooks/paypal/', views.paypal_webhook, name='paypal_webhook'),
+    # PayPal webhook route removed: it had no signature verification. Re-add only
+    # together with PayPal signature verification.
 ] 

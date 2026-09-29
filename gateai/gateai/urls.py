@@ -78,13 +78,9 @@ urlpatterns = [
     path('api/v1/decision-slots/', include('decision_slots.urls')),
     path('api/v1/adminpanel/', include('adminpanel.urls')), # Admin panel for managing users, mentors, appointments, etc.
     path('api/v1/signal-delivery/', include('signal_delivery.urls')), # Signal Delivery Layer (formerly Notifications for users)
-    
-    # Backward compatibility redirect
-    path('api/v1/notifications/', RedirectView.as_view(url='/api/v1/signal-delivery/', permanent=False)),
+
     path('api/v1/ats-signals/', include('ats_signals.urls')), # ATS Signal Engine (formerly Resume management)
-    
-    # Backward compatibility redirect
-    path('api/v1/resumes/', RedirectView.as_view(url='/api/v1/ats-signals/', permanent=False)),
+
     path('api/v1/payments/', include('payments.urls')), # Payment management
     path('api/v1/chat/', include('chat.urls')), # Real-time chat
     path('api/v1/search/', include('search.urls')), # Search functionality
@@ -95,14 +91,9 @@ urlpatterns = [
     # GateAI Kernel API (Phase-A: Kernel Control Plane)
     path('api/v1/kernel/', include('kernel.urls')),
 
-    # GateAI Kernel Console — API path (apiClient uses /api/v1 baseURL)
+    # GateAI Kernel Console — API path (apiClient uses /api/v1 baseURL).
+    # This is the only kernel mount; the legacy /kernel/ mount was removed.
     path('api/v1/kernel/console/', include('kernel.console.urls')),
-
-    # GateAI Kernel Syscalls (legacy direct path)
-    path('kernel/', include('kernel.urls')),
-
-    # GateAI Kernel Console (Root Control Plane)
-    path('kernel/console/', include('kernel.console.urls')),
 
     # Reserved engine namespaces (not yet implemented)
     # See docs/GATEAI_OS_CONTRACT.md for details

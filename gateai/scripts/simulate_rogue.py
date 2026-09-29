@@ -1,7 +1,7 @@
 """
 scripts/simulate_rogue_v2.py
 
-Red-team v2: concurrent + multi-context + multi-agent attacks against /kernel/dispatch sys_claim.
+Red-team v2: concurrent + multi-context + multi-agent attacks against /api/v1/kernel/dispatch sys_claim.
 
 Goals:
 A) Same resource_id, DIFFERENT context_hash (should NOT all succeed; should be single winner, others CONFLICT/REPLAY)
@@ -22,7 +22,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
 
-URL = "http://localhost:8001/kernel/dispatch"
+URL = "http://localhost:8001/api/v1/kernel/dispatch"
 
 
 def sha256_json(material) -> str:
