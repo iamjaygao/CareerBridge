@@ -8,6 +8,7 @@
 
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import WorkloadRuntimeConsolePage from '../WorkloadRuntimeConsolePage';
 
 // Mock fetch
@@ -56,7 +57,11 @@ describe('WorkloadRuntimeConsolePage', () => {
       json: async () => mockRegistry,
     });
 
-    render(<WorkloadRuntimeConsolePage />);
+    render(
+      <MemoryRouter>
+        <WorkloadRuntimeConsolePage />
+      </MemoryRouter>
+    );
 
     // Wait for loading to complete
     await waitFor(() => {
@@ -114,7 +119,11 @@ describe('WorkloadRuntimeConsolePage', () => {
       json: async () => mockRegistry,
     });
 
-    render(<WorkloadRuntimeConsolePage />);
+    render(
+      <MemoryRouter>
+        <WorkloadRuntimeConsolePage />
+      </MemoryRouter>
+    );
 
     // Wait for data to load
     await waitFor(() => {
@@ -129,7 +138,11 @@ describe('WorkloadRuntimeConsolePage', () => {
   it('should handle registry load error gracefully', async () => {
     (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
 
-    render(<WorkloadRuntimeConsolePage />);
+    render(
+      <MemoryRouter>
+        <WorkloadRuntimeConsolePage />
+      </MemoryRouter>
+    );
 
     // Wait for error to display
     await waitFor(() => {
