@@ -5,10 +5,38 @@ from unittest.mock import patch
 import json
 
 from human_loop.models import MentorProfile
+from kernel.governance.models import BusPowerState, FeatureFlag, PlatformState
+from kernel.policies.bus_power import BUS_POWER_DEFAULTS, invalidate_cache
 from django.contrib.auth import get_user_model
 
 
+def seed_payment_bus(state):
+    BusPowerState.objects.all().delete()
+    BusPowerState.objects.bulk_create([
+        BusPowerState(bus_name=n, state=v)
+        for n, v in {**BUS_POWER_DEFAULTS, 'PAYMENT_BUS': state}.items()
+    ])
+    invalidate_cache()
+
+
 class StripeWebhookTests(TestCase):
+    def setUp(self):
+        # PAYMENT_BUS on and governance initialised, so the webhook view runs.
+        seed_payment_bus('ON')
+        self.addCleanup(invalidate_cache)
+        PlatformState.objects.create(state='SINGLE_WORKLOAD', active_workloads=[], frozen_modules=[], reason='t')
+        FeatureFlag.objects.create(key='PAYMENTS', state='ON', visibility='public', reason='t')
+
+    @override_settings(STRIPE_WEBHOOK_SECRET='whsec_test')
+    @patch('stripe.Webhook.construct_event')
+    def test_webhook_is_404_when_payment_bus_is_off(self, mock_construct_event):
+        """Control: with PAYMENT_BUS off the webhook is hidden and never runs."""
+        seed_payment_bus('OFF')
+        url = reverse('payments:stripe_webhook')
+        resp = self.client.post(url, data='{}', content_type='application/json', HTTP_STRIPE_SIGNATURE='t')
+        self.assertEqual(resp.status_code, 404)
+        mock_construct_event.assert_not_called()
+
     @override_settings(STRIPE_WEBHOOK_SECRET='whsec_test')
     @patch('stripe.Webhook.construct_event')
     def test_account_updated_updates_mentor_fields(self, mock_construct_event):
