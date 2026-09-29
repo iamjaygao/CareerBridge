@@ -4,17 +4,27 @@ Unit Tests for Bus Power Policy
 Tests the bus resolution and power state logic.
 """
 
-import pytest
+from django.test import SimpleTestCase, TestCase
+
 from kernel.policies.bus_power import (
     resolve_bus,
     is_bus_powered,
     get_bus_state,
     get_all_buses,
+    invalidate_cache,
     BUS_POWER,
 )
 
 
-class TestBusResolution:
+class _FreshBusStateTestCase(TestCase):
+    """Reads bus state from a fresh DB; drop the module-level cache between tests."""
+
+    def setUp(self):
+        invalidate_cache()
+        self.addCleanup(invalidate_cache)
+
+
+class TestBusResolution(SimpleTestCase):
     """Test path-to-bus resolution logic"""
     
     def test_kernel_core_bus(self):
@@ -78,7 +88,7 @@ class TestBusResolution:
         assert resolve_bus('/unknown/path/') == 'PUBLIC_WEB_BUS'
 
 
-class TestBusPowerState:
+class TestBusPowerState(_FreshBusStateTestCase):
     """Test bus power state logic"""
     
     def test_kernel_core_bus_is_on(self):
@@ -116,7 +126,7 @@ class TestBusPowerState:
         assert len(all_buses) == len(BUS_POWER)
 
 
-class TestPhaseAConstraints:
+class TestPhaseAConstraints(_FreshBusStateTestCase):
     """Test Phase-A specific constraints"""
     
     def test_only_kernel_is_on(self):
