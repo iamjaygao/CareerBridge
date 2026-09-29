@@ -149,7 +149,7 @@ describe('WorkloadRuntimeConsolePage', () => {
     const totalBusesCard = screen.getByText('Total Buses').closest('.MuiCard-root') as HTMLElement;
     expect(totalBusesCard).not.toBeNull();
     expect(within(totalBusesCard).getByText('1')).toBeInTheDocument();
-    expect(screen.getByText('OFF')).toBeInTheDocument(); // Bus state
+    expect(within(busRow).getByText('OFF')).toBeInTheDocument(); // Bus state, in the bus row
   });
 
   it('should handle registry load error gracefully', async () => {
