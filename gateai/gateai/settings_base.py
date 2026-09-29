@@ -57,6 +57,8 @@ REST_FRAMEWORK = {
         'anon': '100/day',
         'burst': '20/min',
         'ai_analysis': '10/day',
+        'peer_write': '60/hour',   # peer mock writes per user
+        'peer_invite': '10/hour',  # peer mock onboarding attempts (invite code checks) per user
     },
     'DEFAULT_THROTTLE_CLASSES': [
         'rest_framework.throttling.UserRateThrottle',
@@ -92,7 +94,14 @@ CELERY_IMPORTS = (
     'human_loop.tasks',
     'signal_delivery.tasks',
     'kernel.tasks',
+    'peer_mock.tasks',
 )
+# Peer mock: round schedule points (deadline, matching, window) are wall times in this
+# timezone; users see them in their own timezone. Must be an IANA name (checked at startup).
+PEER_MOCK_OPS_TZ = os.environ.get('PEER_MOCK_OPS_TZ', 'America/New_York')
+# First cohort: onboarding needs an invite code. Set to "false" to open sign-up.
+PEER_MOCK_INVITE_REQUIRED = os.environ.get('PEER_MOCK_INVITE_REQUIRED', 'true').lower() != 'false'
+
 CELERY_BEAT_SCHEDULE = {
     # Proves beat -> broker -> worker; ops/CI read kernel.tasks.HEARTBEAT_CACHE_KEY.
     'kernel_beat_heartbeat': {
@@ -100,6 +109,10 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': timedelta(seconds=int(os.environ.get('CELERY_HEARTBEAT_SECONDS', '60'))),
     },
     # Tasks below belong to unlaunched modules; each is a no-op while its bus is OFF.
+    'peer_mock_ensure_rounds': {
+        'task': 'peer_mock.tasks.ensure_rounds',
+        'schedule': timedelta(hours=1),
+    },
     'notify_staff_unanswered_chats': {
         'task': 'chat.tasks.notify_staff_unanswered_chats',
         'schedule': timedelta(hours=1),

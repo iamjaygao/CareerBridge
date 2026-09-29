@@ -27,6 +27,7 @@ GATED_TASKS = {
     'adminpanel.tasks.notify_admin_risk_alerts': 'ADMIN_BUS',
     # System alerts to superadmins always run (KERNEL_CORE_BUS cannot be switched off).
     'adminpanel.tasks.notify_superadmin_system_alerts': 'KERNEL_CORE_BUS',
+    'peer_mock.tasks.ensure_rounds': 'PEER_MOCK_BUS',
 }
 ALWAYS_ON = {'KERNEL_CORE_BUS'}
 
