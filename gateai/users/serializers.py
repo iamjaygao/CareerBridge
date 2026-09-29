@@ -39,7 +39,8 @@ class RegisterSerializer(serializers.ModelSerializer):
             "password2",
             "role"
         )
-        read_only_fields = ("id",)
+        # Role is assigned by the server, never by the client.
+        read_only_fields = ("id", "role")
 
     def validate(self, attrs):
         if attrs["password"] != attrs["password2"]:
@@ -58,6 +59,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         password = validated_data.pop("password")
         validated_data.pop("password2")
 
+        validated_data["role"] = User._meta.get_field("role").default
         return User.objects.create_user(
             password=password,
             **validated_data,
@@ -73,7 +75,7 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         # Phase-A: Added is_superuser/is_staff for frontend world routing
         fields = ("id", "username", "email", "first_name", "last_name", "role", "avatar", "phone", "location", "email_verified", "is_superuser", "is_staff")
-        read_only_fields = ("id", "is_superuser", "is_staff")
+        read_only_fields = ("id", "role", "is_superuser", "is_staff")
 
 
 # ----------------------------------------------------------

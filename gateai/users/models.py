@@ -112,7 +112,9 @@ class User(AbstractUser):
         between kernel-level permissions and application-level roles.
         
         PRIORITY: Django flags (is_superuser, is_staff) are source of truth.
-        The role field is derived/synced from these flags.
+        The role field is derived/synced from these flags, never the reverse:
+        a role string must not grant is_superuser or is_staff. Superusers are
+        created with `manage.py createsuperuser`.
         """
         # 1. 如果是超级用户，强制设定角色
         if self.is_superuser:
@@ -122,14 +124,6 @@ class User(AbstractUser):
         # 自动提升为 admin (或者你认为合适的默认管理角色)
         elif self.is_staff and self.role == 'student':
             self.role = 'admin'
-
-        # 3. 如果角色是 superadmin 但没勾选 is_superuser，
-        # 反向同步确保权限生效
-        if self.role == 'superadmin':
-            self.is_superuser = True
-            self.is_staff = True
-        elif self.role == 'admin' or self.role == 'staff':
-            self.is_staff = True
 
         super().save(*args, **kwargs)
 
