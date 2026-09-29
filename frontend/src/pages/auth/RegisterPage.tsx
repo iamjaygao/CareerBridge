@@ -11,10 +11,6 @@ import {
   Alert,
   CircularProgress,
   Grid,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
 } from '@mui/material';
 import { PersonAddOutlined } from '@mui/icons-material';
 import { useForm } from 'react-hook-form';
@@ -48,7 +44,6 @@ const schema = yup.object({
     .oneOf([yup.ref('password')], 'Passwords must match'),
   firstName: yup.string().required().min(2),
   lastName: yup.string().required().min(2),
-  role: yup.string().oneOf(['student', 'mentor']).required(),
 });
 
 // =======================
@@ -61,7 +56,6 @@ interface RegisterFormData {
   confirmPassword: string;
   firstName: string;
   lastName: string;
-  role: 'student' | 'mentor';
 }
 
 // =======================
@@ -92,7 +86,6 @@ const RegisterPage: React.FC = () => {
         password2: data.confirmPassword,
         first_name: data.firstName,
         last_name: data.lastName,
-        role: data.role,
       });
 
       navigate('/login', {
@@ -164,15 +157,6 @@ const RegisterPage: React.FC = () => {
                   error={!!errors.email}
                   helperText={errors.email?.message}
                 />
-              </Grid>
-              <Grid item xs={12}>
-                <FormControl fullWidth>
-                  <InputLabel>Role</InputLabel>
-                  <Select label="Role" defaultValue="" {...register('role')}>
-                    <MenuItem value="student">Student</MenuItem>
-                    <MenuItem value="mentor">Mentor</MenuItem>
-                  </Select>
-                </FormControl>
               </Grid>
               <Grid item xs={12}>
                 <TextField
