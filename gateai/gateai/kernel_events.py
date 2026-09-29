@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
 
 from django.db import transaction
+from datetime import timezone as dt_timezone
 from django.utils import timezone
 
 from kernel.models import KernelAuditLog
@@ -82,7 +83,7 @@ def compute_context_hash(
     """Compute deterministic SHA256 hash binding resource + boundary."""
     expires_norm = ""
     if isinstance(lock_expires_at, datetime):
-        expires_norm = lock_expires_at.astimezone(timezone.utc).isoformat()
+        expires_norm = lock_expires_at.astimezone(dt_timezone.utc).isoformat()
     elif lock_expires_at:
         expires_norm = str(lock_expires_at)
     base = f"{resource_id}|{owner_id}|{action_type}|{expires_norm}"

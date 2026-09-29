@@ -7,6 +7,7 @@ from rest_framework.pagination import PageNumberPagination
 
 from django.shortcuts import get_object_or_404
 from django.db.models import Q, Avg, Count
+from datetime import timezone as dt_timezone
 from django.utils import timezone
 from django.conf import settings
 from zoneinfo import ZoneInfo
@@ -428,8 +429,8 @@ class MentorAvailabilitySlotsView(APIView):
                         datetime.combine(check_date, slot_end),
                         timezone=mentor_tz
                     )
-                    slot_start_utc = slot_datetime_start.astimezone(timezone.utc)
-                    slot_end_utc = slot_datetime_end.astimezone(timezone.utc)
+                    slot_start_utc = slot_datetime_start.astimezone(dt_timezone.utc)
+                    slot_end_utc = slot_datetime_end.astimezone(dt_timezone.utc)
                     
                     has_conflicting_session = MentorSession.objects.filter(
                         mentor=mentor,

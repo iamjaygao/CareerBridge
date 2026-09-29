@@ -3,6 +3,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.decorators import action, api_view, permission_classes
 from django.shortcuts import get_object_or_404
+from datetime import timezone as dt_timezone
 from django.utils import timezone
 from django.db.models import Q, F
 from django.db import transaction
@@ -386,7 +387,7 @@ class MentorAppointmentStatusView(APIView):
                         "resource_id": appointment.id,
                         "owner_id": appointment.user_id,
                         "action_type": "APPOINTMENT_COMPLETED",
-                        "lock_expires_at": lock_boundary.astimezone(timezone.utc).isoformat() if lock_boundary else None,
+                        "lock_expires_at": lock_boundary.astimezone(dt_timezone.utc).isoformat() if lock_boundary else None,
                     }
                 )
 
