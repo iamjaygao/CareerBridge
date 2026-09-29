@@ -1,7 +1,29 @@
 # scripts/seed_dev.py
 import os
+import sys
 import django
 import random
+
+
+def _production_reason(settings=None):
+    """Return why this looks like production, or None if it looks like dev."""
+    if os.environ.get("DJANGO_ENV", "").lower() == "production":
+        return "DJANGO_ENV=production"
+    if os.environ.get("DJANGO_SETTINGS_MODULE", "").endswith("settings_prod"):
+        return "DJANGO_SETTINGS_MODULE is settings_prod"
+    if settings is not None and not settings.DEBUG:
+        return "DEBUG is off"
+    return None
+
+
+def _refuse_if_production(settings=None):
+    reason = _production_reason(settings)
+    if reason:
+        sys.exit(f"❌ seed_dev refused: this looks like production ({reason}). Dev only.")
+
+
+# Check the environment before Django (and the database) is touched at all.
+_refuse_if_production()
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "gateai.settings")
 django.setup()
@@ -129,8 +151,9 @@ def seed_mentors(count=20):
 # 主入口
 # -------------------------
 def run():
-    if not settings.DEBUG:
-        raise RuntimeError("❌ seed_dev 只能在 DEBUG 模式运行")
+    # Re-check with the loaded settings (catches DEBUG off, and prod settings
+    # selected indirectly, e.g. via gateai.settings + DJANGO_ENV).
+    _refuse_if_production(settings)
 
     seed_system_users()
     seed_mentors(20)

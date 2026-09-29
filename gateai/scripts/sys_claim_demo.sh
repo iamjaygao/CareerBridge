@@ -4,7 +4,7 @@
 # Goal: Prove contract-correct OK then REPLAY.
 
 BASE_URL=${BASE_URL:-"http://localhost:8001"}
-ENDPOINT="$BASE_URL/kernel/dispatch"
+ENDPOINT="$BASE_URL/api/v1/kernel/dispatch"
 
 # Helper for portable future date (ISO8601 Z)
 get_future_date() {

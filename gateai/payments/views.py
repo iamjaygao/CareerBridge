@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from django.views.decorators.csrf import csrf_exempt
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
+from datetime import timezone as dt_timezone
 from django.utils import timezone
 from django.db.models import Sum, Count, Q
 from datetime import datetime, timedelta
@@ -1316,7 +1317,7 @@ def stripe_webhook(request):
             mentor.charges_enabled = bool(acct.get('charges_enabled'))
             mentor.kyc_disabled_reason = acct.get('requirements', {}).get('disabled_reason', '') if acct.get('requirements') else ''
             due_by = acct.get('requirements', {}).get('current_deadline') if acct.get('requirements') else None
-            mentor.kyc_due_by = timezone.datetime.fromtimestamp(due_by, tz=timezone.utc) if due_by else None
+            mentor.kyc_due_by = timezone.datetime.fromtimestamp(due_by, tz=dt_timezone.utc) if due_by else None
             mentor.stripe_capabilities = acct.get('capabilities', {}) or {}
             mentor.save()
 

@@ -83,8 +83,8 @@
             useEffect(() => {
                 const fetchAudit = async () => {
                     const url = lastIdRef.current
-                        ? `/kernel/observability/audit?since_id=${lastIdRef.current}`
-                        : `/kernel/observability/audit?limit=50`;
+                        ? `/api/v1/kernel/observability/audit?since_id=${lastIdRef.current}`
+                        : `/api/v1/kernel/observability/audit?limit=50`;
 
                     try {
                         const res = await fetch(url);
@@ -111,7 +111,7 @@
             useEffect(() => {
                 const fetchLocks = async () => {
                     try {
-                        const res = await fetch("/kernel/observability/locks?active_only=true");
+                        const res = await fetch("/api/v1/kernel/observability/locks?active_only=true");
                         const data = await res.json();
                         setLocks(data);
                     } catch (err) {
@@ -128,7 +128,7 @@
             useEffect(() => {
                 const fetchCompliance = async () => {
                     try {
-                        const res = await fetch("/kernel/observability/compliance");
+                        const res = await fetch("/api/v1/kernel/observability/compliance");
                         const data = await res.json();
                         setViolations(data.violations || []);
                     } catch (err) {

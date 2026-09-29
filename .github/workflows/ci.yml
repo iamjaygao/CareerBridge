@@ -2,13 +2,15 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, 'fix/**' ]
   pull_request:
     branches: [ main ]
 
 jobs:
   backend:
     runs-on: ubuntu-latest
+    env:
+      DJANGO_ENV: test
     defaults:
       run:
         working-directory: gateai
@@ -27,6 +29,59 @@ jobs:
       - name: Run tests
         run: |
           python manage.py test || true
+
+  # Backend suite on a real Postgres server (SQLite ignores select_for_update
+  # and can't exercise lock races). No `|| true`: failures fail this job.
+  backend-postgres:
+    runs-on: ubuntu-latest
+    env:
+      # Throwaway per-run credentials, not a secret: the database lives only
+      # inside this job's service container and is destroyed with it.
+      POSTGRES_DB: careerbridge_ci
+      POSTGRES_USER: careerbridge_ci
+      POSTGRES_PASSWORD: ci-${{ github.run_id }}-${{ github.run_attempt }}
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: '5432'
+      DJANGO_SETTINGS_MODULE: gateai.settings_test_postgres
+    services:
+      postgres:
+        image: postgres:15.7  # same as docker-compose.prod.yml
+        env:
+          POSTGRES_DB: careerbridge_ci
+          POSTGRES_USER: careerbridge_ci
+          POSTGRES_PASSWORD: ci-${{ github.run_id }}-${{ github.run_attempt }}
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U careerbridge_ci -d careerbridge_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: gateai
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r ../requirements.txt
+      - name: Confirm tests will use Postgres
+        run: |
+          python -c "import django; django.setup(); from django.db import connection; print(connection.vendor); assert connection.vendor == 'postgresql'"
+      - name: Run tests on Postgres
+        run: |
+          set -o pipefail
+          python manage.py test -v 2 2>&1 | tee test-postgres.log
+      - name: Upload test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-postgres-test-log
+          path: gateai/test-postgres.log
 
   frontend:
     runs-on: ubuntu-latest

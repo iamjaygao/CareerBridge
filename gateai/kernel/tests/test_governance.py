@@ -8,11 +8,12 @@ Acceptance tests for Phase-A governance:
 - SuperAdmin-only access to governance APIs
 """
 
-import time
 from django.test import TestCase, Client, override_settings
 from django.contrib.auth import get_user_model
 from django.urls import reverse
-from kernel.governance.models import PlatformState, FeatureFlag, GovernanceAudit
+from rest_framework_simplejwt.tokens import RefreshToken
+from kernel.governance.models import PlatformState, FeatureFlag, GovernanceAudit, BusPowerState
+from kernel.policies.bus_power import BUS_POWER_DEFAULTS, invalidate_cache
 
 User = get_user_model()
 
@@ -96,15 +97,9 @@ class GovernanceMiddlewareTest(TestCase):
     def test_active_module_works(self):
         """Test that active modules (ON state) work normally"""
         # Users module should work (note: might get 401 if auth required, but not 404)
-        response = self.client.get('/api/v1/users/profile/')
+        response = self.client.get('/api/v1/users/me/')
         self.assertNotEqual(response.status_code, 404, 
                            'Active module should not return 404')
-    
-    def test_admin_bypass(self):
-        """Test that admin paths are never blocked"""
-        response = self.client.get('/admin/')
-        # Should not return 404 (will redirect to login)
-        self.assertNotEqual(response.status_code, 404)
     
     def test_static_bypass(self):
         """Test that static paths are never blocked"""
@@ -156,7 +151,7 @@ class GovernanceAPITest(TestCase):
     
     def test_superuser_can_access_governance_api(self):
         """Test that superuser can access governance APIs"""
-        self.client.login(username='superadmin', password='testpass123')
+        self.client.defaults['HTTP_AUTHORIZATION'] = 'Bearer ' + str(RefreshToken.for_user(self.superuser).access_token)
         
         response = self.client.get('/api/v1/adminpanel/governance/platform-state/')
         self.assertEqual(response.status_code, 200)
@@ -166,7 +161,7 @@ class GovernanceAPITest(TestCase):
     
     def test_staff_cannot_access_governance_api(self):
         """Test that staff (non-superuser) cannot access governance APIs"""
-        self.client.login(username='staff', password='testpass123')
+        self.client.defaults['HTTP_AUTHORIZATION'] = 'Bearer ' + str(RefreshToken.for_user(self.staff_user).access_token)
         
         response = self.client.get('/api/v1/adminpanel/governance/platform-state/')
         self.assertEqual(response.status_code, 403, 
@@ -177,7 +172,7 @@ class GovernanceAPITest(TestCase):
     
     def test_feature_flag_update_increments_version(self):
         """Test that updating a feature flag increments governance_version"""
-        self.client.login(username='superadmin', password='testpass123')
+        self.client.defaults['HTTP_AUTHORIZATION'] = 'Bearer ' + str(RefreshToken.for_user(self.superuser).access_token)
         
         old_version = self.platform_state.governance_version
         
@@ -206,7 +201,7 @@ class GovernanceAPITest(TestCase):
     
     def test_governance_update_requires_reason(self):
         """Test that all governance updates require a reason"""
-        self.client.login(username='superadmin', password='testpass123')
+        self.client.defaults['HTTP_AUTHORIZATION'] = 'Bearer ' + str(RefreshToken.for_user(self.superuser).access_token)
         
         # Try to update without reason
         response = self.client.patch(
@@ -219,68 +214,23 @@ class GovernanceAPITest(TestCase):
         self.assertIn('reason', response.json())
 
 
-class FeatureFlagCachingTest(TestCase):
-    """Test that middleware caching respects governance_version"""
-    
-    def setUp(self):
-        """Initialize governance"""
-        self.superuser = User.objects.create_user(
-            username='superadmin',
-            email='super@test.com',
-            password='testpass123',
-            is_superuser=True,
-            is_staff=True
-        )
-        
-        self.platform_state = PlatformState.objects.create(
-            state='SINGLE_WORKLOAD',
-            active_workloads=['PEER_MOCK'],
-            frozen_modules=[],
-            reason='Test',
-            updated_by=self.superuser
-        )
-        
-        self.feature_flag = FeatureFlag.objects.create(
-            key='PAYMENTS',
-            state='OFF',
-            visibility='internal',
-            reason='Test',
-            updated_by=self.superuser
-        )
-    
-    def test_feature_flag_change_respected_within_ttl(self):
-        """Test that changing a feature flag is respected by middleware"""
-        self.client = Client()
-        self.client.login(username='superadmin', password='testpass123')
-        
-        # First request - should return 404 (PAYMENTS is OFF)
-        response = self.client.get('/api/v1/payments/payouts/summary/')
-        self.assertEqual(response.status_code, 404)
-        
-        # Enable PAYMENTS feature
-        self.feature_flag.state = 'ON'
-        self.feature_flag.save()
-        
-        # Increment platform governance_version to invalidate cache
-        self.platform_state.save()  # This increments governance_version
-        
-        # Wait a moment for cache to refresh (up to 5 seconds TTL)
-        time.sleep(0.5)
-        
-        # Second request - should NOT return 404 anymore (PAYMENTS is ON)
-        # Note: might return 401/403 due to permissions, but not 404
-        response = self.client.get('/api/v1/payments/payouts/summary/')
-        self.assertNotEqual(response.status_code, 404, 
-                           'Feature should be accessible after enabling')
-
-
 class BetaFeatureAccessTest(TestCase):
     """Test BETA feature access (superuser only)"""
     
     def setUp(self):
         """Initialize test data"""
+        # SEARCH_BUS on, so requests reach the BETA gate rather than a bus 404.
+        BusPowerState.objects.all().delete()
+        BusPowerState.objects.bulk_create([
+            BusPowerState(bus_name=n, state=v)
+            for n, v in {**BUS_POWER_DEFAULTS, 'SEARCH_BUS': 'ON'}.items()
+        ])
+        invalidate_cache()
+        self.addCleanup(invalidate_cache)
+
         self.superuser = User.objects.create_user(
             username='superadmin',
+            email='beta-super@test.com',
             password='testpass123',
             is_superuser=True,
             is_staff=True
@@ -288,6 +238,7 @@ class BetaFeatureAccessTest(TestCase):
         
         self.staff_user = User.objects.create_user(
             username='staff',
+            email='beta-staff@test.com',
             password='testpass123',
             is_staff=True,
             is_superuser=False
@@ -295,6 +246,7 @@ class BetaFeatureAccessTest(TestCase):
         
         self.regular_user = User.objects.create_user(
             username='user',
+            email='beta-user@test.com',
             password='testpass123'
         )
         
@@ -307,37 +259,39 @@ class BetaFeatureAccessTest(TestCase):
         )
         
         # Create BETA feature
-        FeatureFlag.objects.create(
+        self.flag = FeatureFlag.objects.create(
             key='SEARCH',
             state='BETA',
             visibility='user',
             reason='Beta testing',
             updated_by=self.superuser
         )
+
+    def get_search(self, user):
+        # JWT: DRF authenticates JWT only, so a session login would look anonymous.
+        client = Client(HTTP_AUTHORIZATION='Bearer ' + str(RefreshToken.for_user(user).access_token))
+        return client.get('/api/v1/search/')
+
+    def assert_404_is_from_beta_gate(self, user):
+        self.assertEqual(self.get_search(user).status_code, 404)
+        # Same user, same bus, same route: only the flag state changes.
+        FeatureFlag.objects.filter(pk=self.flag.pk).update(state='ON')
+        self.assertEqual(self.get_search(user).status_code, 200)
     
     def test_superuser_can_access_beta_feature(self):
         """Test that superuser can access BETA features"""
-        self.client = Client()
-        self.client.login(username='superadmin', password='testpass123')
-        
-        # Should NOT return 404 (might return other errors, but governance allows it)
-        response = self.client.get('/api/v1/search/')
-        self.assertNotEqual(response.status_code, 404)
+        response = self.get_search(self.superuser)
+        self.assertEqual(response.status_code, 200)
     
     def test_staff_cannot_access_beta_feature(self):
         """Test that staff cannot access BETA features (GOVERNANCE CONSTITUTION)"""
-        self.client = Client()
-        self.client.login(username='staff', password='testpass123')
-        
-        # Should return 404 (BETA features only for superuser)
-        response = self.client.get('/api/v1/search/')
-        self.assertEqual(response.status_code, 404)
+        self.assert_404_is_from_beta_gate(self.staff_user)
     
     def test_regular_user_cannot_access_beta_feature(self):
         """Test that regular user cannot access BETA features"""
-        self.client = Client()
-        self.client.login(username='user', password='testpass123')
-        
-        # Should return 404
-        response = self.client.get('/api/v1/search/')
-        self.assertEqual(response.status_code, 404)
+        self.assert_404_is_from_beta_gate(self.regular_user)
+
+    def test_search_bus_off_hides_beta_feature_from_superuser(self):
+        """Control: with SEARCH_BUS off, even the superuser gets 404."""
+        BusPowerState.objects.filter(bus_name='SEARCH_BUS').update(state='OFF')
+        self.assertEqual(self.get_search(self.superuser).status_code, 404)

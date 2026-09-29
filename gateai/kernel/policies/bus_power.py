@@ -7,7 +7,6 @@ Only SuperAdmin can modify via /kernel/console/buses/.
 Falls back to hardcoded defaults when DB is unavailable (startup safety).
 """
 
-import time
 import logging
 
 logger = logging.getLogger(__name__)
@@ -18,7 +17,7 @@ BUS_POWER_DEFAULTS = {
     "PUBLIC_WEB_BUS":  "OFF",
     "ADMIN_BUS":       "OFF",
     "AI_BUS":          "OFF",
-    "PEER_MOCK_BUS":   "ON",
+    "PEER_MOCK_BUS":   "OFF",  # off until the peer mock feature launches
     "MENTOR_BUS":      "OFF",
     "PAYMENT_BUS":     "OFF",
     "SEARCH_BUS":      "OFF",
@@ -26,12 +25,6 @@ BUS_POWER_DEFAULTS = {
 
 # Keep BUS_POWER as alias so existing imports don't break
 BUS_POWER = BUS_POWER_DEFAULTS
-
-# ── In-process cache ──────────────────────────────────────────────────────────
-_cache: dict = {}
-_cache_ts: float = 0.0
-_CACHE_TTL: int = 5  # seconds
-
 
 def _load_from_db() -> dict | None:
     """
@@ -68,32 +61,27 @@ def _seed_db_if_empty() -> None:
 
 def _get_bus_states() -> dict:
     """
-    Return current bus states with 5-second in-process cache.
+    Return current bus states, read from the DB on every call.
+
+    Not cached in-process: the DB row is the only state shared by all
+    workers, so a toggle is visible to the very next request everywhere.
+    It is one query over at most 8 rows.
     Falls back to hardcoded defaults if DB is unavailable.
     """
-    global _cache, _cache_ts
-
-    now = time.time()
-    if _cache and (now - _cache_ts) < _CACHE_TTL:
-        return _cache
-
-    _seed_db_if_empty()
     states = _load_from_db()
+    if states is None:
+        _seed_db_if_empty()
+        states = _load_from_db()
 
     if states:
-        _cache = states
-        _cache_ts = now
         return states
 
-    # DB not ready — use hardcoded defaults (don't cache so we retry next request)
+    # DB not ready — use hardcoded defaults
     return BUS_POWER_DEFAULTS
 
 
 def invalidate_cache() -> None:
-    """Force next request to re-read from DB (call after any bus state change)."""
-    global _cache, _cache_ts
-    _cache = {}
-    _cache_ts = 0.0
+    """No-op, kept for callers: bus states are no longer cached."""
 
 
 def resolve_bus(path: str) -> str:
@@ -110,7 +98,13 @@ def resolve_bus(path: str) -> str:
     7. Admin Bus
     8. Public Web Bus
     """
-    if path.startswith("/kernel/") or path.startswith("/superadmin/"):
+    # Kernel core: kernel API, governance, and identity (signup/login/profile).
+    # KERNEL_CORE_BUS cannot be switched off.
+    if (path.startswith("/kernel/") or
+            path.startswith("/superadmin/") or
+            path.startswith("/api/v1/kernel/") or
+            path.startswith("/api/v1/adminpanel/governance/") or
+            path.startswith("/api/v1/users/")):
         return "KERNEL_CORE_BUS"
 
     if (path.startswith("/api/v1/peer-mock/") or
@@ -142,6 +136,7 @@ def resolve_bus(path: str) -> str:
         return "SEARCH_BUS"
 
     if (path.startswith("/admin/") or
+            path.startswith("/api/v1/adminpanel/") or
             path.startswith("/staff/") or
             path.startswith("/audit/") or
             path.startswith("/ops/") or
@@ -151,12 +146,17 @@ def resolve_bus(path: str) -> str:
     if path.startswith("/") and not path.startswith("/api/"):
         return "PUBLIC_WEB_BUS"
 
+    # Public API utility endpoints (index, ping, info)
+    if path in ("/api/v1/", "/api/v1/ping/", "/api/info/"):
+        return "PUBLIC_WEB_BUS"
+
     return "UNKNOWN"
 
 
 def is_bus_powered(bus: str) -> bool:
+    # A path with no bus is refused (default deny).
     if bus == "UNKNOWN":
-        return True
+        return False
     return _get_bus_states().get(bus, "OFF") == "ON"
 
 

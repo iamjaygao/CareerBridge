@@ -37,27 +37,27 @@ class KernelPulseAccessTest(TestCase):
         
         self.client = Client()
     
-    def test_unauthenticated_returns_403(self):
+    def test_unauthenticated_returns_401(self):
         """Unauthenticated request should return 403"""
-        response = self.client.get('/kernel/pulse/summary/')
-        self.assertEqual(response.status_code, 403)
+        response = self.client.get('/api/v1/kernel/pulse/summary/')
+        self.assertEqual(response.status_code, 401)
     
     def test_regular_user_returns_403(self):
         """Regular user should be denied access"""
         self.client.force_login(self.regular_user)
-        response = self.client.get('/kernel/pulse/summary/')
+        response = self.client.get('/api/v1/kernel/pulse/summary/')
         self.assertEqual(response.status_code, 403)
     
     def test_superuser_returns_200(self):
         """Superuser should get 200 OK"""
         self.client.force_login(self.superuser)
-        response = self.client.get('/kernel/pulse/summary/')
+        response = self.client.get('/api/v1/kernel/pulse/summary/')
         self.assertEqual(response.status_code, 200)
     
     def test_response_contains_pulse_abi_keys(self):
         """Response should contain all Pulse ABI v0.1 keys"""
         self.client.force_login(self.superuser)
-        response = self.client.get('/kernel/pulse/summary/')
+        response = self.client.get('/api/v1/kernel/pulse/summary/')
         
         self.assertEqual(response.status_code, 200)
         data = response.json()
@@ -129,7 +129,7 @@ class KernelPulseDataTest(TestCase):
     
     def test_recent_syscalls_returned(self):
         """Recent syscalls should be returned"""
-        response = self.client.get('/kernel/pulse/summary/')
+        response = self.client.get('/api/v1/kernel/pulse/summary/')
         self.assertEqual(response.status_code, 200)
         
         data = response.json()
@@ -149,7 +149,7 @@ class KernelPulseDataTest(TestCase):
     
     def test_counts_computed_correctly(self):
         """Counts should be computed correctly"""
-        response = self.client.get('/kernel/pulse/summary/')
+        response = self.client.get('/api/v1/kernel/pulse/summary/')
         self.assertEqual(response.status_code, 200)
         
         data = response.json()
@@ -162,7 +162,7 @@ class KernelPulseDataTest(TestCase):
     
     def test_kernel_state_mode_derivation(self):
         """Kernel state mode should be derived from error rate"""
-        response = self.client.get('/kernel/pulse/summary/')
+        response = self.client.get('/api/v1/kernel/pulse/summary/')
         self.assertEqual(response.status_code, 200)
         
         data = response.json()
@@ -179,7 +179,7 @@ class KernelPulseDataTest(TestCase):
     
     def test_active_locks_structure(self):
         """Active locks should have correct structure"""
-        response = self.client.get('/kernel/pulse/summary/')
+        response = self.client.get('/api/v1/kernel/pulse/summary/')
         self.assertEqual(response.status_code, 200)
         
         data = response.json()

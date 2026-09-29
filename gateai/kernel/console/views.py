@@ -11,9 +11,10 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.contrib.auth import get_user_model
 
 from kernel.console.permissions import KernelPermission
+from kernel.governance.permissions import FeatureVisibility
 from kernel.governance.models import FeatureFlag, PlatformState, BusPowerState, GovernanceAudit
 from kernel.worlds import WORLD_NAMESPACES
-from kernel.policies.bus_power import BUS_POWER_DEFAULTS, invalidate_cache
+from kernel.policies.bus_power import BUS_POWER_DEFAULTS
 
 User = get_user_model()
 
@@ -25,7 +26,7 @@ class KernelStatusView(APIView):
     Returns the current kernel and platform state.
     """
     authentication_classes = [JWTAuthentication, SessionAuthentication]
-    permission_classes = [KernelPermission]
+    permission_classes = [KernelPermission, FeatureVisibility]
 
     def get(self, request):
         ps = PlatformState.objects.first()
@@ -47,7 +48,7 @@ class KernelFeatureFlagsView(APIView):
     View and update feature flags from kernel console.
     """
     authentication_classes = [JWTAuthentication, SessionAuthentication]
-    permission_classes = [KernelPermission]
+    permission_classes = [KernelPermission, FeatureVisibility]
 
     def get(self, request):
         """List all feature flags"""
@@ -160,7 +161,7 @@ class KernelWorldMapView(APIView):
     Returns the 4-World OS namespace map.
     """
     authentication_classes = [JWTAuthentication, SessionAuthentication]
-    permission_classes = [KernelPermission]
+    permission_classes = [KernelPermission, FeatureVisibility]
 
     def get(self, request):
         return Response({
@@ -176,7 +177,7 @@ class KernelUserListView(APIView):
     Returns list of superuser accounts.
     """
     authentication_classes = [JWTAuthentication, SessionAuthentication]
-    permission_classes = [KernelPermission]
+    permission_classes = [KernelPermission, FeatureVisibility]
 
     def get(self, request):
         superusers = User.objects.filter(is_superuser=True).values(
@@ -193,11 +194,10 @@ class KernelBusPowerView(APIView):
     PATCH payload:
         { "AI_BUS": "ON", "MENTOR_BUS": "OFF" }
 
-    Only superadmin (is_superuser=True) can reach this endpoint because it lives
-    under /kernel/ which is protected by KernelPermission + GovernanceMiddleware.
+    Only superadmin (is_superuser=True) can reach this endpoint: KernelPermission.
     """
     authentication_classes = [JWTAuthentication, SessionAuthentication]
-    permission_classes = [KernelPermission]
+    permission_classes = [KernelPermission, FeatureVisibility]
 
     def get(self, request):
         buses = BusPowerState.objects.all().values(
@@ -242,7 +242,7 @@ class KernelBusPowerView(APIView):
 
             # Write audit log
             GovernanceAudit.objects.create(
-                action="MODULE_ENABLE" if new_state == "ON" else "MODULE_DISABLE",
+                action="BUS_ENABLE" if new_state == "ON" else "BUS_DISABLE",
                 payload={"bus": bus_name, "old_state": old_state, "new_state": new_state},
                 reason=f"Bus power changed via kernel console by {request.user.username}",
                 actor=request.user,
@@ -250,8 +250,6 @@ class KernelBusPowerView(APIView):
             )
             updated.append({"bus_name": bus_name, "state": new_state})
 
-        # Invalidate in-process cache so next request picks up new values
-        invalidate_cache()
 
         return Response({
             "updated": updated,

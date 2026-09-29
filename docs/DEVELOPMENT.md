@@ -39,6 +39,10 @@ pip install -r requirements.txt
 ```bash
 cp env_template.txt .env
 # 编辑 .env 文件，配置必要的环境变量
+
+# 必须在 shell 中设置 DJANGO_ENV（development / test / production），没有默认值。
+# 写在 .env 里不起作用：settings 选择发生在读取 .env 之前。
+export DJANGO_ENV=development
 ```
 
 #### 数据库迁移

@@ -58,6 +58,7 @@ WORLD_NAMESPACES: Dict[str, List[str]] = {
     ],
     "kernel": [
         "/kernel",
+        "/api/v1/kernel",   # Kernel API (the mount the SPA uses)
         "/kernel/console",  # Kernel Console (Root Control Plane)
         "/kernel/pulse",    # Kernel Pulse (Phase-A.1 Observability)
         "/superadmin",

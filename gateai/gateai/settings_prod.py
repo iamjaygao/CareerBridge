@@ -25,12 +25,14 @@ ALLOWED_HOSTS = [host.strip() for host in allowed_hosts_env.split(',') if host.s
 database_url = os.environ.get('DATABASE_URL', '').strip()
 if database_url:
     parsed = urlparse(database_url)
+    if not parsed.password:
+        raise RuntimeError('DATABASE_URL has no password (is POSTGRES_PASSWORD set?)')
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
             'NAME': parsed.path.lstrip('/'),
             'USER': parsed.username or '',
-            'PASSWORD': parsed.password or '',
+            'PASSWORD': parsed.password,
             'HOST': parsed.hostname or '',
             'PORT': parsed.port or '',
         }

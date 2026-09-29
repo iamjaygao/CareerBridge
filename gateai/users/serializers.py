@@ -39,7 +39,8 @@ class RegisterSerializer(serializers.ModelSerializer):
             "password2",
             "role"
         )
-        read_only_fields = ("id",)
+        # Role is assigned by the server, never by the client.
+        read_only_fields = ("id", "role")
 
     def validate(self, attrs):
         if attrs["password"] != attrs["password2"]:
@@ -58,6 +59,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         password = validated_data.pop("password")
         validated_data.pop("password2")
 
+        validated_data["role"] = User._meta.get_field("role").default
         return User.objects.create_user(
             password=password,
             **validated_data,
@@ -73,7 +75,7 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         # Phase-A: Added is_superuser/is_staff for frontend world routing
         fields = ("id", "username", "email", "first_name", "last_name", "role", "avatar", "phone", "location", "email_verified", "is_superuser", "is_staff")
-        read_only_fields = ("id", "is_superuser", "is_staff")
+        read_only_fields = ("id", "role", "is_superuser", "is_staff")
 
 
 # ----------------------------------------------------------
@@ -131,7 +133,8 @@ class EmailVerificationSerializer(serializers.Serializer):
 
     def save(self):
         self.user.email_verified = True
-        self.user.email_verification_token = None
+        # The column is NOT NULL: rotate instead of clearing, so the used token is dead.
+        self.user.email_verification_token = uuid.uuid4()
         self.user.email_verification_sent_at = None
         self.user.save()
         return self.user
@@ -201,16 +204,17 @@ class UserUpdateSerializer(serializers.ModelSerializer):
 
         return value
 
+    def update(self, instance, validated_data):
+        # Record username changes so validate_username can enforce the 90-day rule.
+        if "username" in validated_data and validated_data["username"] != instance.username:
+            validated_data["username_updated_at"] = timezone.now()
+        return super().update(instance, validated_data)
+
 
 class UserSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserSettings
         fields = ["data", "updated_at"]
-
-    def update(self, instance, validated_data):
-        if validated_data.get("username") != instance.username:
-            validated_data["username_updated_at"] = timezone.now()
-        return super().update(instance, validated_data)
 
 
 # ----------------------------------------------------------

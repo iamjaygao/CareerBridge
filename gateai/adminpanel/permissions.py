@@ -7,7 +7,8 @@ def is_superadmin(user):
     """
     if not user or not user.is_authenticated:
         return False
-    return hasattr(user, 'role') and user.role == 'superadmin'
+    # The Django flag is authoritative; the role string is display data.
+    return user.is_superuser
 
 
 def is_admin_level(user):

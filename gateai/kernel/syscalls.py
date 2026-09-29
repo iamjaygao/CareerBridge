@@ -22,13 +22,12 @@ from dataclasses import dataclass
 from typing import Dict, Any, Optional
 from datetime import datetime, timedelta
 
-from django.db import transaction, IntegrityError
-from django.db.transaction import get_connection
+from django.db import connection, transaction, IntegrityError
 from django.utils import timezone
 
 from kernel.abi import classify_success, classify_failure, map_outcome_to_status, KernelOutcome, KernelErrorCode
 from kernel.idempotency_primitives import claim_idempotency_key
-from kernel.models import KernelAuditLog
+from kernel.models import KernelAuditLog, KernelIdempotencyRecord
 from decision_slots.models import ResourceLock
 
 logger = logging.getLogger(__name__)
@@ -221,50 +220,23 @@ def _update_audit(audit: KernelAuditLog, outcome: KernelOutcome) -> None:
         )
 
 
-def _cleanup_expired_lock(resource_type: str, resource_id: Any) -> bool:
+def _delete_expired_active_lock(resource_type: str, resource_id: Any, now: datetime) -> int:
     """
-    Best-effort cleanup of expired lock (shadow pre-check).
-    
-    Deletes stale lock if found, reducing false conflicts.
-    
-    Args:
-        resource_type: Resource type
-        resource_id: Resource ID
-    
-    Returns:
-        True if expired lock was deleted, False otherwise
+    Remove an expired ACTIVE lock on this resource, in the caller's transaction.
+
+    A single conditional DELETE (no read-then-write): under READ COMMITTED a
+    concurrent deleter blocks on the row lock, re-checks the WHERE clause and
+    deletes nothing. Correctness does not depend on the count; the partial
+    unique index decides who gets the resource.
     """
-    try:
-        existing = ResourceLock.objects.filter(
-            resource_type=resource_type,
-            resource_id=resource_id,
-        ).first()
-        
-        if existing and existing.is_expired:
-            logger.info(
-                "SYS_CLAIM: Cleaning up expired lock",
-                extra={
-                    "resource_type": resource_type,
-                    "resource_id": resource_id,
-                    "lock_id": existing.id,
-                    "expired_at": existing.expires_at.isoformat(),
-                },
-            )
-            existing.delete()
-            return True
-        
-        return False
-        
-    except Exception as e:
-        logger.warning(
-            "SYS_CLAIM: Expired lock cleanup failed (non-fatal)",
-            extra={
-                "resource_type": resource_type,
-                "resource_id": resource_id,
-                "error": str(e),
-            },
+    table = ResourceLock._meta.db_table
+    with connection.cursor() as cursor:
+        cursor.execute(
+            f"DELETE FROM {table} WHERE resource_type = %s AND resource_id = %s "
+            f"AND status = 'active' AND expires_at <= %s",
+            [resource_type, resource_id, now],
         )
-        return False
+        return cursor.rowcount
 
 
 # KERNEL INVARIANT:
@@ -363,212 +335,40 @@ def sys_claim(payload: Dict[str, Any]) -> SyscallResult:
             outcome_code=outcome.outcome_code,
         )
     
+    try:
+        owner_pk = int(owner_id)
+    except (TypeError, ValueError):
+        audit = _create_audit_root(payload)
+        outcome = classify_failure(
+            error_code="KERNEL/INVALID_PAYLOAD",
+            internal_reason=f"owner_id must be an integer user id, got {owner_id!r}",
+        )
+        _update_audit(audit, outcome)
+        return SyscallResult(
+            audit_id=str(audit.event_id),
+            outcome=outcome.to_dict(),
+            outcome_code=outcome.outcome_code,
+        )
+
     # Step 1: Allocate audit root (PID equivalent) FIRST
     audit = _create_audit_root(payload)
-    
+
     try:
-        # Step 2: Idempotency CAS
-        idempotency_key = f"sys_claim:{decision_id}:{context_hash}"
-        
-        claimed, idempotency_record = claim_idempotency_key(
-            idempotency_key=idempotency_key,
-            event_type="SYS_CLAIM",
-            decision_id=decision_id,
-            context_hash=context_hash,
-            event_id=str(audit.event_id),
-        )
-        
-        if not claimed:
-            # Idempotent replay detected
-            logger.info(
-                "SYS_CLAIM: Idempotent replay detected",
-                extra={
-                    "audit_id": str(audit.event_id),
-                    "decision_id": decision_id,
-                    "idempotency_key": idempotency_key,
-                },
+        # One transaction for idempotency + physical claim + final status.
+        # If the caller already has a transaction this is a savepoint, so a
+        # failure here never poisons the caller's transaction.
+        with transaction.atomic():
+            outcome = _claim_in_transaction(
+                audit=audit,
+                decision_id=decision_id,
+                context_hash=context_hash,
+                resource_type=resource_type,
+                resource_id=resource_id,
+                resource_key=resource_key,
+                owner_pk=owner_pk,
+                expires_at=expires_at,
             )
-            
-            outcome = classify_success(
-                claimed=False,
-                message="Idempotent replay - operation already completed",
-            )
-            _update_audit(audit, outcome)
-            
-            return SyscallResult(
-                audit_id=str(audit.event_id),
-                outcome=outcome.to_dict(),
-                outcome_code=outcome.outcome_code,
-            )
-        
-        # Step 3: Shadow pre-check (cleanup expired locks)
-        _cleanup_expired_lock(resource_type, resource_id)
-        
-        # Step 4 & 5: Physical claim with ZERO TOLERANCE broken transaction handling
-        # ============================================================================
-        # CRITICAL PATTERN:
-        # - NO database access inside except IntegrityError
-        # - Use flag to defer conflict vs re-entry check until AFTER atomic scope exits
-        # - Only then (in finally or after try/except) do read-only query
-        # ============================================================================
-        
-        final_outcome = None
-        needs_post_atomic_check = False
-        conflict_exception = None
-        claimed_lock_id = None
-        
-        try:
-            with transaction.atomic():
-                # KERNEL NOTE: owner_id=0 indicates system/kernel-controlled lock
-                # Semantic owner_id (from payload) is preserved in logging only
-                lock = ResourceLock.objects.create(
-                    decision_id=decision_id,
-                    resource_type=resource_type,
-                    resource_id=resource_id,
-                    resource_key=resource_key,
-                    owner_id=0,  # System owner (DB expects int, not semantic string)
-                    expires_at=expires_at,
-                    status='active',
-                )
-                
-                claimed_lock_id = lock.id
-                
-                logger.info(
-                    "SYS_CLAIM: Lock claimed successfully",
-                    extra={
-                        "audit_id": str(audit.event_id),
-                        "lock_id": lock.id,
-                        "resource_type": resource_type,
-                        "resource_id": resource_id,
-                        "owner_id": owner_id,
-                        "expires_at": expires_at.isoformat(),
-                    },
-                )
-                
-                # Success outcome (will be returned if atomic succeeds)
-                final_outcome = classify_success(
-                    claimed=True,
-                    message="Resource lock claimed successfully",
-                    lock_id=lock.id,
-                )
-        
-        except IntegrityError as e:
-            # 🚨 TRANSACTION IS BROKEN HERE
-            # ABSOLUTELY NO DATABASE ACCESS
-            # Set flag to check conflict vs re-entry AFTER atomic scope exits
-            
-            logger.warning(
-                "SYS_CLAIM: Physical conflict detected (UNIQUE constraint)",
-                extra={
-                    "audit_id": str(audit.event_id),
-                    "resource_type": resource_type,
-                    "resource_id": resource_id,
-                    "owner_id": owner_id,
-                    "error": str(e),
-                },
-            )
-            
-            needs_post_atomic_check = True
-            conflict_exception = e
-        
-        finally:
-            # ✅ SAFE ZONE: All atomic scopes have exited (or should have)
-            # DAY-3 SAFETY FIX: Check if outer atomic block still active
-            
-            if needs_post_atomic_check:
-                # TASK 1: Guard against outer transaction.atomic() decorator/caller
-                if get_connection().in_atomic_block:
-                    # 🚨 STILL IN ATOMIC BLOCK - Cannot safely query DB
-                    # Return retryable failure instead of risking broken transaction
-                    logger.error(
-                        "SYS_CLAIM: Cannot perform post-conflict check (still in atomic block)",
-                        extra={
-                            "audit_id": str(audit.event_id),
-                            "resource_type": resource_type,
-                            "resource_id": resource_id,
-                            "owner_id": owner_id,
-                            "reason": "Outer transaction.atomic() prevents safe DB query",
-                        },
-                    )
-                    
-                    final_outcome = classify_failure(
-                        error_code=KernelErrorCode.KERNEL_GENERIC_FAILURE,
-                        internal_reason="Atomic context violation: cannot distinguish conflict vs re-entry",
-                    )
-                
-                else:
-                    # ✅ SAFE: No atomic block active - can query DB
-                    
-                    # TASK 2: Precise re-entry detection query
-                    # Filter by FULL identity + ACTIVE locks only (not expired)
-                    now = timezone.now()
-                    existing = ResourceLock.objects.filter(
-                        resource_type=resource_type,
-                        resource_id=resource_id,
-                        expires_at__gt=now,  # Only ACTIVE locks (not expired)
-                        status='active',  # Only active status
-                    ).order_by('-id').first()  # Deterministic ordering (newest first)
-                    
-                    # Re-entrant detection: Same owner already holds ACTIVE lock
-                    if existing and str(existing.owner_id) == str(owner_id):
-                        logger.info(
-                            "SYS_CLAIM: Re-entrant claim detected (ownership guard)",
-                            extra={
-                                "audit_id": str(audit.event_id),
-                                "resource_type": resource_type,
-                                "resource_id": resource_id,
-                                "owner_id": owner_id,
-                                "existing_lock_id": existing.id,
-                                "existing_decision_id": existing.decision_id,
-                                "existing_expires_at": existing.expires_at.isoformat(),
-                            },
-                        )
-                        
-                        # V1 Kernel Design Decision:
-                        # Re-entry is OK for idempotency but does NOT extend TTL
-                        # to prevent stealth lease hijacking.
-                        # Same owner can claim multiple times, but expires_at is unchanged.
-                        
-                        final_outcome = classify_success(
-                            claimed=True,
-                            message="Re-entrant claim detected - owner already holds lock",
-                            existing_lock_id=existing.id,
-                            existing_decision_id=existing.decision_id,
-                        )
-                    
-                    else:
-                        # Real contention: Different owner holds lock OR no active lock found
-                        logger.warning(
-                            "SYS_CLAIM: Real contention - different owner holds lock",
-                            extra={
-                                "audit_id": str(audit.event_id),
-                                "resource_type": resource_type,
-                                "resource_id": resource_id,
-                                "requested_owner": owner_id,
-                                "holding_owner": existing.owner_id if existing else None,
-                                "holding_lock_id": existing.id if existing else None,
-                            },
-                        )
-                        
-                        final_outcome = classify_failure(
-                            resource_conflict=True,
-                            exception=conflict_exception,
-                            internal_reason=f"Lock held by owner {existing.owner_id}" if existing else "Lock conflict",
-                        )
-            
-            # TASK 3: SINGLE EXIT FUNNEL - Audit closure on ALL paths
-            # Seal audit and return (best-effort, never blocks)
-            if final_outcome:
-                _update_audit(audit, final_outcome)
-                
-                return SyscallResult(
-                    audit_id=str(audit.event_id),
-                    outcome=final_outcome.to_dict(),
-                    outcome_code=final_outcome.outcome_code,
-                )
-    
     except Exception as e:
-        # Step 6: Unexpected error (generic failure)
         logger.error(
             "SYS_CLAIM: Unexpected error",
             extra={
@@ -580,16 +380,176 @@ def sys_claim(payload: Dict[str, Any]) -> SyscallResult:
             },
             exc_info=True,
         )
-        
         outcome = classify_failure(
             exception=e,
             internal_reason=f"Unexpected syscall error: {e}",
         )
-        _update_audit(audit, outcome)
-        
-        return SyscallResult(
-            audit_id=str(audit.event_id),
-            outcome=outcome.to_dict(),
-            outcome_code=outcome.outcome_code,
+
+    _update_audit(audit, outcome)
+    return SyscallResult(
+        audit_id=str(audit.event_id),
+        outcome=outcome.to_dict(),
+        outcome_code=outcome.outcome_code,
+    )
+
+
+def _set_idempotency_status(record: KernelIdempotencyRecord, status: str) -> None:
+    record.status = status
+    record.save(update_fields=["status"])
+
+
+def _claim_in_transaction(
+    *,
+    audit: KernelAuditLog,
+    decision_id: str,
+    context_hash: str,
+    resource_type: str,
+    resource_id: Any,
+    resource_key: Optional[str],
+    owner_pk: int,
+    expires_at: datetime,
+) -> KernelOutcome:
+    """
+    Idempotency + physical claim. Must run inside transaction.atomic().
+
+    Idempotency (key = decision_id + context_hash), with the record row-locked
+    for the rest of the transaction so same-key requests are serialised:
+    - key held by a different owner          -> CONFLICT (refused)
+    - key already SUCCEEDED (same owner)     -> REPLAY
+    - key already REJECTED (a lost claim)    -> CONFLICT
+    - otherwise                              -> attempt the claim
+
+    Physical claim, relying only on database mechanisms:
+    - expired active lock removed by a conditional DELETE
+    - INSERT inside a savepoint; the partial unique index
+      (one active lock per resource) arbitrates concurrent inserts
+    - on IntegrityError the savepoint is rolled back and the holder is read
+      with SELECT ... FOR UPDATE: same owner -> re-entrant OK, else CONFLICT
+    """
+    idempotency_key = f"sys_claim:{decision_id}:{context_hash}"
+    owner = str(owner_pk)
+
+    existing_record = (
+        KernelIdempotencyRecord.objects.select_for_update()
+        .filter(idempotency_key=idempotency_key)
+        .first()
+    )
+    if existing_record and existing_record.owner_id and existing_record.owner_id != owner:
+        logger.warning(
+            "SYS_CLAIM: Idempotency key presented by a different owner",
+            extra={"audit_id": str(audit.event_id), "idempotency_key": idempotency_key},
+        )
+        return classify_failure(
+            resource_conflict=True,
+            internal_reason="Idempotency key belongs to a different owner",
         )
 
+    claimed, record = claim_idempotency_key(
+        idempotency_key=idempotency_key,
+        event_type="SYS_CLAIM",
+        decision_id=decision_id,
+        context_hash=context_hash,
+        event_id=str(audit.event_id),
+        owner_id=owner,
+    )
+    if record.pk is None:
+        # Synthetic record: the primitive could not read or create the key.
+        return classify_failure(
+            error_code=KernelErrorCode.KERNEL_GENERIC_FAILURE,
+            internal_reason=f"Idempotency claim failed: {record.failure_reason}",
+        )
+
+    now = timezone.now()
+
+    if not claimed:
+        if record.status in KernelIdempotencyRecord.SUCCESS_STATES:
+            held = ResourceLock.objects.filter(
+                resource_type=resource_type, resource_id=resource_id,
+                status="active", owner_id=owner_pk, expires_at__gt=now,
+            ).first()
+            logger.info(
+                "SYS_CLAIM: Idempotent replay detected",
+                extra={"audit_id": str(audit.event_id), "idempotency_key": idempotency_key},
+            )
+            return classify_success(
+                claimed=False,
+                message="Idempotent replay - operation already completed",
+                lock_id=held.id if held else None,
+                lock_active=held is not None,
+            )
+        if record.status == KernelIdempotencyRecord.STATUS_REJECTED:
+            return classify_failure(
+                resource_conflict=True,
+                internal_reason="Idempotent replay of a claim that lost the resource",
+            )
+        # IN_PROGRESS (left by an interrupted attempt) or FAILED: we hold the
+        # record's row lock, so it is safe to attempt the claim now.
+
+    _delete_expired_active_lock(resource_type, resource_id, now)
+
+    try:
+        with transaction.atomic():  # savepoint: an IntegrityError rolls back only this
+            lock = ResourceLock.objects.create(
+                decision_id=decision_id,
+                resource_type=resource_type,
+                resource_id=resource_id,
+                resource_key=resource_key,
+                owner_id=owner_pk,
+                expires_at=expires_at,
+                status="active",
+            )
+    except IntegrityError as e:
+        holder = (
+            ResourceLock.objects.select_for_update()
+            .filter(resource_type=resource_type, resource_id=resource_id, status="active")
+            .first()
+        )
+        if holder and holder.owner_id == owner_pk and holder.expires_at > now:
+            # Re-entry is OK but does NOT extend the TTL (no stealth lease extension).
+            logger.info(
+                "SYS_CLAIM: Re-entrant claim detected (ownership guard)",
+                extra={"audit_id": str(audit.event_id), "existing_lock_id": holder.id},
+            )
+            _set_idempotency_status(record, KernelIdempotencyRecord.STATUS_SUCCEEDED)
+            return classify_success(
+                claimed=True,
+                message="Re-entrant claim detected - owner already holds lock",
+                lock_id=holder.id,
+                existing_lock_id=holder.id,
+                existing_decision_id=holder.decision_id,
+            )
+
+        logger.warning(
+            "SYS_CLAIM: Real contention - resource held by another owner",
+            extra={
+                "audit_id": str(audit.event_id),
+                "resource_type": resource_type,
+                "resource_id": resource_id,
+                "requested_owner": owner_pk,
+                "holding_owner": holder.owner_id if holder else None,
+            },
+        )
+        _set_idempotency_status(record, KernelIdempotencyRecord.STATUS_REJECTED)
+        return classify_failure(
+            resource_conflict=True,
+            exception=e,
+            internal_reason=f"Lock held by owner {holder.owner_id}" if holder else "Lock conflict",
+        )
+
+    logger.info(
+        "SYS_CLAIM: Lock claimed successfully",
+        extra={
+            "audit_id": str(audit.event_id),
+            "lock_id": lock.id,
+            "resource_type": resource_type,
+            "resource_id": resource_id,
+            "owner_id": owner_pk,
+            "expires_at": expires_at.isoformat(),
+        },
+    )
+    _set_idempotency_status(record, KernelIdempotencyRecord.STATUS_SUCCEEDED)
+    return classify_success(
+        claimed=True,
+        message="Resource lock claimed successfully",
+        lock_id=lock.id,
+    )

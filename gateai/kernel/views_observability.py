@@ -3,9 +3,11 @@ from datetime import timezone as py_timezone
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.utils import timezone
+from kernel.access import kernel_api_view
 from kernel.models import KernelAuditLog
 from decision_slots.models import ResourceLock
 
+@kernel_api_view(['GET'])
 def audit_stream(request):
     """
     API 1: KernelAudit Live Stream
@@ -80,6 +82,7 @@ def audit_stream(request):
     return JsonResponse(results, safe=False)
 
 
+@kernel_api_view(['GET'])
 def lock_snapshot(request):
     """
     API 2: ResourceLock Snapshot
@@ -113,6 +116,7 @@ def lock_snapshot(request):
 
 
 
+@kernel_api_view(['GET'])
 def compliance_monitor(request):
     """
     API 3: Compliance Monitor (Rapid Retry Detection)
@@ -224,10 +228,11 @@ def compliance_monitor(request):
     }, safe=False)
 
 
+@kernel_api_view(['GET'])
 def kernel_pulse(request):
     """
     View: Kernel Pulse (Day-4 Constitution)
     Serves the high-fidelity observability dashboard.
     Strictly READ-ONLY.
     """
-    return render(request, 'kernel/pulse.html')
+    return render(request._request, 'kernel/pulse.html')

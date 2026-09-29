@@ -17,7 +17,7 @@ The kernel is governed by three immutable laws:
 
 ### Covered By
 - `kernel/tests/test_syscalls.py`
-- Chaos Demo scripts (`scripts/sys_claim_demo.sh`, `scripts/trigger_chaos.sh`)
+- Chaos Demo script (`scripts/sys_claim_demo.sh`)
 
 ### Verified Properties
 - Identical payloads always yield identical outcomes (OK / REPLAY).

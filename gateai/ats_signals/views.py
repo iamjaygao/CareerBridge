@@ -1683,6 +1683,7 @@ class ReferralLinkView(generics.RetrieveAPIView):
 
 class PricingView(generics.ListAPIView):
     """Pricing Information View"""
+    permission_classes = [permissions.IsAuthenticated]
     
     @swagger_auto_schema(
         operation_description="Get pricing information for all tiers"
@@ -1699,6 +1700,7 @@ class PricingView(generics.ListAPIView):
 
 class PricingDetailView(generics.RetrieveAPIView):
     """Pricing Detail View"""
+    permission_classes = [permissions.IsAuthenticated]
     
     @swagger_auto_schema(
         operation_description="Get detailed pricing for specific tier",

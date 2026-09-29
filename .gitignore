@@ -55,8 +55,9 @@ coverage.xml
 .pytest_cache/
 venv/
 careerbridge/venv/
-# Ignore user uploaded media files
+# Ignore user uploaded media files (uploads and exports: never commit)
 careerbridge/media/
+gateai/media/
 
 node_modules/
 careerbridge/node_modules/
@@ -75,3 +76,5 @@ phrase/
 # Django collectstatic output (generated at deploy time)
 gateai/staticfiles/
 careerbridge/
+# Private audit/security docs (never push)
+docs/private/

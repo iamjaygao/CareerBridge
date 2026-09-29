@@ -26,6 +26,7 @@ from django.db import transaction
 from datetime import datetime, timedelta
 
 from appointments.models import TimeSlot, Appointment, AppointmentRequest
+from decision_slots.models import ResourceLock
 from appointments.serializers import (
     TimeSlotSerializer, TimeSlotCreateSerializer
 )
@@ -49,6 +50,66 @@ def _sync_slot_bookings(slot):
     if slot.current_bookings != booked_count:
         slot.current_bookings = booked_count
         slot.save(update_fields=['current_bookings'])
+
+
+HOLD_MINUTES = 10
+
+
+def _claim_slot(slot, user, purpose, idempotency_key=None):
+    """
+    Claim the TIME_SLOT kernel lock for this slot via sys_claim (the only
+    legal locking path). Call inside the transaction holding the TimeSlot
+    row lock. Returns True if the user now holds the slot.
+    """
+    from kernel.abi import KernelOutcomeCode
+    from kernel.syscalls import sys_claim
+    import uuid
+
+    result = sys_claim({
+        'decision_id': f'booking:slot:{slot.id}',
+        'context_hash': f'{purpose}:{user.id}:{idempotency_key or uuid.uuid4().hex}',
+        'resource_type': ResourceLock.RESOURCE_TYPE_TIME_SLOT,
+        'resource_id': slot.id,
+        'owner_id': user.id,
+        'duration_seconds': HOLD_MINUTES * 60,
+    })
+    return result.outcome_code in (KernelOutcomeCode.OK, KernelOutcomeCode.REPLAY)
+
+
+def _release_slot_lock(slot, owner=None):
+    """Drop the active TIME_SLOT lock on this slot (optionally only the owner's)."""
+    if not slot:
+        return
+    locks = ResourceLock.objects.filter(
+        resource_type=ResourceLock.RESOURCE_TYPE_TIME_SLOT, resource_id=slot.id, status='active')
+    if owner is not None:
+        locks = locks.filter(owner_id=owner.id)
+    locks.delete()
+
+
+def _release_expired_hold(slot, now):
+    """If the slot's hold has expired, expire its appointment and free the slot."""
+    if slot.reserved_until and slot.reserved_until <= now:
+        if slot.reserved_appointment:
+            slot.reserved_appointment.status = 'expired'
+            slot.reserved_appointment.save(update_fields=['status'])
+        slot.is_available = True
+        slot.reserved_until = None
+        slot.reserved_appointment = None
+        slot.save(update_fields=['is_available', 'reserved_until', 'reserved_appointment'])
+        _release_slot_lock(slot)
+
+
+def _slot_unavailable_reason(slot, user, now):
+    """None if `user` may take the slot, else a 409 error message."""
+    if Appointment.objects.filter(time_slot=slot, status__in=['confirmed', 'completed']).exists():
+        return 'This time slot is already booked'
+    held = slot.reserved_appointment
+    if slot.reserved_until and slot.reserved_until > now and held and held.user_id != user.id:
+        return 'This time slot is currently locked by another user'
+    if slot.current_bookings >= slot.max_bookings:
+        return 'This time slot is fully booked'
+    return None
 
 
 def _notify_staff_appointment_cancelled(appointment) -> None:
@@ -306,6 +367,7 @@ def lock_slot(request):
                     old_slot.reserved_appointment = None
                     old_slot.save(update_fields=['is_available', 'reserved_until', 'reserved_appointment'])
                     _sync_slot_bookings(old_slot)
+                    _release_slot_lock(old_slot, owner=request.user)
                 
                 return Response({
                     'appointment': {
@@ -370,6 +432,7 @@ def lock_slot(request):
                     slot.reserved_appointment = None
                     slot.save(update_fields=['is_available', 'reserved_until', 'reserved_appointment'])
                     _sync_slot_bookings(slot)
+                    _release_slot_lock(slot, owner=request.user)
 
                 return Response({
                     'appointment': {
@@ -441,14 +504,34 @@ def lock_slot(request):
                         {'error': 'Service duration exceeds available slot'},
                         status=status.HTTP_400_BAD_REQUEST
                     )
+
+                now = timezone.now()
+                if old_slot and new_slot.id == old_slot.id:
+                    return Response(
+                        {'error': 'Appointment is already on this time slot'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # The target slot must be free (same rules as a new booking);
+                # never overwrite another user's hold or booking.
+                _release_expired_hold(new_slot, now)
+                reason = _slot_unavailable_reason(new_slot, request.user, now)
+                if reason:
+                    return Response({'error': reason}, status=status.HTTP_409_CONFLICT)
+                if not _claim_slot(new_slot, request.user, f'reschedule:{appointment.id}',
+                                   request.data.get('idempotency_key')):
+                    return Response(
+                        {'error': 'This time slot is currently locked by another user'},
+                        status=status.HTTP_409_CONFLICT
+                    )
                 
                 if old_slot:
                     old_slot.is_available = True
                     old_slot.reserved_until = None
                     old_slot.reserved_appointment = None
                     old_slot.save(update_fields=['is_available', 'reserved_until', 'reserved_appointment'])
+                    _release_slot_lock(old_slot, owner=request.user)
                 
-                now = timezone.now()
                 appointment.time_slot = new_slot
                 appointment.scheduled_start = scheduled_start
                 appointment.scheduled_end = scheduled_end
@@ -465,7 +548,7 @@ def lock_slot(request):
                 if appointment.status == 'confirmed' and appointment.is_paid:
                     new_slot.reserved_until = None
                 else:
-                    new_slot.reserved_until = now + timedelta(minutes=10)
+                    new_slot.reserved_until = now + timedelta(minutes=HOLD_MINUTES)
                 new_slot.reserved_appointment = appointment
                 new_slot.save(update_fields=['is_available', 'reserved_until', 'reserved_appointment'])
                 _sync_slot_bookings(new_slot)
@@ -590,19 +673,7 @@ def lock_slot(request):
             # ------------------------------------------------------------------
             # STEP 1: If slot has a lock but it's expired → HARD RELEASE
             # ------------------------------------------------------------------
-            if slot.reserved_until and slot.reserved_until <= now:
-                if slot.reserved_appointment:
-                    slot.reserved_appointment.status = 'expired'
-                    slot.reserved_appointment.save(update_fields=['status'])
-
-                slot.is_available = True
-                slot.reserved_until = None
-                slot.reserved_appointment = None
-                slot.save(update_fields=[
-                    'is_available',
-                    'reserved_until',
-                    'reserved_appointment',
-                ])
+            _release_expired_hold(slot, now)
 
             # ------------------------------------------------------------------
             # STEP 2: Slot still locked (not expired)
@@ -664,6 +735,12 @@ def lock_slot(request):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
+            if not _claim_slot(slot, request.user, 'create', request.data.get('idempotency_key')):
+                return Response(
+                    {'error': 'This time slot is currently locked by another user'},
+                    status=status.HTTP_409_CONFLICT
+                )
+
             appointment = Appointment.objects.create(
                 user=request.user,
                 mentor=slot.mentor,
@@ -680,7 +757,7 @@ def lock_slot(request):
             )
 
             slot.is_available = False
-            slot.reserved_until = now + timedelta(minutes=10)
+            slot.reserved_until = now + timedelta(minutes=HOLD_MINUTES)
             slot.reserved_appointment = appointment
             slot.save(update_fields=[
                 'is_available',

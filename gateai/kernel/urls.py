@@ -1,5 +1,4 @@
 from django.urls import path, include
-from django.conf import settings
 from .views import dispatch_syscall
 from .views_observability import audit_stream, lock_snapshot, kernel_pulse, compliance_monitor
 
@@ -15,9 +14,3 @@ urlpatterns = [
     path('observability/pulse', kernel_pulse, name='kernel_pulse'),
     path('observability/compliance', compliance_monitor, name='compliance_monitor'),
 ]
-
-if settings.DEBUG:
-    from .views_sandbox import atomic_trap
-    urlpatterns += [
-        path('sandbox/atomic-trap', atomic_trap, name='kernel_atomic_trap'),
-    ]

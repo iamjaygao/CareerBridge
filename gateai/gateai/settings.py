@@ -1,21 +1,31 @@
 """
 Django settings for gateai project.
 
-This file imports the appropriate settings based on the environment.
-For development, it imports from settings_dev.py
-For production, it imports from settings_prod.py
+Selects settings from the DJANGO_ENV environment variable, which is required:
+- development, test -> settings_dev
+- production        -> settings_prod
 
-To switch environments, set the DJANGO_SETTINGS_MODULE environment variable:
-- Development: export DJANGO_SETTINGS_MODULE=gateai.settings_dev
-- Production: export DJANGO_SETTINGS_MODULE=gateai.settings_prod
+There is no default. An unset or unknown value is an error, so a server that
+forgot DJANGO_ENV can never silently run with the development settings.
+
+Setting DJANGO_SETTINGS_MODULE to a specific module (as the Docker image does
+with gateai.settings_prod) bypasses this file entirely.
 """
 
 import os
 
-# Determine which settings to use based on environment
-environment = os.environ.get('DJANGO_ENV', 'development')
+_DEV_ENVS = ('development', 'test')
+_PROD_ENVS = ('production',)
 
-if environment == 'production':
+environment = os.environ.get('DJANGO_ENV')
+
+if environment in _PROD_ENVS:
     from .settings_prod import *
-else:
+elif environment in _DEV_ENVS:
     from .settings_dev import *
+else:
+    from django.core.exceptions import ImproperlyConfigured
+    raise ImproperlyConfigured(
+        f"DJANGO_ENV must be one of {', '.join(_DEV_ENVS + _PROD_ENVS)} "
+        f"(got {environment!r}). Set it explicitly; there is no default."
+    )

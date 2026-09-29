@@ -23,11 +23,13 @@ class ResourceLock(models.Model):
     RESOURCE_TYPE_APPOINTMENT = "APPOINTMENT"
     RESOURCE_TYPE_STAGING_SERVER = "STAGING_SERVER"
     RESOURCE_TYPE_API_CREDENTIAL = "API_CREDENTIAL"
+    RESOURCE_TYPE_TIME_SLOT = "TIME_SLOT"
     
     RESOURCE_TYPE_CHOICES = [
         (RESOURCE_TYPE_APPOINTMENT, "Appointment"),
         (RESOURCE_TYPE_STAGING_SERVER, "Staging Server"),
         (RESOURCE_TYPE_API_CREDENTIAL, "API Credential"),
+        (RESOURCE_TYPE_TIME_SLOT, "Time Slot"),
     ]
     
     # Core locking fields (OS ABI)
@@ -86,11 +88,13 @@ class ResourceLock(models.Model):
             models.Index(fields=['expires_at', 'status']),
             models.Index(fields=['owner_id', 'status']),
         ]
-        # Unique constraint on resource_type and resource_id
+        # Database backstop: at most one ACTIVE lock per physical resource.
+        # Released/expired rows are history and don't block re-locking.
         constraints = [
             models.UniqueConstraint(
                 fields=["resource_type", "resource_id"],
-                name="uniq_physical_resource_lock",
+                condition=models.Q(status="active"),
+                name="uniq_active_resource_lock",
             )
         ]
         ordering = ['-created_at']

@@ -14,6 +14,12 @@ class KernelObservabilityTestCase(TransactionTestCase):
     
     def setUp(self):
         self.client = Client()
+        # Kernel endpoints are superuser-only.
+        from django.contrib.auth import get_user_model
+        self._su = get_user_model().objects.create_user(
+            username='kernel_root', email='kernel_root@example.com', password='pw',
+            is_superuser=True, is_staff=True)
+        self.client.force_login(self._su)
         # Clean state
         ResourceLock.objects.all().delete()
         KernelAuditLog.objects.all().delete()
@@ -40,7 +46,7 @@ class KernelObservabilityTestCase(TransactionTestCase):
             status=KernelAuditLog.STATUS_HANDLED
         )
         
-        response = self.client.get("/kernel/observability/audit")
+        response = self.client.get("/api/v1/kernel/observability/audit")
         self.assertEqual(response.status_code, 200)
         data = response.json()
         
@@ -72,7 +78,7 @@ class KernelObservabilityTestCase(TransactionTestCase):
             payload={"request": {"resource_id": resource_id}, "abi": {"outcome_code": "OK"}}
         )
         
-        response = self.client.get("/kernel/observability/audit")
+        response = self.client.get("/api/v1/kernel/observability/audit")
         data = response.json()
         item = data[0]
         
@@ -91,7 +97,7 @@ class KernelObservabilityTestCase(TransactionTestCase):
             )
             
         # 1. Newest first (id DESC)
-        response = self.client.get("/kernel/observability/audit?limit=2")
+        response = self.client.get("/api/v1/kernel/observability/audit?limit=2")
         data = response.json()
         self.assertEqual(len(data), 2)
         self.assertEqual(data[0]["syscall_name"], "EVENT_5")
@@ -99,7 +105,7 @@ class KernelObservabilityTestCase(TransactionTestCase):
         
         # 2. since_id filter
         since_id = data[1]["id"]
-        response = self.client.get(f"/kernel/observability/audit?since_id={since_id}")
+        response = self.client.get(f"/api/v1/kernel/observability/audit?since_id={since_id}")
         data = response.json()
         self.assertEqual(len(data), 1)
         self.assertEqual(data[0]["syscall_name"], "EVENT_5")
@@ -139,13 +145,13 @@ class KernelObservabilityTestCase(TransactionTestCase):
         )
 
         # 1. active_only=true (default)
-        response = self.client.get("/kernel/observability/locks")
+        response = self.client.get("/api/v1/kernel/observability/locks")
         data = response.json()
         self.assertEqual(len(data), 1)
         self.assertEqual(data[0]["resource_id"], 1)
         
         # 2. active_only=false
-        response = self.client.get("/kernel/observability/locks?active_only=false")
+        response = self.client.get("/api/v1/kernel/observability/locks?active_only=false")
         data = response.json()
         self.assertEqual(len(data), 3)
         # Order: resource_type, resource_id
@@ -154,13 +160,13 @@ class KernelObservabilityTestCase(TransactionTestCase):
 
     def test_pulse_view_accessibility(self):
         """Verify the kernel_pulse view is accessible (returns 200)."""
-        response = self.client.get("/kernel/observability/pulse")
+        response = self.client.get("/api/v1/kernel/observability/pulse")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "GateAI Kernel Pulse")
 
     def test_compliance_monitor_endpoint_schema(self):
         """Verify compliance endpoint returns correct schema."""
-        response = self.client.get("/kernel/observability/compliance")
+        response = self.client.get("/api/v1/kernel/observability/compliance")
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertIn("window_ms", data)
@@ -199,7 +205,7 @@ class KernelObservabilityTestCase(TransactionTestCase):
         
         # 2. Check compliance monitor
         # Use a window larger than 500ms to catch it
-        response = self.client.get("/kernel/observability/compliance?window_ms=1000")
+        response = self.client.get("/api/v1/kernel/observability/compliance?window_ms=1000")
         self.assertEqual(response.status_code, 200)
         data = response.json()
         
