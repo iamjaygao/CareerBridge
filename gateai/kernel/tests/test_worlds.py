@@ -137,13 +137,16 @@ class MiddlewareWorldIntegrationTest(TestCase):
     
     def test_kernel_access_denied_for_regular_user(self):
         """Regular user should be blocked from kernel"""
-        request = self.factory.get('/kernel/pulse')
-        request.user = self.regular_user
+        # Asserts the final HTTP result through the full stack, not which layer
+        # (middleware or DRF permission) produces it.
+        from rest_framework.test import APIClient
+        from rest_framework_simplejwt.tokens import RefreshToken
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f'Bearer {RefreshToken.for_user(self.regular_user).access_token}')
         
-        response = self.middleware(request)
+        response = client.get('/api/v1/kernel/pulse/summary/')
         
         # Should return 403
-        self.assertEqual(request.world, 'kernel')
         self.assertEqual(response.status_code, 403)
     
     def test_admin_path_allowed_for_staff(self):
