@@ -16,8 +16,7 @@ from kernel.policies.bus_power import BUS_POWER_DEFAULTS, invalidate_cache
 
 # Periodic tasks are gated by the bus of the module their function belongs to.
 GATED_TASKS = {
-    # Chat's only bus today is AI_BUS (/api/v1/chat/ resolves there); pending decision.
-    'chat.tasks.notify_staff_unanswered_chats': 'AI_BUS',
+    'chat.tasks.notify_staff_unanswered_chats': 'CHAT_BUS',
     # Appointment/mentor notifications belong to the mentor module.
     'decision_slots.tasks.notify_staff_upcoming_appointments': 'MENTOR_BUS',
     'decision_slots.tasks.notify_staff_unconfirmed_appointments': 'MENTOR_BUS',
