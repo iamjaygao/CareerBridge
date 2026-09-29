@@ -2,10 +2,11 @@ from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from kernel.governance.permissions import FeatureVisibility
 
 
 class PeerMockHealthView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, FeatureVisibility]
     
     def get(self, request):
         return Response({
@@ -16,7 +17,7 @@ class PeerMockHealthView(APIView):
 
 
 class PeerMockStatusView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, FeatureVisibility]
     
     def get(self, request):
         return Response({
@@ -27,7 +28,7 @@ class PeerMockStatusView(APIView):
 
 
 class PeerMockSessionsView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, FeatureVisibility]
     
     def get(self, request):
         return Response([])

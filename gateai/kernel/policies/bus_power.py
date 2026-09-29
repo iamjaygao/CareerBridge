@@ -17,7 +17,7 @@ BUS_POWER_DEFAULTS = {
     "PUBLIC_WEB_BUS":  "OFF",
     "ADMIN_BUS":       "OFF",
     "AI_BUS":          "OFF",
-    "PEER_MOCK_BUS":   "ON",
+    "PEER_MOCK_BUS":   "OFF",  # off until the peer mock feature launches
     "MENTOR_BUS":      "OFF",
     "PAYMENT_BUS":     "OFF",
     "SEARCH_BUS":      "OFF",
@@ -98,7 +98,13 @@ def resolve_bus(path: str) -> str:
     7. Admin Bus
     8. Public Web Bus
     """
-    if path.startswith("/kernel/") or path.startswith("/superadmin/"):
+    # Kernel core: kernel API, governance, and identity (signup/login/profile).
+    # KERNEL_CORE_BUS cannot be switched off.
+    if (path.startswith("/kernel/") or
+            path.startswith("/superadmin/") or
+            path.startswith("/api/v1/kernel/") or
+            path.startswith("/api/v1/adminpanel/governance/") or
+            path.startswith("/api/v1/users/")):
         return "KERNEL_CORE_BUS"
 
     if (path.startswith("/api/v1/peer-mock/") or
@@ -130,6 +136,7 @@ def resolve_bus(path: str) -> str:
         return "SEARCH_BUS"
 
     if (path.startswith("/admin/") or
+            path.startswith("/api/v1/adminpanel/") or
             path.startswith("/staff/") or
             path.startswith("/audit/") or
             path.startswith("/ops/") or
@@ -139,12 +146,17 @@ def resolve_bus(path: str) -> str:
     if path.startswith("/") and not path.startswith("/api/"):
         return "PUBLIC_WEB_BUS"
 
+    # Public API utility endpoints (index, ping, info)
+    if path in ("/api/v1/", "/api/v1/ping/", "/api/info/"):
+        return "PUBLIC_WEB_BUS"
+
     return "UNKNOWN"
 
 
 def is_bus_powered(bus: str) -> bool:
+    # A path with no bus is refused (default deny).
     if bus == "UNKNOWN":
-        return True
+        return False
     return _get_bus_states().get(bus, "OFF") == "ON"
 
 

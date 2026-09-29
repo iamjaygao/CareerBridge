@@ -10,7 +10,8 @@ from django.utils import timezone
 from django.db.models import Count, Q
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from kernel.console.permissions import KernelPermission
+from kernel.governance.permissions import FeatureVisibility
 from rest_framework.authentication import SessionAuthentication
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
@@ -34,13 +35,11 @@ class KernelPulseSummaryView(APIView):
     - top_errors_24h: Most common errors
     
     Security:
-    - Protected by GovernanceMiddleware (kernel world check)
-    - Additional DRF permission (IsAuthenticated)
-    - Superuser-only via middleware
+    - DRF permission: superuser only (KernelPermission)
     """
     
-    authentication_classes = [SessionAuthentication, JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthentication, SessionAuthentication]
+    permission_classes = [KernelPermission, FeatureVisibility]
     
     def get(self, request):
         now = timezone.now()

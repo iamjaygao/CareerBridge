@@ -4,14 +4,14 @@ from django.conf import settings
 from django.http import JsonResponse, Http404
 from django.db import transaction
 from django.utils import timezone
-from django.views.decorators.csrf import csrf_exempt
+from kernel.access import kernel_api_view
 from kernel.syscalls import sys_claim
 from kernel.abi import KernelOutcomeCode
 from decision_slots.models import ResourceLock
 
 logger = logging.getLogger(__name__)
 
-@csrf_exempt
+@kernel_api_view(['GET', 'POST'])
 def atomic_trap(request):
     """
     Sandbox-only endpoint to trigger the atomic block guard in sys_claim.

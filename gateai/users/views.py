@@ -2,7 +2,8 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from kernel.governance.permissions import FeatureVisibility
 from .serializers import (
     RegisterSerializer, LoginSerializer, UserSerializer,
     UserUpdateSerializer, PasswordChangeSerializer, ResendVerificationSerializer,
@@ -25,6 +26,8 @@ from .models import User
 
 
 class RegisterView(APIView):
+    # Pre-login flow: must be reachable anonymously.
+    permission_classes = [AllowAny, FeatureVisibility]
     # when a frontend sends a JSON request, DRF will automatically convert it to 
     # to a python dictionary before it reaches the post(self, request) method 
     # in the view.
@@ -74,6 +77,8 @@ class RegisterView(APIView):
 # Handles user login with email and password
 #----------------------------------------------------------
 class LoginView(APIView):
+    # Pre-login flow: must be reachable anonymously.
+    permission_classes = [AllowAny, FeatureVisibility]
     # The decorator swagger here is to generate documentation showing that 
     # This API expects a request body with fields that defined in the LoginSerializer.
     # It's for decumentation only, not for logic 
@@ -105,6 +110,8 @@ class LoginView(APIView):
 # Handles password reset request via email
 #----------------------------------------------------------
 class PasswordResetRequestView(APIView):
+    # Pre-login flow: must be reachable anonymously.
+    permission_classes = [AllowAny, FeatureVisibility]
     @swagger_auto_schema(
         operation_description="Request password reset via email",
         request_body=PasswordResetRequestSerializer,
@@ -135,6 +142,8 @@ class PasswordResetRequestView(APIView):
 # Handles password reset with token
 #----------------------------------------------------------
 class PasswordResetView(APIView):
+    # Pre-login flow: must be reachable anonymously.
+    permission_classes = [AllowAny, FeatureVisibility]
     @swagger_auto_schema(
         operation_description="Reset password using reset token",
         request_body=PasswordResetSerializer,
@@ -164,6 +173,8 @@ class PasswordResetView(APIView):
 # Handles resending verification emails
 #----------------------------------------------------------
 class ResendVerificationView(APIView):
+    # Pre-login flow: must be reachable anonymously.
+    permission_classes = [AllowAny, FeatureVisibility]
     @swagger_auto_schema(
         operation_description="Resend verification email",
         request_body=ResendVerificationSerializer,
@@ -190,6 +201,8 @@ class ResendVerificationView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class RequestVerificationView(APIView):
+    # Pre-login flow: must be reachable anonymously.
+    permission_classes = [AllowAny, FeatureVisibility]
     @swagger_auto_schema(
         operation_description="Request verification email",
         request_body=ResendVerificationSerializer,
@@ -216,6 +229,8 @@ class RequestVerificationView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class EmailVerificationView(APIView):
+    # Pre-login flow: must be reachable anonymously.
+    permission_classes = [AllowAny, FeatureVisibility]
     @swagger_auto_schema(
         operation_description="Verify email using token",
         request_body=EmailVerificationSerializer,
@@ -242,6 +257,8 @@ class EmailVerificationView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class PasswordResetConfirmView(APIView):
+    # Pre-login flow: must be reachable anonymously.
+    permission_classes = [AllowAny, FeatureVisibility]
     @swagger_auto_schema(
         operation_description="Reset password using reset token",
         request_body=PasswordResetSerializer,
@@ -274,7 +291,7 @@ class PasswordResetConfirmView(APIView):
 class UserView(APIView):
     #  Import the built-in permission class from DRF,which means 
     #  This API can only be accessed by authenticaed (logged in) users.
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, FeatureVisibility]
     
     @swagger_auto_schema(
         operation_description="Get current user profile information",
@@ -315,7 +332,7 @@ class UserView(APIView):
 
 
 class UserSettingsView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, FeatureVisibility]
 
     def get(self, request):
         settings_obj, _ = UserSettings.objects.get_or_create(user=request.user)
@@ -335,7 +352,7 @@ class UserSettingsView(APIView):
 # Handles checking username modification status
 #----------------------------------------------------------
 class UsernameChangeStatusView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, FeatureVisibility]
     
     @swagger_auto_schema(
         operation_description="Check if user can change username and days remaining",
@@ -375,7 +392,7 @@ class UsernameChangeStatusView(APIView):
 # Handles password updates with validation
 #----------------------------------------------------------
 class PasswordChangeView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, FeatureVisibility]
     @swagger_auto_schema(
         request_body=PasswordChangeSerializer,
         responses={
@@ -404,7 +421,7 @@ class PasswordChangeView(APIView):
 # Handles avatar uploads with validation
 #----------------------------------------------------------
 class AvatarUploadView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, FeatureVisibility]
     parser_classes = [MultiPartParser, FormParser]
 
     @swagger_auto_schema(
@@ -457,6 +474,8 @@ class AvatarUploadView(APIView):
 # Handles JWT token refresh
 #----------------------------------------------------------
 class RefreshTokenView(TokenRefreshView):
+    # Token refresh carries no access token; the refresh token is the credential.
+    permission_classes = [AllowAny, FeatureVisibility]
     @swagger_auto_schema(
         operation_description="Refresh JWT access token using refresh token",
         request_body=openapi.Schema(

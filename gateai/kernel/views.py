@@ -1,13 +1,11 @@
 import json
 import uuid
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_POST
+from kernel.access import kernel_api_view
 from kernel.syscalls import sys_claim
 from kernel.abi import KernelOutcomeCode
 
-@csrf_exempt
-@require_POST
+@kernel_api_view(['POST'])
 def dispatch_syscall(request):
     """
     Hardened HTTP entrypoint for GateAI Kernel syscalls.

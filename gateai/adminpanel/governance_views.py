@@ -23,6 +23,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import PermissionDenied, NotFound, ValidationError
 from django.shortcuts import get_object_or_404
 from kernel.governance.models import PlatformState, FeatureFlag, GovernanceAudit
+from kernel.governance.permissions import FeatureVisibility
 
 
 class IsSuperUser(IsAuthenticated):
@@ -49,7 +50,7 @@ class PlatformStateView(APIView):
     SuperAdmin only.
     """
     
-    permission_classes = [IsSuperUser]
+    permission_classes = [IsSuperUser, FeatureVisibility]
     
     def get(self, request):
         """Get current platform state"""
@@ -141,7 +142,7 @@ class FeatureFlagListView(APIView):
     SuperAdmin only.
     """
     
-    permission_classes = [IsSuperUser]
+    permission_classes = [IsSuperUser, FeatureVisibility]
     
     def get(self, request):
         """List all feature flags"""
@@ -170,7 +171,7 @@ class FeatureFlagDetailView(APIView):
     SuperAdmin only.
     """
     
-    permission_classes = [IsSuperUser]
+    permission_classes = [IsSuperUser, FeatureVisibility]
     
     def get(self, request, key):
         """Get feature flag by key"""
