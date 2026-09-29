@@ -104,7 +104,8 @@ def resolve_bus(path: str) -> str:
             path.startswith("/superadmin/") or
             path.startswith("/api/v1/kernel/") or
             path.startswith("/api/v1/adminpanel/governance/") or
-            path.startswith("/api/v1/users/")):
+            path.startswith("/api/v1/users/") or
+            path == "/health/"):  # load balancer / Docker healthcheck: never switched off
         return "KERNEL_CORE_BUS"
 
     if (path.startswith("/api/v1/peer-mock/") or
