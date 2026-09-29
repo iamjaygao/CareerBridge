@@ -101,6 +101,13 @@ class BrokerSettingsTest(SimpleTestCase):
             'SECRET_KEY': 'x', 'ALLOWED_HOSTS': 'h', 'CORS_ALLOWED_ORIGINS': 'https://h',
             'CSRF_TRUSTED_ORIGINS': 'https://h', 'DATABASE_URL': 'postgresql://a:b@db:5432/app',
             'REDIS_URL': 'redis://redis:6379/0', 'CELERY_BROKER_URL': 'redis://redis:6379/3',
+            # Fake SMTP settings (required by settings_prod since M3; never used to send).
+            'EMAIL_HOST': 'smtp.example.invalid',
+            'EMAIL_PORT': '587',
+            'EMAIL_HOST_USER': 'test',
+            'EMAIL_HOST_PASSWORD': 'test-only-not-real',
+            'EMAIL_USE_TLS': 'true',
+            'DEFAULT_FROM_EMAIL': 'test@example.invalid',
         }
         code = ('import django; django.setup(); from django.conf import settings as s; '
                 'print(s.CELERY_BROKER_URL); print(s.CACHES["default"]["BACKEND"])')
