@@ -227,7 +227,7 @@ const WorkloadRuntimeConsolePage: React.FC = () => {
     return (
       <Box>
         <Alert severity="error" sx={{ mb: 2 }}>
-          <Typography variant="h6">Failed to Load Bus Registry</Typography>
+          <Typography variant="h6">Failed to Load Registry</Typography>
           <Typography variant="body2">{error}</Typography>
           <Typography variant="caption" sx={{ mt: 1, display: 'block' }}>
             Make sure you've run: <code>node scripts/build_frozen_registry.mjs && ./scripts/sync_registry_to_frontend.sh</code>

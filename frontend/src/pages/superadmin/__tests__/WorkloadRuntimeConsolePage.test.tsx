@@ -14,6 +14,15 @@ import WorkloadRuntimeConsolePage from '../WorkloadRuntimeConsolePage';
 // Mock fetch
 global.fetch = jest.fn();
 
+// The page also loads live bus states from the kernel API.
+jest.mock('../../../services/api/client', () => ({
+  __esModule: true,
+  default: {
+    get: jest.fn(() => Promise.resolve({ data: [{ bus_name: 'AI_BUS', state: 'OFF' }] })),
+    patch: jest.fn(),
+  },
+}));
+
 describe('WorkloadRuntimeConsolePage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
