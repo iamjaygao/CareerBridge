@@ -14,18 +14,22 @@ from django.test import SimpleTestCase, TestCase
 from kernel.governance.models import BusPowerState
 from kernel.policies.bus_power import BUS_POWER_DEFAULTS, invalidate_cache
 
-# Periodic tasks of modules that are not launched, and the bus that gates each.
+# Periodic tasks are gated by the bus of the module their function belongs to.
 GATED_TASKS = {
+    # Chat's only bus today is AI_BUS (/api/v1/chat/ resolves there); pending decision.
     'chat.tasks.notify_staff_unanswered_chats': 'AI_BUS',
-    'decision_slots.tasks.notify_staff_upcoming_appointments': 'AI_BUS',
-    'decision_slots.tasks.notify_staff_unconfirmed_appointments': 'AI_BUS',
-    'decision_slots.tasks.notify_staff_missing_mentor_feedback': 'AI_BUS',
-    'decision_slots.tasks.notify_admin_slot_conflicts': 'AI_BUS',
+    # Appointment/mentor notifications belong to the mentor module.
+    'decision_slots.tasks.notify_staff_upcoming_appointments': 'MENTOR_BUS',
+    'decision_slots.tasks.notify_staff_unconfirmed_appointments': 'MENTOR_BUS',
+    'decision_slots.tasks.notify_staff_missing_mentor_feedback': 'MENTOR_BUS',
+    'decision_slots.tasks.notify_admin_slot_conflicts': 'MENTOR_BUS',
     'adminpanel.tasks.notify_admin_payment_success_drop': 'PAYMENT_BUS',
     'adminpanel.tasks.notify_admin_metric_anomaly': 'ADMIN_BUS',
     'adminpanel.tasks.notify_admin_risk_alerts': 'ADMIN_BUS',
-    'adminpanel.tasks.notify_superadmin_system_alerts': 'ADMIN_BUS',
+    # System alerts to superadmins always run (KERNEL_CORE_BUS cannot be switched off).
+    'adminpanel.tasks.notify_superadmin_system_alerts': 'KERNEL_CORE_BUS',
 }
+ALWAYS_ON = {'KERNEL_CORE_BUS'}
 
 
 def load_task(dotted):
@@ -67,9 +71,19 @@ class BusGatedTasksTest(TestCase):
 
     def test_gated_task_does_nothing_while_its_bus_is_off(self):
         for dotted, bus in GATED_TASKS.items():
+            if bus in ALWAYS_ON:
+                continue
             with self.subTest(task=dotted):
                 self.set_bus(bus, 'OFF')
                 self.assertEqual(load_task(dotted).run(*self.args_for(dotted)), 'skipped: bus off')
+
+    def test_superadmin_alerts_run_with_every_other_bus_off(self):
+        BusPowerState.objects.all().delete()
+        BusPowerState.objects.bulk_create([BusPowerState(bus_name=n, state='ON' if n == 'KERNEL_CORE_BUS' else 'OFF')
+                                           for n in BUS_POWER_DEFAULTS])
+        invalidate_cache()
+        task = load_task('adminpanel.tasks.notify_superadmin_system_alerts')
+        self.assertNotEqual(task.run(), 'skipped: bus off')
 
     @staticmethod
     def args_for(dotted):
