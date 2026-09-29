@@ -78,5 +78,10 @@
     "svgo": "^2.8.4",
     "serialize-javascript": "^7.1.2",
     "underscore": "^1.13.8"
+  },
+  "jest": {
+    "moduleNameMapper": {
+      "^react-router/dom$": "<rootDir>/node_modules/react-router/dist/development/dom-export.js"
+    }
   }
 }

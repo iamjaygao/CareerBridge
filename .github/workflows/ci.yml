@@ -226,5 +226,7 @@ jobs:
         run: npm ci --legacy-peer-deps
       - name: Lint (blocks on errors, incl. jsx-a11y accessibility rules)
         run: npm run lint
+      - name: Unit tests (jest)
+        run: CI=true npx react-scripts test --watchAll=false
       - name: Build
         run: CI=false npm run build
