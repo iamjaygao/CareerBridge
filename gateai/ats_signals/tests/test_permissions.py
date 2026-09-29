@@ -13,8 +13,21 @@ from django.utils import timezone
 
 from ats_signals.models import ATSSignal
 from human_loop.models import HumanReviewTask
+from kernel.governance.models import BusPowerState, FeatureFlag, PlatformState
+from kernel.policies.bus_power import BUS_POWER_DEFAULTS, invalidate_cache
 
 User = get_user_model()
+
+
+def seed_governance(**buses):
+    BusPowerState.objects.all().delete()
+    BusPowerState.objects.bulk_create(
+        [BusPowerState(bus_name=n, state=s) for n, s in {**BUS_POWER_DEFAULTS, **buses}.items()])
+    invalidate_cache()
+    PlatformState.objects.get_or_create(
+        defaults={'state': 'SINGLE_WORKLOAD', 'active_workloads': [], 'frozen_modules': [], 'reason': 't'})
+    for key in ('ATS_SIGNALS', 'HUMAN_LOOP'):
+        FeatureFlag.objects.update_or_create(key=key, defaults={'state': 'ON', 'visibility': 'user', 'reason': 't'})
 
 
 class ATSSignalPermissionsTest(TestCase):
@@ -22,6 +35,10 @@ class ATSSignalPermissionsTest(TestCase):
     
     def setUp(self):
         """Set up test fixtures."""
+        # Power the AI and mentor buses and initialise governance, so requests
+        # reach the views' own permission checks (not a bus/governance 404).
+        seed_governance(AI_BUS='ON', MENTOR_BUS='ON')
+        self.addCleanup(invalidate_cache)
         self.client = APIClient()
         
         # Create two users
@@ -207,4 +224,26 @@ class ATSSignalPermissionsTest(TestCase):
         # Should only return signals for user A's allowed slots
         # Since we're using context_data workaround, it should return signals with user_id in details
         self.assertGreaterEqual(data['total_count'], 0)
+
+
+class ATSSignalBusOffControlTest(TestCase):
+    """Control for ATSSignalPermissionsTest: with the buses OFF, the same
+    endpoints are hidden (404) even for their owner and for staff."""
+
+    def setUp(self):
+        ATSSignalPermissionsTest.setUp(self)  # same fixture, not the same tests
+        seed_governance(AI_BUS='OFF', MENTOR_BUS='OFF')
+
+    def test_endpoints_are_404_when_buses_are_off(self):
+        paths = [
+            f'/api/v1/ats-signals/ats-signals/?decision_slot_id={self.slot_a}',
+            f'/api/v1/ats-signals/ats-signals/{self.signal_a1.id}/',
+            f'/api/v1/human-loop/review-tasks/?decision_slot_id={self.slot_a}',
+            f'/api/v1/human-loop/review-tasks/{self.review_task_a.id}/',
+        ]
+        for user in (self.user_a, self.staff_user):
+            for path in paths:
+                with self.subTest(user=user.username, path=path):
+                    self.client.force_authenticate(user=user)
+                    self.assertEqual(self.client.get(path).status_code, 404)
 

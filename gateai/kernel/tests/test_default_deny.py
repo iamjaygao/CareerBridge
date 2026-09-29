@@ -23,7 +23,7 @@ from kernel.policies.bus_power import resolve_bus
 
 User = get_user_model()
 
-KERNEL_PREFIXES = ['/kernel/', '/api/v1/kernel/']
+KERNEL_PREFIXES = ['/api/v1/kernel/']  # the only kernel mount
 
 
 def routed_paths(prefix=''):
@@ -60,7 +60,7 @@ class KernelEndpointsRequireAuthTest(TestCase):
         paths = kernel_endpoint_paths()
         self.assertIn('/api/v1/kernel/observability/audit', paths)
         self.assertIn('/api/v1/kernel/dispatch', paths)
-        self.assertIn('/kernel/dispatch', paths)
+        self.assertIn('/api/v1/kernel/console/buses/', paths)
 
     def test_anonymous_gets_401_on_every_kernel_endpoint(self):
         client = jwt_client()
@@ -78,7 +78,7 @@ class KernelEndpointsRequireAuthTest(TestCase):
                 'resource_id': 1, 'owner_id': 1, 'duration_seconds': 60,
             },
         }
-        for path in ('/kernel/dispatch', '/api/v1/kernel/dispatch'):
+        for path in ('/api/v1/kernel/dispatch',):
             with self.subTest(path=path):
                 jwt_client().post(path, body, format='json')
                 self.assertEqual(ResourceLock.objects.count(), 0)
@@ -138,6 +138,19 @@ class UnknownBusDeniedTest(SimpleTestCase):
         response = middleware(RequestFactory().get(path))
         self.assertEqual(response.status_code, 404)
 
+    # Routes deliberately left without a bus (so refused) until their milestone.
+    UNMAPPED_BY_DECISION = {
+        '/api/v1/services/metrics/': 'M3.3 rebuilds metrics',
+    }
+
     def test_every_routed_url_maps_to_a_known_bus(self):
         unknown = sorted({p for p in routed_paths() if resolve_bus(p) == 'UNKNOWN'})
-        self.assertEqual(unknown, [], 'routes with no bus would be refused')
+        unexpected = [p for p in unknown if p not in self.UNMAPPED_BY_DECISION]
+        self.assertEqual(unexpected, [], 'routes with no bus would be refused')
+
+    def test_unmapped_by_decision_routes_are_refused(self):
+        for path in self.UNMAPPED_BY_DECISION:
+            with self.subTest(path=path):
+                self.assertEqual(resolve_bus(path), 'UNKNOWN')
+                middleware = GovernanceMiddleware(lambda request: HttpResponse('reached view'))
+                self.assertEqual(middleware(RequestFactory().get(path)).status_code, 404)

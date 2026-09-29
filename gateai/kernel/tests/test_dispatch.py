@@ -13,7 +13,13 @@ class KernelDispatchTestCase(TransactionTestCase):
     
     def setUp(self):
         self.client = Client()
-        self.url = "/kernel/dispatch"
+        # Kernel endpoints are superuser-only.
+        from django.contrib.auth import get_user_model
+        self._su = get_user_model().objects.create_user(
+            username='kernel_root', email='kernel_root@example.com', password='pw',
+            is_superuser=True, is_staff=True)
+        self.client.force_login(self._su)
+        self.url = "/api/v1/kernel/dispatch"
         # Ensure clean state
         ResourceLock.objects.all().delete()
 

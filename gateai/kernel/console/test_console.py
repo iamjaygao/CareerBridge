@@ -65,7 +65,7 @@ class KernelConsoleAccessTest(TestCase):
     def test_superuser_can_access_status(self):
         """Superuser should be able to access kernel console status"""
         self.client.force_login(self.superuser)
-        response = self.client.get('/kernel/console/status/')
+        response = self.client.get('/api/v1/kernel/console/status/')
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertTrue(data['kernel_online'])
@@ -74,7 +74,7 @@ class KernelConsoleAccessTest(TestCase):
     def test_superuser_can_access_flags(self):
         """Superuser should be able to view feature flags"""
         self.client.force_login(self.superuser)
-        response = self.client.get('/kernel/console/flags/')
+        response = self.client.get('/api/v1/kernel/console/flags/')
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertIsInstance(data, list)
@@ -82,7 +82,7 @@ class KernelConsoleAccessTest(TestCase):
     def test_superuser_can_access_world_map(self):
         """Superuser should be able to view world map"""
         self.client.force_login(self.superuser)
-        response = self.client.get('/kernel/console/world-map/')
+        response = self.client.get('/api/v1/kernel/console/world-map/')
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertIn('worlds', data)
@@ -91,7 +91,7 @@ class KernelConsoleAccessTest(TestCase):
     def test_superuser_can_access_users(self):
         """Superuser should be able to view superuser list"""
         self.client.force_login(self.superuser)
-        response = self.client.get('/kernel/console/users/')
+        response = self.client.get('/api/v1/kernel/console/users/')
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertIsInstance(data, list)
@@ -100,19 +100,19 @@ class KernelConsoleAccessTest(TestCase):
     def test_staff_user_denied_access(self):
         """Staff user (non-superuser) should be denied access"""
         self.client.force_login(self.staff_user)
-        response = self.client.get('/kernel/console/status/')
+        response = self.client.get('/api/v1/kernel/console/status/')
         self.assertEqual(response.status_code, 403)
     
     def test_regular_user_denied_access(self):
         """Regular user should be denied access"""
         self.client.force_login(self.regular_user)
-        response = self.client.get('/kernel/console/status/')
+        response = self.client.get('/api/v1/kernel/console/status/')
         self.assertEqual(response.status_code, 403)
     
     def test_unauthenticated_denied_access(self):
         """Unauthenticated request should be denied access"""
-        response = self.client.get('/kernel/console/status/')
-        self.assertEqual(response.status_code, 403)
+        response = self.client.get('/api/v1/kernel/console/status/')
+        self.assertEqual(response.status_code, 401)
 
 
 class KernelConsoleOperationsTest(TestCase):
@@ -162,7 +162,7 @@ class KernelConsoleOperationsTest(TestCase):
             'FLAG_B': 'BETA'
         }
         response = self.client.post(
-            '/kernel/console/flags/',
+            '/api/v1/kernel/console/flags/',
             data=json.dumps(payload),
             content_type='application/json'
         )
@@ -181,7 +181,7 @@ class KernelConsoleOperationsTest(TestCase):
             'FLAG_A': 'INVALID_STATE'
         }
         response = self.client.post(
-            '/kernel/console/flags/',
+            '/api/v1/kernel/console/flags/',
             data=json.dumps(payload),
             content_type='application/json'
         )
@@ -193,7 +193,7 @@ class KernelConsoleOperationsTest(TestCase):
     
     def test_status_returns_platform_info(self):
         """Status endpoint should return complete platform info"""
-        response = self.client.get('/kernel/console/status/')
+        response = self.client.get('/api/v1/kernel/console/status/')
         self.assertEqual(response.status_code, 200)
         
         data = response.json()
@@ -223,14 +223,14 @@ class KernelConsoleWorldIntegrationTest(TestCase):
     
     def test_kernel_world_detected(self):
         """Kernel console should be detected as kernel world"""
-        response = self.client.get('/kernel/console/status/')
+        response = self.client.get('/api/v1/kernel/console/status/')
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(data['world'], 'kernel')
     
     def test_world_map_shows_all_worlds(self):
         """World map should show all 4 worlds"""
-        response = self.client.get('/kernel/console/world-map/')
+        response = self.client.get('/api/v1/kernel/console/world-map/')
         self.assertEqual(response.status_code, 200)
         data = response.json()
         

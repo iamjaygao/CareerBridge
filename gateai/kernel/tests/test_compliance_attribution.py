@@ -18,6 +18,12 @@ class ComplianceAttributionTestCase(TransactionTestCase):
     
     def setUp(self):
         self.client = Client()
+        # Kernel endpoints are superuser-only.
+        from django.contrib.auth import get_user_model
+        self._su = get_user_model().objects.create_user(
+            username='kernel_root', email='kernel_root@example.com', password='pw',
+            is_superuser=True, is_staff=True)
+        self.client.force_login(self._su)
         KernelAuditLog.objects.all().delete()
 
     # --- TASK A & B: SDK ENFORCEMENT & HASHING ---
@@ -97,7 +103,7 @@ class ComplianceAttributionTestCase(TransactionTestCase):
             }
         )
         
-        response = self.client.get("/kernel/observability/compliance?window_ms=2000")
+        response = self.client.get("/api/v1/kernel/observability/compliance?window_ms=2000")
         self.assertEqual(response.status_code, 200)
         data = response.json()
         

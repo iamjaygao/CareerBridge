@@ -112,9 +112,9 @@ class TestBusPowerState(_FreshBusStateTestCase):
             assert get_bus_state(bus) == 'OFF', f'{bus} should be OFF'
             assert is_bus_powered(bus) is False, f'{bus} should not be powered'
     
-    def test_unknown_bus_is_powered(self):
-        """UNKNOWN bus should be powered (fail-open)"""
-        assert is_bus_powered('UNKNOWN') is True
+    def test_unknown_bus_is_refused(self):
+        """UNKNOWN bus is refused (default deny)"""
+        assert is_bus_powered('UNKNOWN') is False
     
     def test_get_all_buses(self):
         """get_all_buses should return all bus states"""

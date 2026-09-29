@@ -12,6 +12,7 @@ import time
 from django.test import TestCase, Client, override_settings
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+from rest_framework_simplejwt.tokens import RefreshToken
 from kernel.governance.models import PlatformState, FeatureFlag, GovernanceAudit
 
 User = get_user_model()
@@ -156,7 +157,7 @@ class GovernanceAPITest(TestCase):
     
     def test_superuser_can_access_governance_api(self):
         """Test that superuser can access governance APIs"""
-        self.client.login(username='superadmin', password='testpass123')
+        self.client.defaults['HTTP_AUTHORIZATION'] = 'Bearer ' + str(RefreshToken.for_user(self.superuser).access_token)
         
         response = self.client.get('/api/v1/adminpanel/governance/platform-state/')
         self.assertEqual(response.status_code, 200)
@@ -166,7 +167,7 @@ class GovernanceAPITest(TestCase):
     
     def test_staff_cannot_access_governance_api(self):
         """Test that staff (non-superuser) cannot access governance APIs"""
-        self.client.login(username='staff', password='testpass123')
+        self.client.defaults['HTTP_AUTHORIZATION'] = 'Bearer ' + str(RefreshToken.for_user(self.staff_user).access_token)
         
         response = self.client.get('/api/v1/adminpanel/governance/platform-state/')
         self.assertEqual(response.status_code, 403, 
@@ -177,7 +178,7 @@ class GovernanceAPITest(TestCase):
     
     def test_feature_flag_update_increments_version(self):
         """Test that updating a feature flag increments governance_version"""
-        self.client.login(username='superadmin', password='testpass123')
+        self.client.defaults['HTTP_AUTHORIZATION'] = 'Bearer ' + str(RefreshToken.for_user(self.superuser).access_token)
         
         old_version = self.platform_state.governance_version
         
@@ -206,7 +207,7 @@ class GovernanceAPITest(TestCase):
     
     def test_governance_update_requires_reason(self):
         """Test that all governance updates require a reason"""
-        self.client.login(username='superadmin', password='testpass123')
+        self.client.defaults['HTTP_AUTHORIZATION'] = 'Bearer ' + str(RefreshToken.for_user(self.superuser).access_token)
         
         # Try to update without reason
         response = self.client.patch(

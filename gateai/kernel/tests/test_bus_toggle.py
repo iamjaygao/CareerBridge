@@ -12,7 +12,7 @@ from kernel.policies.bus_power import BUS_POWER_DEFAULTS, invalidate_cache
 
 User = get_user_model()
 
-TOGGLE_URLS = ['/kernel/console/buses/', '/api/v1/kernel/console/buses/']
+TOGGLE_URLS = ['/api/v1/kernel/console/buses/']  # the only kernel mount
 ADMIN_URL = '/admin/'
 
 
