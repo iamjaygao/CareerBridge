@@ -118,6 +118,15 @@ jobs:
           grep '^METRICS_TOKEN=' .env | cut -d= -f2 | tr -d '\n' > monitoring/metrics_token
           chmod 644 monitoring/metrics_token   # read by the prometheus container user
 
+      - name: Start memory sampler (docker stats every 2s, whole job)
+        run: |
+          nohup bash -c 'while true; do
+            ts=$(date +%s)
+            docker stats --no-stream --format "{{.Name}}\t{{.MemUsage}}" 2>/dev/null | sed "s/^/$ts\t/"
+            sleep 2
+          done' > /tmp/mem_samples.tsv 2>/dev/null &
+          echo $! > /tmp/mem_sampler.pid
+
       - name: docker compose up (wait for healthchecks)
         run: $COMPOSE up -d --build --wait --wait-timeout 900
 
@@ -181,6 +190,21 @@ jobs:
           scripts/ops/restore_postgres.sh /tmp/backup.dump careerbridge_restore
           scripts/ops/db_fingerprint.sh careerbridge_restore > /tmp/fp_restored.txt
           diff /tmp/fp_live.txt /tmp/fp_restored.txt && echo "restored database is identical"
+
+      - name: Container memory report (peak per container and total)
+        if: always()
+        run: |
+          kill "$(cat /tmp/mem_sampler.pid)" 2>/dev/null || true
+          # True peaks from cgroup v2, when the kernel exposes memory.peak.
+          : > /tmp/mem_cgroup_peak.tsv
+          for id in $(docker ps -q); do
+            name=$(docker inspect -f '{{.Name}}' "$id" | sed 's#^/##')
+            full=$(docker inspect -f '{{.Id}}' "$id")
+            f=$(ls /sys/fs/cgroup/system.slice/docker-"$full".scope/memory.peak 2>/dev/null || true)
+            [ -n "$f" ] && printf '%s\t%s\n' "$name" "$(cat "$f")" >> /tmp/mem_cgroup_peak.tsv
+          done
+          python3 scripts/ci/memory_report.py /tmp/mem_samples.tsv /tmp/mem_cgroup_peak.tsv | tee /tmp/mem_report.md
+          { echo "### Container memory (stack job)"; cat /tmp/mem_report.md; } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Stack status and logs
         if: failure()
