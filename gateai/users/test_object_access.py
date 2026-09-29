@@ -7,11 +7,13 @@ input (query params, body fields, tokens) and assert B is untouched.
 """
 
 import io
+import shutil
+import tempfile
 import uuid
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from PIL import Image
 from rest_framework.test import APIClient
@@ -28,6 +30,12 @@ PASSWORD_B = 'Bravo-Passw0rd!'
 
 class ObjectAccessBase(TestCase):
     def setUp(self):
+        # Uploaded files go to a throwaway MEDIA_ROOT, never the repo's media/.
+        media_root = tempfile.mkdtemp(prefix='test-media-')
+        self.addCleanup(shutil.rmtree, media_root, ignore_errors=True)
+        media_override = override_settings(MEDIA_ROOT=media_root)
+        media_override.enable()
+        self.addCleanup(media_override.disable)
         self.a = User.objects.create_user(username='alice', email='alice@example.com', password=PASSWORD_A)
         self.b = User.objects.create_user(username='bob', email='bob@example.com', password=PASSWORD_B,
                                           first_name='Bob', phone='555-0100', location='Boston')
