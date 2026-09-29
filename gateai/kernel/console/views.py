@@ -13,7 +13,7 @@ from django.contrib.auth import get_user_model
 from kernel.console.permissions import KernelPermission
 from kernel.governance.models import FeatureFlag, PlatformState, BusPowerState, GovernanceAudit
 from kernel.worlds import WORLD_NAMESPACES
-from kernel.policies.bus_power import BUS_POWER_DEFAULTS, invalidate_cache
+from kernel.policies.bus_power import BUS_POWER_DEFAULTS
 
 User = get_user_model()
 
@@ -242,7 +242,7 @@ class KernelBusPowerView(APIView):
 
             # Write audit log
             GovernanceAudit.objects.create(
-                action="MODULE_ENABLE" if new_state == "ON" else "MODULE_DISABLE",
+                action="BUS_ENABLE" if new_state == "ON" else "BUS_DISABLE",
                 payload={"bus": bus_name, "old_state": old_state, "new_state": new_state},
                 reason=f"Bus power changed via kernel console by {request.user.username}",
                 actor=request.user,
@@ -250,8 +250,6 @@ class KernelBusPowerView(APIView):
             )
             updated.append({"bus_name": bus_name, "state": new_state})
 
-        # Invalidate in-process cache so next request picks up new values
-        invalidate_cache()
 
         return Response({
             "updated": updated,

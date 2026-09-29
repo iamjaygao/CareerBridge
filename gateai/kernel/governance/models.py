@@ -248,6 +248,8 @@ class GovernanceAudit(models.Model):
         ('WORKLOAD_FREEZE', 'Workload Frozen'),
         ('MODULE_ENABLE', 'Module Enabled'),
         ('MODULE_DISABLE', 'Module Disabled'),
+        ('BUS_ENABLE', 'Bus Powered On'),
+        ('BUS_DISABLE', 'Bus Powered Off'),
     ]
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

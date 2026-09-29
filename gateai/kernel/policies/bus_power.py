@@ -7,7 +7,6 @@ Only SuperAdmin can modify via /kernel/console/buses/.
 Falls back to hardcoded defaults when DB is unavailable (startup safety).
 """
 
-import time
 import logging
 
 logger = logging.getLogger(__name__)
@@ -26,12 +25,6 @@ BUS_POWER_DEFAULTS = {
 
 # Keep BUS_POWER as alias so existing imports don't break
 BUS_POWER = BUS_POWER_DEFAULTS
-
-# ── In-process cache ──────────────────────────────────────────────────────────
-_cache: dict = {}
-_cache_ts: float = 0.0
-_CACHE_TTL: int = 5  # seconds
-
 
 def _load_from_db() -> dict | None:
     """
@@ -68,32 +61,27 @@ def _seed_db_if_empty() -> None:
 
 def _get_bus_states() -> dict:
     """
-    Return current bus states with 5-second in-process cache.
+    Return current bus states, read from the DB on every call.
+
+    Not cached in-process: the DB row is the only state shared by all
+    workers, so a toggle is visible to the very next request everywhere.
+    It is one query over at most 8 rows.
     Falls back to hardcoded defaults if DB is unavailable.
     """
-    global _cache, _cache_ts
-
-    now = time.time()
-    if _cache and (now - _cache_ts) < _CACHE_TTL:
-        return _cache
-
-    _seed_db_if_empty()
     states = _load_from_db()
+    if states is None:
+        _seed_db_if_empty()
+        states = _load_from_db()
 
     if states:
-        _cache = states
-        _cache_ts = now
         return states
 
-    # DB not ready — use hardcoded defaults (don't cache so we retry next request)
+    # DB not ready — use hardcoded defaults
     return BUS_POWER_DEFAULTS
 
 
 def invalidate_cache() -> None:
-    """Force next request to re-read from DB (call after any bus state change)."""
-    global _cache, _cache_ts
-    _cache = {}
-    _cache_ts = 0.0
+    """No-op, kept for callers: bus states are no longer cached."""
 
 
 def resolve_bus(path: str) -> str:
