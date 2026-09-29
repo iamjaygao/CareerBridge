@@ -34,10 +34,8 @@ def api_root(request):
             'human_loop': request.build_absolute_uri('/api/v1/human-loop/'),
             'appointments': request.build_absolute_uri('/api/v1/decision-slots/'),  # Legacy name, redirects to new path
             'decision_slots': request.build_absolute_uri('/api/v1/decision-slots/'),
-            'resumes': request.build_absolute_uri('/api/v1/ats-signals/'),  # Legacy name, redirects to new path
             'ats_signals': request.build_absolute_uri('/api/v1/ats-signals/'),
             'payments': request.build_absolute_uri('/api/v1/payments/'),
-            'notifications': request.build_absolute_uri('/api/v1/signal-delivery/'),  # Legacy name, redirects to new path
             'signal_delivery': request.build_absolute_uri('/api/v1/signal-delivery/'),
             'admin_panel': request.build_absolute_uri('/api/v1/adminpanel/'),
         },
@@ -141,7 +139,6 @@ def api_info(request):
             "health": "/health/",
             "api_docs": "/api/docs/",
             "admin": "/admin/",
-            "resumes": "/api/ats-signals/",  # Legacy endpoint, redirects to new path
             "ats_signals": "/api/ats-signals/",
             "mentors": "/api/human-loop/",  # Legacy endpoint, redirects to new path
             "human_loop": "/api/human-loop/",
