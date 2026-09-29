@@ -96,7 +96,7 @@ class GovernanceMiddlewareTest(TestCase):
     def test_active_module_works(self):
         """Test that active modules (ON state) work normally"""
         # Users module should work (note: might get 401 if auth required, but not 404)
-        response = self.client.get('/api/v1/users/profile/')
+        response = self.client.get('/api/v1/users/me/')
         self.assertNotEqual(response.status_code, 404, 
                            'Active module should not return 404')
     
@@ -281,6 +281,7 @@ class BetaFeatureAccessTest(TestCase):
         """Initialize test data"""
         self.superuser = User.objects.create_user(
             username='superadmin',
+            email='beta-super@test.com',
             password='testpass123',
             is_superuser=True,
             is_staff=True
@@ -288,6 +289,7 @@ class BetaFeatureAccessTest(TestCase):
         
         self.staff_user = User.objects.create_user(
             username='staff',
+            email='beta-staff@test.com',
             password='testpass123',
             is_staff=True,
             is_superuser=False
@@ -295,6 +297,7 @@ class BetaFeatureAccessTest(TestCase):
         
         self.regular_user = User.objects.create_user(
             username='user',
+            email='beta-user@test.com',
             password='testpass123'
         )
         

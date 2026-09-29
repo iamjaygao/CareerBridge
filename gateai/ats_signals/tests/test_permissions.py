@@ -108,7 +108,7 @@ class ATSSignalPermissionsTest(TestCase):
         """Test that user A can access their own signals."""
         self.client.force_authenticate(user=self.user_a)
         
-        response = self.client.get(f'/api/v1/ats-signals/?decision_slot_id={self.slot_a}')
+        response = self.client.get(f'/api/v1/ats-signals/ats-signals/?decision_slot_id={self.slot_a}')
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
@@ -124,7 +124,7 @@ class ATSSignalPermissionsTest(TestCase):
         self.client.force_authenticate(user=self.user_b)
         
         # Try to access user A's decision slot
-        response = self.client.get(f'/api/v1/ats-signals/?decision_slot_id={self.slot_a}')
+        response = self.client.get(f'/api/v1/ats-signals/ats-signals/?decision_slot_id={self.slot_a}')
         
         # Should return 404 (not found) to avoid leaking existence
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
@@ -133,7 +133,7 @@ class ATSSignalPermissionsTest(TestCase):
         """Test that user B cannot access user A's signal detail."""
         self.client.force_authenticate(user=self.user_b)
         
-        response = self.client.get(f'/api/v1/ats-signals/{self.signal_a1.id}/')
+        response = self.client.get(f'/api/v1/ats-signals/ats-signals/{self.signal_a1.id}/')
         
         # Should return 404 (not found)
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
@@ -143,15 +143,15 @@ class ATSSignalPermissionsTest(TestCase):
         self.client.force_authenticate(user=self.staff_user)
         
         # Access user A's signals
-        response_a = self.client.get(f'/api/v1/ats-signals/?decision_slot_id={self.slot_a}')
+        response_a = self.client.get(f'/api/v1/ats-signals/ats-signals/?decision_slot_id={self.slot_a}')
         self.assertEqual(response_a.status_code, status.HTTP_200_OK)
         
         # Access user B's signals
-        response_b = self.client.get(f'/api/v1/ats-signals/?decision_slot_id={self.slot_b}')
+        response_b = self.client.get(f'/api/v1/ats-signals/ats-signals/?decision_slot_id={self.slot_b}')
         self.assertEqual(response_b.status_code, status.HTTP_200_OK)
         
         # Access signal detail
-        response_detail = self.client.get(f'/api/v1/ats-signals/{self.signal_a1.id}/')
+        response_detail = self.client.get(f'/api/v1/ats-signals/ats-signals/{self.signal_a1.id}/')
         self.assertEqual(response_detail.status_code, status.HTTP_200_OK)
     
     def test_user_can_access_own_review_tasks(self):
@@ -200,7 +200,7 @@ class ATSSignalPermissionsTest(TestCase):
         """Test that listing without decision_slot_id returns empty for regular users."""
         self.client.force_authenticate(user=self.user_a)
         
-        response = self.client.get('/api/v1/ats-signals/')
+        response = self.client.get('/api/v1/ats-signals/ats-signals/')
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()

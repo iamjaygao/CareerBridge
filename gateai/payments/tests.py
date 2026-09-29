@@ -4,7 +4,7 @@ from django.utils import timezone
 from unittest.mock import patch
 import json
 
-from mentors.models import MentorProfile
+from human_loop.models import MentorProfile
 from django.contrib.auth import get_user_model
 
 

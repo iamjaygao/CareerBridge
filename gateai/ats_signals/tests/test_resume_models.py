@@ -50,7 +50,7 @@ class LegalEndpointsTests(TestCase):
         self.assertTrue(r.data.get('fallback'))
 from django.test import TestCase
 from django.contrib.auth import get_user_model
-from .models import Resume, ResumeComparison, UserDataConsent, DataRetentionPolicy, LegalDisclaimer
+from ats_signals.models import Resume, ResumeComparison, UserDataConsent, DataRetentionPolicy, LegalDisclaimer
 from django.core.files.uploadedfile import SimpleUploadedFile
 from decimal import Decimal
 
