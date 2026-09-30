@@ -1,6 +1,6 @@
 # Peer Mock MVP 设计文档
 
-状态：**设计稿第 2 版**（2026-09-29），已按第一轮审查意见修改。本阶段不含代码和 migration。
+状态：**设计稿第 2.1 版**（2026-09-29），已按第一轮审查意见修改，并补入 Q1、Q18 的决定。本阶段不含代码和 migration。
 
 标注约定：
 - 关于现有代码或外部服务的结论，标 **VERIFIED**（读过代码、实际运行过或查到了官方说明）、**INFERRED**（根据结构推断）或 **UNKNOWN**（需要什么才能确定会写明）。
@@ -51,7 +51,7 @@
 | A2 | 每人每轮最多 1 个有效场次 | Q3，已确定 |
 | A3 | 场次 60 分钟，双方各当 30 分钟面试官；时长作为 Round 的参数 | Q2，已确定 |
 | A4 | 面试类型是硬约束，方向是软约束；每次报名只选 1 个类型 | Q4，已确定 |
-| A5 | 运营时区暂定 `America/New_York` | Q1，**暂定**，等你确认用户分布后再定 |
+| A5 | 运营时区为 `America/New_York`，作为配置项 `PEER_MOCK_OPS_TZ`；界面上的截止时间、匹配时间、场次时间都按用户自己的时区显示 | Q1，已确定。用户以美国、加拿大为主，另有伦敦等校区的学生 |
 | A6 | 只有验证过邮箱的用户能使用 peer mock 接口 | 登录本身不检查 `email_verified`（VERIFIED：`LoginSerializer`），所以由 peer mock 的权限类 `IsEmailVerified` 把关 |
 | A7 | 默认不向搭档展示邮箱；用户可以选择对已确认的搭档公开 | Q6，已确定 |
 | A8 | 邮件服务的免费档为每天 100 封、每月 3,000 封 | 免费档的常见限制（INFERRED；上线前要对照所选服务商的实际条款） |
@@ -91,7 +91,8 @@
 | `default_interview_type` / `default_direction` | Char | 用于预填 |
 | `email_round_invites` | Bool | 默认 **False**，每周征集邮件需要用户主动勾选 |
 | `share_email_with_partner` | Bool | 默认 False |
-| `terms_version` / `terms_accepted_at` | Char(16) / DateTime | 同意的条款版本和时间，是同意的证据 |
+| `terms_version` / `terms_accepted_at` | Char(16) / DateTime | 同意的条款和隐私说明的版本及时间，是处理依据（用户同意）的证据 |
+| `adult_confirmed_at` | DateTime | 用户确认自己年满 18 岁的时间（条款要求，Q18） |
 | `completed_count` / `no_show_count` / `late_cancel_count` / `dispute_count` | PositiveInt | 信誉计数的缓存，可以从场次表重新算出（见 4.6） |
 | `suspended_until_round` | FK → Round，null | 这一轮（含）之前不参与匹配 |
 | `needs_review` | Bool | True 时不参与匹配，直到管理员处理 |
@@ -271,7 +272,7 @@
 | 评分、评论 | Feedback | 帮搭档改进、质量监控 | 按 Q8 的规则 |
 | 屏蔽关系 | Block | 排除匹配 | 屏蔽人本人 |
 | 举报内容 | Report | 安全审核 | 举报人本人、管理员 |
-| 同意记录、邀请码渠道 | PeerProfile | 同意的证据、渠道统计 | 系统 |
+| 同意记录、年满 18 岁的确认、邀请码渠道 | PeerProfile | 处理依据和年龄要求的证据、渠道统计 | 系统 |
 | 预注册数据 | PreRegistration | 注册时预填 | 系统；60 天内没有认领的会被删除 |
 | 邮件发送记录 | EmailOutbox（不存地址和正文） | 重试、限额、排错 | 系统 |
 | 事件 | PeerEvent（只存化名 id） | 指标 | 管理员 |
@@ -300,7 +301,7 @@
 ### 2.1 通用规则
 - 前缀 `/api/v1/peer-mock/`，归属 PEER_MOCK_BUS。bus 关闭时，中间件返回 404（VERIFIED：现有的中间件行为）。
 - **每个视图都显式声明 `permission_classes`**，不依赖全局默认值。基础组合是：
-  `P = [IsAuthenticated, IsEmailVerified, FeatureVisibility]`
+  `P = [IsAuthenticated, FeatureVisibility, IsEmailVerified]`（FeatureVisibility 放在前面：功能被隐藏时，对所有人都是 404，包括未验证邮箱的用户）
   - `IsEmailVerified`：新增，要求 `request.user.email_verified`，否则返回 403，`code=email_not_verified`；
   - `HasPeerProfile`：新增，要求已经完成资料填写，否则返回 409，`code=onboarding_required`；
   - `IsSuperuser`：新增，只看 `is_superuser`。
@@ -314,7 +315,7 @@
 | 方法 | 路径 | 权限 | 请求 → 返回 |
 |---|---|---|---|
 | GET | `me/profile/` | P | → `{display_name, timezone, default_interview_type, default_direction, email_round_invites, share_email_with_partner, terms_version, reputation:{...}}`；还没填写时返回 404，`code=no_profile`，同时附上 `prefill`（来自 PreRegistration） |
-| PUT | `me/profile/` | P | `{display_name, timezone, default_interview_type?, default_direction?, email_round_invites, share_email_with_partner, accept_terms_version, invite_code?}` → 同上。第一次调用时创建 profile：必须带有效的邀请码（`PEER_MOCK_INVITE_REQUIRED=True` 时），否则返回 400 `invalid_invite_code`；成功后写入 `onboarded` 事件 |
+| PUT | `me/profile/` | P | `{display_name, timezone, default_interview_type?, default_direction?, email_round_invites, share_email_with_partner, accept_terms_version, confirm_adult, invite_code?}` → 同上。第一次调用时创建 profile，必须同时满足：带有效的邀请码（`PEER_MOCK_INVITE_REQUIRED=True` 时），否则返回 400 `invalid_invite_code`；`accept_terms_version` 等于当前版本，否则返回 400 `terms_not_accepted`；`confirm_adult=true`，否则返回 400 `adult_confirmation_required`。成功后写入 `onboarded` 事件 |
 | GET | `meta/` | P | → `{interview_types:[...], directions:{type:[...]}, terms_version, invite_required, limits:{max_windows, min_window_minutes}, video_domains:[...]}` |
 
 ### 2.3 轮次和可用时间
@@ -793,7 +794,7 @@ reliability = round(100 × (completed + 1) / (completed + no_show + 0.5 × late_
 
 beat 调度表写在 `CELERY_BEAT_SCHEDULE` 里（和现有做法一致，VERIFIED：`settings_base.py:96`），`peer_mock.tasks` 加入 `CELERY_IMPORTS`。
 
-**默认的周节奏**（运营时区 America/New_York，**暂定**，Q1）：
+**默认的周节奏**（运营时区 America/New_York，Q1 已确定）：
 | 时间 | 事件 |
 |---|---|
 | 周一 10:00 | 征集邮件（只发给订阅了的用户；群里同时发帖） |
@@ -803,6 +804,8 @@ beat 调度表写在 `CELERY_BEAT_SCHEDULE` 里（和现有做法一致，VERIFI
 | 周日 00:00 – 下周六 24:00 | 场次窗口 |
 
 这样安排，征集邮件和结果邮件分别在不同的日子发，提醒和反馈邮件会分散到整周。
+
+上表只是运营时区里的定义。界面和邮件里，这些时间都按**用户自己的时区**显示。比如对伦敦的用户，「周四 23:59 截止」显示为「周五 04:59 BST」（夏令时切换前后的那几周，差值会变）。
 
 ### 5.2 邮件队列（EmailOutbox）
 - **入队**：业务代码只调用 `enqueue(kind, user, context_ids, priority, send_after, send_before, dedupe_key)`，并且**和状态变化在同一个事务里**提交。事务回滚了，邮件也不会留下。
@@ -958,7 +961,7 @@ beat 调度表写在 `CELERY_BEAT_SCHEDULE` 里（和现有做法一致，VERIFI
 | 页面 | 路径 | 调用的接口 |
 |---|---|---|
 | 注册 / 登录 / 验证邮箱（已有） | `/register`、`/login`、`/email-verification` | `users/register`、`login`、`verify-email`、`resend-verification` |
-| 首次资料填写 | `/peer/onboarding` | `GET meta/`、`GET me/profile/`（拿到预填数据）、`PUT me/profile/`（带邀请码）。时区默认取 `Intl.DateTimeFormat().resolvedOptions().timeZone`，同时展示隐私说明和条款，要求勾选同意 |
+| 首次资料填写 | `/peer/onboarding` | `GET meta/`、`GET me/profile/`（拿到预填数据）、`PUT me/profile/`（带邀请码）。时区默认取 `Intl.DateTimeFormat().resolvedOptions().timeZone`；展示隐私说明和条款，要求分别勾选「同意条款和隐私说明」和「我已年满 18 岁」 |
 | 首页 | `/peer` | `GET rounds/current/`、`GET sessions/?scope=upcoming`，显示待办：确认、填写会议链接、反馈、申诉 |
 | 提交可用时间 | `/peer/rounds/:id/availability` | `GET rounds/{id}/registration/`、`PUT`、`DELETE`。按当地时间显示周视图，提交后回显 UTC 时间，并把 `warnings` 和夏令时相关的错误显示在对应的时间段上 |
 | 我的场次 | `/peer/sessions` | `GET sessions/?scope=upcoming\|past` |
@@ -1073,19 +1076,21 @@ beat 调度表写在 `CELERY_BEAT_SCHEDULE` 里（和现有做法一致，VERIFI
 ### v1
 | PR | 范围 | 验收标准 |
 |---|---|---|
-| **PR1 基础：资料、邀请码、轮次、可用时间** | 开始前先列出 `resolve_bus` 收紧会影响的现有测试，等你确认。模型：InviteCode、PeerProfile、Round、Registration、AvailabilityWindow、PeerEvent、PreRegistration 和 migration；`timeutil`（当地时间 ↔ UTC、round 时间点的生成）；权限类 IsEmailVerified、HasPeerProfile、IsSuperuser；2.2、2.3 的接口；`peer_ensure_rounds` 任务；`peer_invite_codes` 命令；`resolve_bus` 前缀收紧；删除旧的 stub 视图 | T9–T12b、T23–T25 通过；邀请码用例和 I1 通过；2.2、2.3 的 IDOR 用例通过；bus 关闭时返回 404；`makemigrations --check` 干净 |
+| **PR1 基础：资料、邀请码、轮次、可用时间** | 开始前先列出 `resolve_bus` 收紧会影响的现有测试，等你确认。模型：InviteCode、PeerProfile、Round、Registration、AvailabilityWindow、PeerEvent、PreRegistration 和 migration；`timeutil`（当地时间 ↔ UTC、round 时间点的生成）；权限类 IsEmailVerified、HasPeerProfile（IsSuperuser 在 PR5 随管理接口一起加入）；2.2、2.3 的接口；`peer_ensure_rounds` 任务；`peer_invite_codes` 命令；`resolve_bus` 前缀收紧。**旧的 stub 视图保留**：`health/`、`status/` 继续保留（`FeatureVisibilityForJwtUsersTest` 用它们作测试接口，见 LATER）；`sessions/` 在 PR2 中由真实接口替换，届时列出 `PeerMockAccessTest` 需要的修改；运营时区配置项 `PEER_MOCK_OPS_TZ`（默认 America/New_York，非法值启动时报错）；本文档第 10 节 Q1、Q18 的更新 | T9–T12b、T23–T25 通过；不同意条款或不确认年满 18 岁时无法完成资料填写；`PEER_MOCK_OPS_TZ` 换成 Europe/London 时，Round 时间点按新时区生成；邀请码用例和 I1 通过；2.2、2.3 的 IDOR 用例通过；bus 关闭时返回 404；`makemigrations --check` 干净 |
 | **PR2 匹配与 CSV 试运行** | `matching.py` 纯函数（两阶段）；Session、SessionParticipant 模型和三个部分唯一约束；`peer_run_due_matching` 任务；`peer_run_matching` 命令，支持数据库和 CSV 两种输入（3.9）；`GET sessions/`、`GET sessions/{sid}/`（只读） | T1–T8、T4b、T5b、T13、T14、T19–T22、T26 通过；**T20b 通过**；Postgres 上 T15、T17 通过；用一份样例 CSV 跑 dry run，输出 `matches.csv` 和 `unmatched.csv`，标准输出不含邮箱 |
 | **PR3 邮件队列与匹配通知** | EmailOutbox、dispatch、额度、重试；邮件模板（纯文本 + HTML）；`.ics`；匹配结果、未匹配、征集邮件；退订接口 | 8.1 的邮件用例和 E1 通过；在开发环境用 console backend 走一遍：匹配 → 两封带 `.ics` 的邮件 |
 | **PR4 场次生命周期（v1）** | confirm（主持人要同时填写链接）、cancel、video-link（白名单）；`confirmation_sweep`、`enqueue_reminders` 任务；取消和催促邮件；搭档取消后的 `partner_cancelled` 优先规则 | 4.1 的所有转换都有测试；T18、T18c 在 Postgres 上通过；视频链接白名单用例通过；2.4 的 IDOR 用例通过；取消后下一轮的匹配结果里，留下的一方排在最前面（端到端测试） |
 | **PR5 场后：到场、申诉、评分、信誉、屏蔽、举报** | attendance（爽约指控通知、申诉、`finalize_after` 延后）、feedback（双盲）、结算任务、计数和暂停规则、争议计数和 needs_review；Block、Report；2.8 的管理接口和命令；反馈请求邮件 | 4.5 的规则表逐行有测试；指控通知立即入队且只发一次；申诉期至少 48 小时；双方的争议计数都正确；屏蔽后两个阶段都不会再匹配（端到端测试）；2.6、2.8 的 IDOR 用例通过 |
-| **PR6 删除账号与数据保留** | `DELETE /api/v1/users/me/` 和 peer_mock 的删除钩子；`peer_purge` 任务；隐私说明的内容（文档部分可以单独提 PR） | 1.4 表中的每一行都有断言；删除后指标不变（用 actor_ref 统计）；删除用户时，所有旧模块的外键都不报错 |
+| **PR6 删除账号与数据保留** | `DELETE /api/v1/users/me/` 和 peer_mock 的删除钩子；`peer_purge` 任务；按 GDPR 水平编写的隐私说明和条款（同时覆盖 UK GDPR、加拿大 PIPEDA，见第 10 节 Q18），更新前端的 `/privacy`、`/terms` 页面，条款版本号随之更新 | 1.4 表中的每一行都有断言；删除后指标不变（用 actor_ref 统计）；删除用户时，所有旧模块的外键都不报错 |
 | **PR7 前端 A：主流程** | onboarding（邀请码）、首页、提交可用时间、我的场次、场次详情（确认、填写链接、取消）；导航只保留 peer mock | jest 用例通过；在开发环境打开 bus 后，手动走完「提交 → 匹配 → 确认」 |
 | **PR8 前端 B：其余页面** | 场后反馈和申诉、设置、屏蔽和举报、删除账号、退订页 | jest 用例通过；手动走完全流程 |
 | **PR9 上线准备** | 指标（`admin/metrics/` 或 SQL 视图）和 `peer_metrics` 命令；`peer_import_preregistrations`；运维文档（每周的运营检查清单、手动匹配、处理举报和 review）；governance seed 确认 PEER_MOCK 功能开关 | 用种子数据跑出第 6 节的全部指标；导入命令能处理重复和格式错误的行 |
 
 PR 之间的依赖：PR1 → PR2 → PR3 → PR4 → PR5 → PR6。PR7 在 PR4 之后就可以开始，PR8 在 PR5 之后，PR9 最后。**PR2 合并后，就可以用 CSV 模式跑手动的第一轮。**
 
-**上线本身不是一个 PR**：由你按照 PEER_MOCK_BUS 的上线清单（安全审查、邮件域名 SPF/DKIM、`.ics` 在三个客户端上的实测、隐私说明上线、生成首批邀请码）逐项确认后，手动打开 bus。
+**LATER**：`kernel/tests/test_m12_routing.py::FeatureVisibilityForJwtUsersTest` 改用一个专门的测试接口，不再依赖 peer mock 的 stub；之后 `health/`、`status/` 两个 stub 可以删除。
+
+**上线本身不是一个 PR**：由你按照 PEER_MOCK_BUS 的上线清单（安全审查、邮件域名 SPF/DKIM、`.ics` 在三个客户端上的实测、隐私说明上线、**买好域名后把隐私说明里的 `privacy@<DOMAIN>` 换成真实地址并确认能收信**、生成首批邀请码）逐项确认后，手动打开 bus。
 
 ### 〔v1.1〕
 | PR | 范围 | 验收标准 |
@@ -1099,7 +1104,7 @@ PR 之间的依赖：PR1 → PR2 → PR3 → PR4 → PR5 → PR6。PR7 在 PR4 �
 ## 10. 决定事项
 | # | 问题 | 决定 |
 |---|---|---|
-| Q1 | 运营时区和每周节奏 | **暂定** America/New_York，节奏见 5.1。等你确认用户分布后再定 |
+| Q1 | 运营时区和每周节奏 | 已定：America/New_York，作为配置项 `PEER_MOCK_OPS_TZ`；节奏见 5.1。用户以美国、加拿大为主，另有伦敦等校区的学生，所以界面上的截止时间、匹配时间都按**用户自己的时区**显示（接口返回 `*_local` 字段） |
 | Q2 | 场次时长 | 已定：60 分钟（各 30 分钟），参数放在 Round 上 |
 | Q3 | 每人每轮场次数；是否走 `sys_claim` | 已定：每人每轮 1 场，用部分唯一约束保证；不走 `sys_claim`（3.8） |
 | Q4 | 方向的取值和约束 | 已定：coding 下分 `general_swe` / `frontend` / `backend` / `data_ml` / `mobile`；system design 下分 `general` / `infra`；behavioral 没有方向。方向是软约束；每次报名只选 1 个类型 |
@@ -1116,7 +1121,7 @@ PR 之间的依赖：PR1 → PR2 → PR3 → PR4 → PR5 → PR6。PR7 在 PR4 �
 | Q15 | 收紧 `resolve_bus` | 已同意；PR1 开始时先列出受影响的测试 |
 | Q16 | 重复配对 | 已定：上一轮配对过的硬性排除（K=1），两轮前的作为软约束；剩余用户补匹配时放宽；不启用管理员凑数 |
 | Q17 | 时区的位置 | 已定：PeerProfile |
-| Q18 | 用户中是否有欧盟、英国用户或未满 18 岁的用户 | **待你回答**（影响隐私说明和同意的措辞，PR6 之前需要确定） |
+| Q18 | 隐私和年龄 | 已定：隐私说明按 GDPR 水平编写，同时覆盖 UK GDPR 和加拿大 PIPEDA，在 PR6 中完成，内容包括：<br>1. 用户权利：查看、更正、删除。更正通过设置页完成，删除通过「删除账号」完成；v1 的查看和导出通过邮件申请、人工处理：联系邮箱暂用占位符 `privacy@<DOMAIN>`，**承诺 30 天内答复**（满足 GDPR 和 PIPEDA）；<br>2. 数据存放在美国，属于跨境存储；<br>3. 保存期限，引用 1.4 节；<br>4. 处理依据是用户同意，在首次填写资料时勾选（`terms_version` / `terms_accepted_at`）；<br>5. 条款要求用户年满 18 岁，首次填写资料时要单独确认（`adult_confirmed_at`，在 PR1 实现）。 |
 | Q19 | 免登录签名链接 | 已定：不做 |
 
 ---

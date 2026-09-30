@@ -63,10 +63,16 @@ class TestBusResolution(SimpleTestCase):
         assert resolve_bus('/api/v1/analytics/') == 'SEARCH_BUS'
     
     def test_peer_mock_bus(self):
-        """Peer mock paths should resolve to PEER_MOCK_BUS"""
-        assert resolve_bus('/peer-mock-runtime/') == 'PEER_MOCK_BUS'
-        assert resolve_bus('/api/mock/') == 'PEER_MOCK_BUS'
-        assert resolve_bus('/simulator/test') == 'PEER_MOCK_BUS'
+        """Only the /api/v1/peer-mock/ prefix resolves to PEER_MOCK_BUS (no substring matching)"""
+        assert resolve_bus('/api/v1/peer-mock/') == 'PEER_MOCK_BUS'
+        assert resolve_bus('/api/v1/peer-mock/rounds/current/') == 'PEER_MOCK_BUS'
+        # Paths that merely contain "peer" or "mock" belong to their own module
+        assert resolve_bus('/peer-mock-runtime/') != 'PEER_MOCK_BUS'
+        assert resolve_bus('/simulator/test') != 'PEER_MOCK_BUS'
+        assert resolve_bus('/api/mock/') == 'UNKNOWN'  # default deny
+        assert resolve_bus('/api/v1/ai/mock-interview/') == 'AI_BUS'
+        # Prefix boundary: a sibling path is not the peer mock module
+        assert resolve_bus('/api/v1/peer-mockery/') != 'PEER_MOCK_BUS'
     
     def test_admin_bus(self):
         """Admin paths should resolve to ADMIN_BUS (consolidated)"""

@@ -23,7 +23,6 @@ from rest_framework.permissions import BasePermission
 
 # Path prefix -> feature key. First match wins, so list longer prefixes first.
 PATH_TO_FEATURE = {
-    '/peer/': 'PEER_MOCK',
     '/api/v1/peer-mock/': 'PEER_MOCK',
     '/api/v1/users/': 'USERS',
     '/api/v1/adminpanel/': 'KERNEL_ADMIN',

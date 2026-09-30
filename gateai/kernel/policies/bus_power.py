@@ -110,8 +110,8 @@ def resolve_bus(path: str) -> str:
             path == "/metrics/"):  # Prometheus scrape (token-protected)
         return "KERNEL_CORE_BUS"
 
-    if (path.startswith("/api/v1/peer-mock/") or
-            any(k in path.lower() for k in ["/peer", "/mock", "/simulator", "/runtime-mock"])):
+    # Prefix only: a path that merely contains "peer" or "mock" is not this module.
+    if path.startswith("/api/v1/peer-mock/"):
         return "PEER_MOCK_BUS"
 
     if path.startswith("/api/v1/chat/") or path.startswith("/ws/chat/"):
