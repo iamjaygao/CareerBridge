@@ -4,14 +4,14 @@ import unittest
 
 from django.conf import settings
 from django.core.management import call_command
-from django.test import SimpleTestCase
+from django.test import TestCase
 
 _modules = getattr(settings, 'MIGRATION_MODULES', {})
 MIGRATIONS_DISABLED = 'peer_mock' in _modules and _modules['peer_mock'] is None
 
 
 @unittest.skipIf(MIGRATIONS_DISABLED, 'migrations are disabled in these settings; runs in backend-postgres')
-class MigrationsUpToDateTest(SimpleTestCase):
+class MigrationsUpToDateTest(TestCase):  # makemigrations reads the applied-migrations table
 
     def test_no_missing_migrations(self):
         try:
